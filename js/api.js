@@ -2,80 +2,81 @@
  * api.js - Google Sheets API 通信
  * Nice Serviceman 日報
  *
- * Step 2 で Apps Script をデプロイ後、
- * APPS_SCRIPT_URL に発行されたURLを貼り付ける。
+ * ★ Step2 完了後にここを編集してください ★
+ *   APPS_SCRIPT_URL に Apps Script のデプロイURLを貼り付ける
  */
 
-const APPS_SCRIPT_URL = ''; // TODO: Step2 で設定
+const APPS_SCRIPT_URL = ''; // 例: 'https://script.google.com/macros/s/AKfy.../exec'
+
+// ============================================================
+// 内部ユーティリティ
+// ============================================================
 
 /**
- * Google Sheets からデータを取得する（GET）
- * @param {Object} params - クエリパラメータ
+ * GET リクエスト
+ * @param {Object} params
  * @returns {Promise<any>}
  */
-async function fetchFromSheets(params) {
-  if (!APPS_SCRIPT_URL) throw new Error('Apps Script URL が未設定です（api.js を確認）');
+async function _get(params) {
+  if (!APPS_SCRIPT_URL) {
+    console.warn('APPS_SCRIPT_URL 未設定。api.js の先頭にURLを貼り付けてください。');
+    return null;
+  }
   const url = new URL(APPS_SCRIPT_URL);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`通信エラー: ${res.status}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  const res = await fetch(url.toString(), { redirect: 'follow' });
+  if (!res.ok) throw new Error(`GET エラー: ${res.status}`);
   return res.json();
 }
 
 /**
- * Google Sheets にデータを送信する（POST）
- * @param {Object} body - 送信データ
+ * POST リクエスト（CORS対策: Content-Type: text/plain）
+ * @param {Object} body
  * @returns {Promise<any>}
  */
-async function postToSheets(body) {
-  if (!APPS_SCRIPT_URL) throw new Error('Apps Script URL が未設定です（api.js を確認）');
+async function _post(body) {
+  if (!APPS_SCRIPT_URL) {
+    console.warn('APPS_SCRIPT_URL 未設定。api.js の先頭にURLを貼り付けてください。');
+    return { success: false };
+  }
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain' }, // CORS対策でtext/plainを使用
+    headers: { 'Content-Type': 'text/plain' }, // preflight を回避
     body: JSON.stringify(body),
     redirect: 'follow',
   });
-  if (!res.ok) throw new Error(`通信エラー: ${res.status}`);
+  if (!res.ok) throw new Error(`POST エラー: ${res.status}`);
   return res.json();
 }
 
-// ------------------------------------------------------------------
+// ============================================================
 // エントリ（日次記録）
-// ------------------------------------------------------------------
+// ============================================================
 
 /**
- * 全エントリを取得
+ * 指定月のエントリ一覧を取得
+ * @param {string} yearMonth - "YYYY-MM"（省略で全件）
  * @returns {Promise<DailyEntry[]>}
  */
-async function getEntries() {
-  // TODO: Step2 で実装
-  return [];
+async function getEntries(yearMonth = '') {
+  const params = { action: 'getEntries' };
+  if (yearMonth) params.yearMonth = yearMonth;
+  const result = await _get(params);
+  return Array.isArray(result) ? result : [];
 }
 
 /**
- * 指定月のエントリを取得
- * @param {string} yearMonth - "YYYY-MM"
- * @returns {Promise<DailyEntry[]>}
- */
-async function getEntriesByMonth(yearMonth) {
-  // TODO: Step2 で実装
-  return [];
-}
-
-/**
- * 日次エントリを保存（新規 or 更新）
+ * 日次エントリを保存（date でupsert）
  * @param {DailyEntry} data
- * @returns {Promise<any>}
+ * @returns {Promise<{success: boolean, date: string}>}
  */
 async function saveEntry(data) {
-  // TODO: Step2 で実装
-  console.log('saveEntry（スタブ）:', data);
-  return { success: true };
+  return _post({ action: 'saveEntry', data });
 }
 
-// ------------------------------------------------------------------
+// ============================================================
 // 予算（KGI設定）
-// ------------------------------------------------------------------
+// ============================================================
 
 /**
  * 指定月の予算を取得
@@ -83,17 +84,26 @@ async function saveEntry(data) {
  * @returns {Promise<Budget|null>}
  */
 async function getBudget(yearMonth) {
-  // TODO: Step2 で実装
-  return null;
+  return _get({ action: 'getBudget', yearMonth });
 }
 
 /**
- * 予算を保存（新規 or 更新）
+ * 予算を保存（yearMonth でupsert）
  * @param {Budget} data
- * @returns {Promise<any>}
+ * @returns {Promise<{success: boolean, yearMonth: string}>}
  */
 async function saveBudget(data) {
-  // TODO: Step2 で実装
-  console.log('saveBudget（スタブ）:', data);
-  return { success: true };
+  return _post({ action: 'saveBudget', data });
+}
+
+// ============================================================
+// エクスポート（全データ）
+// ============================================================
+
+/**
+ * 全エントリ＋全予算をまとめて取得
+ * @returns {Promise<{entries: DailyEntry[], budgets: Budget[]}>}
+ */
+async function getAllData() {
+  return _get({ action: 'getAllData' });
 }
