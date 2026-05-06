@@ -6,7 +6,7 @@
  *   APPS_SCRIPT_URL に Apps Script のデプロイURLを貼り付ける
  */
 
-const APPS_SCRIPT_URL = ''; // 例: 'https://script.google.com/macros/s/AKfy.../exec'
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCEwdRtZJI36iA85YWkVXizMgN37ebQVCoDRbow8O5_9m3n_Yctw0pYSV1V9IJe09N/exec';
 
 // ============================================================
 // 内部ユーティリティ
