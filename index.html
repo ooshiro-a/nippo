@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0f1e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="日報">
+  <title>Nice Serviceman 日報</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ヘッダー -->
+    <header id="app-header">
+      <span id="header-title">Nice Serviceman 日報</span>
+      <span id="header-date"></span>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main id="content">
+
+      <!-- 📝 入力タブ -->
+      <section id="tab-input" class="tab-pane active">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">📝</div>
+          <h2>日次入力</h2>
+          <p>Step 5 で実装予定</p>
+          <div class="placeholder-items">
+            <div class="placeholder-item">A. KPI実績（10項目）</div>
+            <div class="placeholder-item">B. 信頼関係アクション（タグ選択）</div>
+            <div class="placeholder-item">C. フィードバック記録</div>
+            <div class="placeholder-item">D. 訪問記録・備考</div>
+            <div class="placeholder-item">E. 振り返り（気づき・明日の一手）</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 📊 進捗タブ -->
+      <section id="tab-dashboard" class="tab-pane">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">📊</div>
+          <h2>ダッシュボード</h2>
+          <p>Step 6 で実装予定</p>
+          <div class="placeholder-items">
+            <div class="placeholder-item">信頼関係指数ヒーロー表示</div>
+            <div class="placeholder-item">KPI進捗バー（達成率色分け）</div>
+            <div class="placeholder-item">個人計画達成率</div>
+            <div class="placeholder-item">良点・改善点フィードバック</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 📅 履歴タブ -->
+      <section id="tab-history" class="tab-pane">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">📅</div>
+          <h2>履歴・サマリ</h2>
+          <p>Step 7 で実装予定</p>
+          <div class="placeholder-items">
+            <div class="placeholder-item">日次ビュー</div>
+            <div class="placeholder-item">週次ビュー</div>
+            <div class="placeholder-item">月次ビュー</div>
+            <div class="placeholder-item">四半期ビュー</div>
+            <div class="placeholder-item">年次ビュー</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ⚙️ KGI設定タブ -->
+      <section id="tab-kgi" class="tab-pane">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">⚙️</div>
+          <h2>KGI設定</h2>
+          <p>Step 4 で実装予定</p>
+          <div class="placeholder-items">
+            <div class="placeholder-item">対象月・点検件数・促進受注額</div>
+            <div class="placeholder-item">保守継続（当月/次月/次々月）</div>
+            <div class="placeholder-item">新規保守・AC洗浄・フルメンテ</div>
+            <div class="placeholder-item">営業トスアップ</div>
+            <div class="placeholder-item">個人計画額・営業所計画額</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- 下部タブナビゲーション -->
+    <nav id="bottom-nav">
+      <button class="nav-btn active" data-tab="tab-input">
+        <span class="nav-icon">📝</span>
+        <span class="nav-label">入力</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-dashboard">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">進捗</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-history">
+        <span class="nav-icon">📅</span>
+        <span class="nav-label">履歴</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-kgi">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">KGI設定</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,450 @@
+/* ============================================================
+   Nice Serviceman 日報 - スタイルシート
+   テーマ: ディープオーシャン × 琉球レッドアクセント
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   カラーパレット（CSS変数）
+   ------------------------------------------------------------ */
+:root {
+  /* 背景 */
+  --bg-primary:   #0a0f1e;
+  --bg-secondary: #111827;
+  --bg-card:      #1e293b;
+  --bg-card-hover:#263248;
+  --bg-input:     #0f172a;
+
+  /* ボーダー */
+  --border:       #2d3f5a;
+  --border-light: #374151;
+
+  /* アクセントカラー */
+  --accent-cyan:    #22d3ee;   /* KPI系 */
+  --accent-rose:    #fb7185;   /* 信頼関係指数 */
+  --accent-emerald: #4ade80;   /* 個人計画 */
+  --accent-amber:   #fbbf24;   /* 営業所計画・年次 */
+  --accent-red:     #f87171;   /* 重要タグ・警告 */
+  --accent-violet:  #a78bfa;   /* 訪問記録 */
+
+  /* テキスト */
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+
+  /* ナビゲーション */
+  --nav-height:   64px;
+  --header-height: 52px;
+
+  /* フォント */
+  --font-ja:      'Zen Kaku Gothic New', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+}
+
+/* ------------------------------------------------------------
+   リセット & ベース
+   ------------------------------------------------------------ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  height: 100%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-ja);
+  font-size: 15px;
+  line-height: 1.6;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------
+   アプリレイアウト
+   ------------------------------------------------------------ */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh; /* dynamic viewport height（アドレスバー対応）*/
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ヘッダー */
+#app-header {
+  flex-shrink: 0;
+  height: var(--header-height);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 10;
+}
+
+#header-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 0.02em;
+}
+
+#header-date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* メインコンテンツ */
+#content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* タブペイン */
+.tab-pane {
+  display: none;
+  padding: 16px;
+  min-height: 100%;
+  animation: fadeIn 0.15s ease;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 下部ナビゲーション */
+#bottom-nav {
+  flex-shrink: 0;
+  height: var(--nav-height);
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+  z-index: 10;
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+  padding: 8px 4px;
+}
+
+.nav-btn:active {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.nav-btn.active {
+  color: var(--accent-cyan);
+}
+
+.nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ------------------------------------------------------------
+   プレースホルダーカード（Step1〜各機能実装まで）
+   ------------------------------------------------------------ */
+.placeholder-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.placeholder-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.placeholder-card h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.placeholder-card p {
+  font-size: 13px;
+  color: var(--accent-cyan);
+  margin-bottom: 20px;
+}
+
+.placeholder-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.placeholder-item {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.placeholder-item::before {
+  content: '▸ ';
+  color: var(--accent-cyan);
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------
+   共通カード
+   ------------------------------------------------------------ */
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+/* ------------------------------------------------------------
+   共通フォーム要素
+   ------------------------------------------------------------ */
+input[type="text"],
+input[type="number"],
+input[type="month"],
+textarea,
+select {
+  width: 100%;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-ja);
+  font-size: 15px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="number"] {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  text-align: right;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.15);
+}
+
+textarea {
+  resize: none;
+  min-height: 80px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+/* ------------------------------------------------------------
+   ボタン
+   ------------------------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: none;
+  font-family: var(--font-ja);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  width: 100%;
+}
+
+.btn:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background-color: var(--accent-cyan);
+  color: var(--bg-primary);
+}
+
+.btn-secondary {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background-color: var(--accent-red);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------
+   タグ（信頼関係アクション等）
+   ------------------------------------------------------------ */
+.tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background-color: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font-ja);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tag-btn.selected {
+  background-color: rgba(34, 211, 238, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* ------------------------------------------------------------
+   進捗バー
+   ------------------------------------------------------------ */
+.progress-bar {
+  height: 8px;
+  background-color: var(--bg-input);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.progress-fill.green   { background-color: var(--accent-emerald); }
+.progress-fill.cyan    { background-color: var(--accent-cyan); }
+.progress-fill.amber   { background-color: var(--accent-amber); }
+.progress-fill.red     { background-color: var(--accent-red); }
+
+/* ------------------------------------------------------------
+   重要タグ（赤強調）
+   ------------------------------------------------------------ */
+.notes-important {
+  border-color: var(--accent-red) !important;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.2) !important;
+}
+
+/* ------------------------------------------------------------
+   数値表示（JetBrains Mono）
+   ------------------------------------------------------------ */
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------------
+   セクション見出し
+   ------------------------------------------------------------ */
+.section-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  margin-top: 20px;
+  padding-left: 2px;
+}
+
+.section-heading:first-child {
+  margin-top: 0;
+}
+
+/* ------------------------------------------------------------
+   スクロールバー（Webkit）
+   ------------------------------------------------------------ */
+#content::-webkit-scrollbar {
+  width: 3px;
+}
+
+#content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#content::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------
+   セーフエリア対応（iPhone等のノッチ）
+   ------------------------------------------------------------ */
+#app-header {
+  padding-top: env(safe-area-inset-top);
+  height: calc(var(--header-height) + env(safe-area-inset-top));
+}
+
+#bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(var(--nav-height) + env(safe-area-inset-bottom));
+}
