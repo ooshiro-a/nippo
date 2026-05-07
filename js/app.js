@@ -131,7 +131,10 @@ async function handleSaveBudget() {
   });
 
   try {
-    await saveBudget(data);
+    const result = await saveBudget(data);
+    if (!result || result.success !== true) {
+      throw new Error(result && result.error ? result.error : JSON.stringify(result));
+    }
     showSaveFeedback(btn);
   } catch (e) {
     btn.disabled = false;

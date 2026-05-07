@@ -39,12 +39,25 @@ async function _post(body) {
     console.warn('APPS_SCRIPT_URL 未設定。api.js の先頭にURLを貼り付けてください。');
     return { success: false };
   }
-  const res = await fetch(APPS_SCRIPT_URL, {
+  // Apps Script は302リダイレクトを返す場合があり、POSTがGETに変わってしまう。
+  // redirect:'manual' で初回リダイレクト先URLを取得し、そこへ再POSTする。
+  const res1 = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain' }, // preflight を回避
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(body),
-    redirect: 'follow',
+    redirect: 'manual',
   });
+  const target = (res1.type === 'opaqueredirect' || (res1.status >= 300 && res1.status < 400))
+    ? (res1.headers.get('location') || APPS_SCRIPT_URL)
+    : null;
+  const res = target
+    ? await fetch(target, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(body),
+        redirect: 'follow',
+      })
+    : res1;
   if (!res.ok) throw new Error(`POST エラー: ${res.status}`);
   return res.json();
 }
