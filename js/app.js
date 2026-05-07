@@ -178,6 +178,152 @@ async function handleSaveEntry() {
 }
 
 // ------------------------------------------------------------------
+// ダッシュボードタブ
+// ------------------------------------------------------------------
+
+let dashboardChart = null;
+
+function initDashboardTab() {
+  document.querySelector('[data-tab="tab-dashboard"]').addEventListener('click', refreshDashboard);
+  refreshDashboard();
+}
+
+async function refreshDashboard() {
+  const yearMonth = getCurrentYearMonthJST();
+  try {
+    const [entries, budget] = await Promise.all([
+      getEntries(yearMonth),
+      getBudget(yearMonth),
+    ]);
+    renderTrustScore(entries);
+    const totals = calcMonthlyTotals(entries);
+    const promotionActual = totals.promotionAmount || 0;
+    renderPlanCard(
+      promotionActual,
+      budget ? (budget.personalPlan || 0) : 0,
+      { actual: 'personal-plan-actual', budget: 'personal-plan-budget', rate: 'personal-plan-rate', bar: 'personal-plan-bar', shortage: 'personal-plan-shortage' }
+    );
+    renderPlanCard(
+      promotionActual,
+      budget ? (budget.officePlan || 0) : 0,
+      { actual: 'office-plan-actual', budget: 'office-plan-budget', rate: 'office-plan-rate', bar: 'office-plan-bar', shortage: 'office-plan-shortage' }
+    );
+    renderKpiChart(totals, budget);
+  } catch (e) {
+    console.warn('ダッシュボードロード失敗:', e);
+  }
+}
+
+function calcMonthlyTotals(entries) {
+  const totals = {};
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+    totals[field.key] = entries.reduce((sum, e) => sum + (e[field.key] || 0), 0);
+  });
+  return totals;
+}
+
+function renderTrustScore(entries) {
+  const allActions = entries.flatMap(e => e.relationshipActions || []);
+  const posTotal = entries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+  const negTotal = entries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+  const score = calcTrustIndex(allActions, posTotal, negTotal);
+
+  document.getElementById('trust-score-value').textContent = score;
+  document.getElementById('trust-action-count').textContent = allActions.length;
+  document.getElementById('trust-pos-count').textContent = posTotal;
+  document.getElementById('trust-neg-count').textContent = negTotal;
+}
+
+function renderPlanCard(actual, plan, ids) {
+  const rate = plan > 0 ? Math.min(Math.round(actual / plan * 100), 999) : 0;
+  const shortage = Math.max(0, plan - actual);
+  const colorClass = getProgressColorClass(rate);
+
+  document.getElementById(ids.actual).textContent = formatCurrency(actual);
+  document.getElementById(ids.budget).textContent = formatCurrency(plan);
+  document.getElementById(ids.rate).textContent = rate + '%';
+  document.getElementById(ids.rate).style.color = getAccentColor(colorClass);
+  document.getElementById(ids.shortage).textContent = formatCurrency(shortage);
+
+  const bar = document.getElementById(ids.bar);
+  bar.style.width = Math.min(rate, 100) + '%';
+  bar.className = `progress-fill ${colorClass}`;
+}
+
+function getAccentColor(colorClass) {
+  return { green: '#4ade80', cyan: '#22d3ee', amber: '#fbbf24', red: '#f87171' }[colorClass] || '#94a3b8';
+}
+
+function renderKpiChart(totals, budget) {
+  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+
+  const labels = [];
+  const rates = [];
+  const colors = [];
+
+  kpiFields.forEach(field => {
+    const b = budget ? (budget[field.key] || 0) : 0;
+    if (b === 0) return;
+    const a = totals[field.key] || 0;
+    const rate = Math.round(a / b * 100);
+    labels.push(field.label);
+    rates.push(rate);
+    colors.push(getAccentColor(getProgressColorClass(rate)) + 'cc');
+  });
+
+  const ctx = document.getElementById('kpi-chart').getContext('2d');
+
+  if (dashboardChart) {
+    dashboardChart.destroy();
+    dashboardChart = null;
+  }
+
+  if (labels.length === 0) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = '#475569';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('KGI設定タブで計画を入力してください', ctx.canvas.width / 2, 60);
+    return;
+  }
+
+  dashboardChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '達成率 (%)',
+        data: rates,
+        backgroundColor: colors,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.parsed.x}%` },
+        },
+      },
+      scales: {
+        x: {
+          min: 0,
+          ticks: { color: '#94a3b8', callback: v => v + '%' },
+          grid: { color: '#2d3f5a' },
+        },
+        y: {
+          ticks: { color: '#f1f5f9', font: { size: 11 } },
+          grid: { color: '#2d3f5a' },
+        },
+      },
+    },
+  });
+}
+
+// ------------------------------------------------------------------
 // KGI設定タブ
 // ------------------------------------------------------------------
 
@@ -300,6 +446,7 @@ function initApp() {
   initTabs();
   updateHeaderDate();
   initInputTab();
+  initDashboardTab();
   initKgiTab();
   console.log('Nice Serviceman 日報 - 初期化完了');
 }

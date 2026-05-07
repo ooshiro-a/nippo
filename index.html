@@ -14,6 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -103,17 +104,59 @@
 
       <!-- 📊 進捗タブ -->
       <section id="tab-dashboard" class="tab-pane">
-        <div class="placeholder-card">
-          <div class="placeholder-icon">📊</div>
-          <h2>ダッシュボード</h2>
-          <p>Step 6 で実装予定</p>
-          <div class="placeholder-items">
-            <div class="placeholder-item">信頼関係指数ヒーロー表示</div>
-            <div class="placeholder-item">KPI進捗バー（達成率色分け）</div>
-            <div class="placeholder-item">個人計画達成率</div>
-            <div class="placeholder-item">良点・改善点フィードバック</div>
+
+        <!-- 信頼関係指数 -->
+        <div class="card dash-card-rose">
+          <div class="card-title">信頼関係指数</div>
+          <div class="trust-hero">
+            <span class="trust-score-value" id="trust-score-value">--</span>
+            <span class="trust-score-unit">pt</span>
+          </div>
+          <div class="trust-breakdown">
+            <span>アクション <span id="trust-action-count">0</span>件 ×2pt</span>
+            <span>ポジFB <span id="trust-pos-count">0</span>件 ×5pt</span>
+            <span>ネガFB <span id="trust-neg-count">0</span>件 ×3pt</span>
           </div>
         </div>
+
+        <!-- 個人計画達成率 -->
+        <div class="card dash-card-emerald">
+          <div class="card-title">個人計画達成率（促進受注額）</div>
+          <div class="plan-row">
+            <span class="plan-actual" id="personal-plan-actual">¥0</span>
+            <span class="plan-sep">/</span>
+            <span class="plan-budget" id="personal-plan-budget">¥0</span>
+            <span class="plan-rate" id="personal-plan-rate">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill green" id="personal-plan-bar" style="width:0%"></div>
+          </div>
+          <div class="plan-shortage">不足額 <span id="personal-plan-shortage">¥0</span></div>
+        </div>
+
+        <!-- KPI達成率チャート -->
+        <div class="card">
+          <div class="card-title">KPI達成率</div>
+          <div class="chart-wrap">
+            <canvas id="kpi-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- 営業所計画達成率 -->
+        <div class="card dash-card-amber">
+          <div class="card-title">営業所計画達成率（促進受注額）</div>
+          <div class="plan-row">
+            <span class="plan-actual" id="office-plan-actual">¥0</span>
+            <span class="plan-sep">/</span>
+            <span class="plan-budget" id="office-plan-budget">¥0</span>
+            <span class="plan-rate" id="office-plan-rate">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill amber" id="office-plan-bar" style="width:0%"></div>
+          </div>
+          <div class="plan-shortage">不足額 <span id="office-plan-shortage">¥0</span></div>
+        </div>
+
       </section>
 
       <!-- 📅 履歴タブ -->

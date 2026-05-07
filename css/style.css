@@ -483,6 +483,87 @@ label {
 }
 
 /* ------------------------------------------------------------
+   ダッシュボードタブ
+   ------------------------------------------------------------ */
+.dash-card-rose    { border-left: 3px solid var(--accent-rose); }
+.dash-card-emerald { border-left: 3px solid var(--accent-emerald); }
+.dash-card-amber   { border-left: 3px solid var(--accent-amber); }
+
+.trust-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.trust-score-value {
+  font-family: var(--font-mono);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--accent-rose);
+  line-height: 1;
+}
+
+.trust-score-unit {
+  font-size: 18px;
+  color: var(--accent-rose);
+}
+
+.trust-breakdown {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.plan-actual {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.plan-sep {
+  color: var(--text-muted);
+}
+
+.plan-budget {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.plan-rate {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.plan-shortage {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.plan-shortage span {
+  color: var(--accent-amber);
+  font-family: var(--font-mono);
+}
+
+.chart-wrap {
+  position: relative;
+  height: 280px;
+}
+
+/* ------------------------------------------------------------
    日次入力タブ - フィードバックカウンター
    ------------------------------------------------------------ */
 .feedback-row {
