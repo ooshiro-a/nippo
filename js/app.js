@@ -39,6 +39,145 @@ function updateHeaderDate() {
 }
 
 // ------------------------------------------------------------------
+// 日次入力タブ
+// ------------------------------------------------------------------
+
+const RELATIONSHIP_ACTIONS = [
+  '挨拶', '雑談', '提案', 'お礼', '訪問',
+  '電話', 'メール', 'フォロー', '紹介依頼', 'クレーム対応',
+];
+
+function initInputTab() {
+  document.getElementById('entry-date').value = getTodayJST();
+  buildInputKpiFields();
+  buildRelationshipTags();
+  initCounterBtns();
+
+  document.getElementById('entry-notes-important').addEventListener('change', updateNotesImportant);
+  document.getElementById('entry-date').addEventListener('change', e => loadEntry(e.target.value));
+  document.getElementById('entry-save-btn').addEventListener('click', handleSaveEntry);
+
+  loadEntry(getTodayJST());
+}
+
+function buildInputKpiFields() {
+  const container = document.getElementById('entry-kpi-container');
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+    const row = document.createElement('div');
+    row.className = 'kgi-field-row';
+    row.innerHTML = `
+      <span class="kgi-field-label">${field.label}</span>
+      <input type="number" class="kgi-field-input" id="entry-${field.key}"
+             value="0" min="0" inputmode="numeric" />
+      <span class="kgi-field-unit">${field.unit}</span>
+    `;
+    container.appendChild(row);
+  });
+  container.querySelectorAll('.kgi-field-input').forEach(input => {
+    input.addEventListener('focus', () => input.select());
+  });
+}
+
+function buildRelationshipTags() {
+  const container = document.getElementById('relationship-tags');
+  RELATIONSHIP_ACTIONS.forEach(action => {
+    const btn = document.createElement('button');
+    btn.className = 'tag-btn';
+    btn.textContent = action;
+    btn.addEventListener('click', () => btn.classList.toggle('selected'));
+    container.appendChild(btn);
+  });
+}
+
+function initCounterBtns() {
+  document.querySelectorAll('.counter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const delta = Number(btn.dataset.delta);
+      const el = document.getElementById(targetId);
+      el.textContent = Math.max(0, Number(el.textContent) + delta);
+    });
+  });
+}
+
+async function loadEntry(date) {
+  if (!date) return;
+  try {
+    const yearMonth = date.slice(0, 7);
+    const entries = await getEntries(yearMonth);
+    const entry = entries.find(e => e.date === date);
+
+    KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+      const el = document.getElementById(`entry-${field.key}`);
+      if (el) el.value = entry ? (entry[field.key] ?? 0) : 0;
+    });
+
+    const actions = entry ? (entry.relationshipActions || []) : [];
+    document.querySelectorAll('#relationship-tags .tag-btn').forEach(btn => {
+      btn.classList.toggle('selected', actions.includes(btn.textContent));
+    });
+
+    document.getElementById('positive-count').textContent = entry ? (entry.positiveFeedback || 0) : 0;
+    document.getElementById('negative-count').textContent = entry ? (entry.negativeFeedback || 0) : 0;
+    document.getElementById('entry-memorable-visit').value = entry ? (entry.memorableVisit || '') : '';
+    document.getElementById('entry-notes').value = entry ? (entry.notes || '') : '';
+    document.getElementById('entry-notes-important').checked = entry ? !!entry.notesImportant : false;
+    document.getElementById('entry-insight').value = entry ? (entry.insight || '') : '';
+    document.getElementById('entry-next-action').value = entry ? (entry.nextAction || '') : '';
+
+    updateNotesImportant();
+  } catch (e) {
+    console.warn('エントリロード失敗:', e);
+  }
+}
+
+function updateNotesImportant() {
+  const checked = document.getElementById('entry-notes-important').checked;
+  document.getElementById('entry-notes').classList.toggle('notes-important', checked);
+}
+
+async function handleSaveEntry() {
+  const btn = document.getElementById('entry-save-btn');
+  const date = document.getElementById('entry-date').value;
+  if (!date) return;
+
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  const actions = Array.from(document.querySelectorAll('#relationship-tags .tag-btn.selected'))
+    .map(b => b.textContent);
+
+  const data = {
+    date,
+    relationshipActions: actions,
+    positiveFeedback: Number(document.getElementById('positive-count').textContent) || 0,
+    negativeFeedback: Number(document.getElementById('negative-count').textContent) || 0,
+    memorableVisit: document.getElementById('entry-memorable-visit').value,
+    notes: document.getElementById('entry-notes').value,
+    notesImportant: document.getElementById('entry-notes-important').checked,
+    insight: document.getElementById('entry-insight').value,
+    nextAction: document.getElementById('entry-next-action').value,
+  };
+
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+    const el = document.getElementById(`entry-${field.key}`);
+    data[field.key] = el ? Number(el.value) || 0 : 0;
+  });
+
+  try {
+    const result = await saveEntry(data);
+    if (!result || result.success !== true) {
+      throw new Error(result && result.error ? result.error : JSON.stringify(result));
+    }
+    showSaveFeedback(btn);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '保存する';
+    alert('保存に失敗しました: ' + e.message);
+  }
+}
+
+// ------------------------------------------------------------------
 // KGI設定タブ
 // ------------------------------------------------------------------
 
@@ -160,6 +299,7 @@ function showSaveFeedback(btn) {
 function initApp() {
   initTabs();
   updateHeaderDate();
+  initInputTab();
   initKgiTab();
   console.log('Nice Serviceman 日報 - 初期化完了');
 }

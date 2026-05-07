@@ -29,18 +29,76 @@
 
       <!-- 📝 入力タブ -->
       <section id="tab-input" class="tab-pane active">
-        <div class="placeholder-card">
-          <div class="placeholder-icon">📝</div>
-          <h2>日次入力</h2>
-          <p>Step 5 で実装予定</p>
-          <div class="placeholder-items">
-            <div class="placeholder-item">A. KPI実績（10項目）</div>
-            <div class="placeholder-item">B. 信頼関係アクション（タグ選択）</div>
-            <div class="placeholder-item">C. フィードバック記録</div>
-            <div class="placeholder-item">D. 訪問記録・備考</div>
-            <div class="placeholder-item">E. 振り返り（気づき・明日の一手）</div>
+        <!-- 日付 -->
+        <div class="card">
+          <div class="card-title">日付</div>
+          <input type="date" id="entry-date" />
+        </div>
+
+        <!-- KPI実績（JSで動的生成） -->
+        <div class="card">
+          <div class="card-title">KPI実績</div>
+          <div id="entry-kpi-container"></div>
+        </div>
+
+        <!-- 信頼関係アクション -->
+        <div class="card">
+          <div class="card-title">信頼関係アクション</div>
+          <div class="tag-group" id="relationship-tags"></div>
+        </div>
+
+        <!-- フィードバック -->
+        <div class="card">
+          <div class="card-title">フィードバック</div>
+          <div class="feedback-row">
+            <span class="feedback-label">ポジティブ</span>
+            <div class="counter">
+              <button class="counter-btn" data-target="positive-count" data-delta="-1">−</button>
+              <span class="counter-value" id="positive-count">0</span>
+              <button class="counter-btn" data-target="positive-count" data-delta="1">＋</button>
+            </div>
+          </div>
+          <div class="feedback-row">
+            <span class="feedback-label">ネガティブ</span>
+            <div class="counter">
+              <button class="counter-btn" data-target="negative-count" data-delta="-1">−</button>
+              <span class="counter-value" id="negative-count">0</span>
+              <button class="counter-btn" data-target="negative-count" data-delta="1">＋</button>
+            </div>
           </div>
         </div>
+
+        <!-- 訪問・メモ -->
+        <div class="card">
+          <div class="card-title">訪問・メモ</div>
+          <div class="form-group">
+            <label>印象的な訪問先</label>
+            <input type="text" id="entry-memorable-visit" placeholder="会社名・お客様名など" />
+          </div>
+          <div class="form-group">
+            <label>メモ</label>
+            <textarea id="entry-notes" placeholder="特記事項"></textarea>
+          </div>
+          <label class="important-toggle">
+            <input type="checkbox" id="entry-notes-important" />
+            <span>重要マーク</span>
+          </label>
+        </div>
+
+        <!-- 振り返り -->
+        <div class="card">
+          <div class="card-title">振り返り</div>
+          <div class="form-group">
+            <label>気づき</label>
+            <textarea id="entry-insight" placeholder="今日の気づき・学び"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>次の一手</label>
+            <textarea id="entry-next-action" placeholder="明日やること"></textarea>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="entry-save-btn">保存する</button>
       </section>
 
       <!-- 📊 進捗タブ -->
