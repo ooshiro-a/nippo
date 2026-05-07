@@ -39,12 +39,125 @@ function updateHeaderDate() {
 }
 
 // ------------------------------------------------------------------
+// KGI設定タブ
+// ------------------------------------------------------------------
+
+const KGI_FIELDS = [
+  { key: 'inspection',            label: '点検件数',         unit: '件', color: 'cyan' },
+  { key: 'promotionAmount',       label: '促進受注額',       unit: '円', color: 'cyan' },
+  { key: 'promotionCount',        label: '促進件数',         unit: '件', color: 'cyan' },
+  { key: 'maintenanceThisMonth',  label: '当月保守継続',     unit: '件', color: 'cyan' },
+  { key: 'maintenanceNextMonth',  label: '次月保守継続',     unit: '件', color: 'cyan' },
+  { key: 'maintenanceNext2Month', label: '次々月保守継続',   unit: '件', color: 'cyan' },
+  { key: 'newAcquisition',        label: '新規保守',         unit: '件', color: 'cyan' },
+  { key: 'acCleaning',            label: 'エアコン洗浄',     unit: '件', color: 'cyan' },
+  { key: 'fullMaintenance',       label: 'フルメンテリース', unit: '件', color: 'cyan' },
+  { key: 'tossUp',                label: '営業トスアップ',   unit: '件', color: 'cyan' },
+  { key: 'personalPlan',          label: '個人計画額',       unit: '円', color: 'emerald' },
+  { key: 'officePlan',            label: '営業所計画額',     unit: '円', color: 'amber' },
+];
+
+function initKgiTab() {
+  const monthInput = document.getElementById('kgi-month');
+  monthInput.value = getTodayJST().slice(0, 7);
+
+  buildKgiFields();
+
+  monthInput.addEventListener('change', () => loadBudget(monthInput.value));
+  document.getElementById('kgi-save-btn').addEventListener('click', handleSaveBudget);
+
+  loadBudget(monthInput.value);
+}
+
+function buildKgiFields() {
+  const container = document.getElementById('kgi-fields-container');
+  container.innerHTML = '';
+
+  const groups = [
+    { color: 'cyan',    fields: KGI_FIELDS.filter(f => f.color === 'cyan') },
+    { color: 'emerald', fields: KGI_FIELDS.filter(f => f.color === 'emerald') },
+    { color: 'amber',   fields: KGI_FIELDS.filter(f => f.color === 'amber') },
+  ];
+
+  groups.forEach(({ color, fields }) => {
+    const card = document.createElement('div');
+    card.className = `card kgi-card-${color}`;
+
+    fields.forEach(field => {
+      const row = document.createElement('div');
+      row.className = 'kgi-field-row';
+      row.innerHTML = `
+        <span class="kgi-field-label">${field.label}</span>
+        <input type="number" class="kgi-field-input" id="kgi-${field.key}"
+               value="0" min="0" inputmode="numeric" />
+        <span class="kgi-field-unit">${field.unit}</span>
+      `;
+      card.appendChild(row);
+    });
+
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll('.kgi-field-input').forEach(input => {
+    input.addEventListener('focus', () => input.select());
+  });
+}
+
+async function loadBudget(yearMonth) {
+  if (!yearMonth) return;
+  try {
+    const data = await getBudget(yearMonth);
+    KGI_FIELDS.forEach(field => {
+      const el = document.getElementById(`kgi-${field.key}`);
+      if (el) el.value = data ? (data[field.key] ?? 0) : 0;
+    });
+  } catch (e) {
+    console.warn('予算ロード失敗:', e);
+  }
+}
+
+async function handleSaveBudget() {
+  const btn = document.getElementById('kgi-save-btn');
+  const yearMonth = document.getElementById('kgi-month').value;
+  if (!yearMonth) return;
+
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  const data = { yearMonth };
+  KGI_FIELDS.forEach(field => {
+    const el = document.getElementById(`kgi-${field.key}`);
+    data[field.key] = el ? Number(el.value) || 0 : 0;
+  });
+
+  try {
+    await saveBudget(data);
+    showSaveFeedback(btn);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '保存する';
+    alert('保存に失敗しました: ' + e.message);
+  }
+}
+
+function showSaveFeedback(btn) {
+  btn.disabled = false;
+  btn.textContent = '✓ 保存しました';
+  btn.classList.add('btn-save-success');
+  setTimeout(() => {
+    btn.textContent = '保存する';
+    btn.classList.remove('btn-save-success');
+  }, 2000);
+}
+
+// ------------------------------------------------------------------
 // アプリ初期化
 // ------------------------------------------------------------------
 
 function initApp() {
   initTabs();
   updateHeaderDate();
+  initKgiTab();
   console.log('Nice Serviceman 日報 - 初期化完了');
 }
 

@@ -76,18 +76,17 @@
 
       <!-- ⚙️ KGI設定タブ -->
       <section id="tab-kgi" class="tab-pane">
-        <div class="placeholder-card">
-          <div class="placeholder-icon">⚙️</div>
-          <h2>KGI設定</h2>
-          <p>Step 4 で実装予定</p>
-          <div class="placeholder-items">
-            <div class="placeholder-item">対象月・点検件数・促進受注額</div>
-            <div class="placeholder-item">保守継続（当月/次月/次々月）</div>
-            <div class="placeholder-item">新規保守・AC洗浄・フルメンテ</div>
-            <div class="placeholder-item">営業トスアップ</div>
-            <div class="placeholder-item">個人計画額・営業所計画額</div>
-          </div>
+        <!-- 月選択 -->
+        <div class="card">
+          <div class="card-title">対象月</div>
+          <input type="month" id="kgi-month" />
         </div>
+
+        <!-- KPIフィールド群（JSで動的生成） -->
+        <div id="kgi-fields-container"></div>
+
+        <!-- 保存ボタン -->
+        <button class="btn btn-primary" id="kgi-save-btn">保存する</button>
       </section>
 
     </main>
