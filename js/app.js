@@ -76,6 +76,28 @@ function buildInputKpiFields() {
   container.querySelectorAll('.kgi-field-input').forEach(input => {
     input.addEventListener('focus', () => input.select());
   });
+
+  // 末見額カードを KPI実績カードの直後に追加
+  const forecastCard = document.createElement('div');
+  forecastCard.className = 'card';
+  forecastCard.innerHTML = '<div class="card-title">末見額</div><div id="entry-forecast-container"></div>';
+  container.closest('.card').insertAdjacentElement('afterend', forecastCard);
+
+  const forecastContainer = document.getElementById('entry-forecast-container');
+  FORECAST_FIELDS.forEach(field => {
+    const row = document.createElement('div');
+    row.className = 'kgi-field-row';
+    row.innerHTML = `
+      <span class="kgi-field-label">${field.label}</span>
+      <input type="number" class="kgi-field-input" id="entry-${field.key}"
+             value="0" min="0" inputmode="numeric" />
+      <span class="kgi-field-unit">${field.unit}</span>
+    `;
+    forecastContainer.appendChild(row);
+  });
+  forecastContainer.querySelectorAll('.kgi-field-input').forEach(input => {
+    input.addEventListener('focus', () => input.select());
+  });
 }
 
 function buildRelationshipTags() {
@@ -108,6 +130,11 @@ async function loadEntry(date) {
     const entry = entries.find(e => e.date === date);
 
     KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+      const el = document.getElementById(`entry-${field.key}`);
+      if (el) el.value = entry ? (entry[field.key] ?? 0) : 0;
+    });
+
+    FORECAST_FIELDS.forEach(field => {
       const el = document.getElementById(`entry-${field.key}`);
       if (el) el.value = entry ? (entry[field.key] ?? 0) : 0;
     });
@@ -164,6 +191,11 @@ async function handleSaveEntry() {
     data[field.key] = el ? Number(el.value) || 0 : 0;
   });
 
+  FORECAST_FIELDS.forEach(field => {
+    const el = document.getElementById(`entry-${field.key}`);
+    data[field.key] = el ? Number(el.value) || 0 : 0;
+  });
+
   try {
     const result = await saveEntry(data);
     if (!result || result.success !== true) {
@@ -209,6 +241,22 @@ async function refreshDashboard() {
       { actual: 'office-plan-actual', budget: 'office-plan-budget', rate: 'office-plan-rate', bar: 'office-plan-bar', shortage: 'office-plan-shortage' }
     );
     renderKpiChart(totals, budget);
+
+    const latestEntry = [...entries].sort((a, b) => b.date.localeCompare(a.date))[0];
+    const personalUnsettled = latestEntry ? (latestEntry.personalUnsettled || 0) : 0;
+    const officeUnsettled   = latestEntry ? (latestEntry.officeUnsettled   || 0) : 0;
+    renderPlanCard(
+      personalUnsettled,
+      budget ? (budget.personalPlan || 0) : 0,
+      { actual: 'personal-unsettled-actual', budget: 'personal-unsettled-budget',
+        rate: 'personal-unsettled-rate', bar: 'personal-unsettled-bar', shortage: 'personal-unsettled-shortage' }
+    );
+    renderPlanCard(
+      officeUnsettled,
+      budget ? (budget.officePlan || 0) : 0,
+      { actual: 'office-unsettled-actual', budget: 'office-unsettled-budget',
+        rate: 'office-unsettled-rate', bar: 'office-unsettled-bar', shortage: 'office-unsettled-shortage' }
+    );
   } catch (e) {
     console.warn('ダッシュボードロード失敗:', e);
   }
@@ -326,6 +374,11 @@ function renderKpiChart(totals, budget) {
 // ------------------------------------------------------------------
 // KGI設定タブ
 // ------------------------------------------------------------------
+
+const FORECAST_FIELDS = [
+  { key: 'personalUnsettled', label: '個人末見額',   unit: '円' },
+  { key: 'officeUnsettled',   label: '営業所末見額', unit: '円' },
+];
 
 const KGI_FIELDS = [
   { key: 'inspection',            label: '点検件数',         unit: '件', color: 'cyan' },

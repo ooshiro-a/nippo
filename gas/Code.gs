@@ -54,6 +54,8 @@ var ENTRIES_COLS = [
   'notes',
   'notes_important',
   'insight',
+  'personal_unsettled',
+  'office_unsettled',
   'next_action'
 ];
 
@@ -307,7 +309,14 @@ function jsonResponse(data) {
 /** エントリ行を正規化（型変換・camelCase化） */
 function normalizeEntry(row) {
   return {
-    date:                   String(row.date || ''),
+    date:                   (function(d) {
+      if (!d) return '';
+      if (d instanceof Date) {
+        var jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+        return jst.toISOString().slice(0, 10);
+      }
+      return String(d).slice(0, 10);
+    })(row.date),
     inspection:             Number(row.inspection) || 0,
     promotionAmount:        Number(row.promotion_amount) || 0,
     promotionCount:         Number(row.promotion_count) || 0,
@@ -325,6 +334,8 @@ function normalizeEntry(row) {
     notes:                  String(row.notes || ''),
     notesImportant:         String(row.notes_important).toUpperCase() === 'TRUE',
     insight:                String(row.insight || ''),
+    personalUnsettled:      Number(row.personal_unsettled) || 0,
+    officeUnsettled:        Number(row.office_unsettled) || 0,
     nextAction:             String(row.next_action || '')
   };
 }
