@@ -130,7 +130,7 @@ function getEntries(yearMonth) {
 
   if (yearMonth) {
     rows = rows.filter(function(row) {
-      return String(row.date).slice(0, 7) === yearMonth;
+      return dateToYMD(row.date).slice(0, 7) === yearMonth;
     });
   }
 
@@ -294,6 +294,16 @@ function findRowByKey(sheet, colIndex, value) {
   return -1;
 }
 
+/** Date型またはISO文字列を "YYYY-MM-DD" に変換（JST基準） */
+function dateToYMD(d) {
+  if (!d) return '';
+  if (d instanceof Date) {
+    var jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+    return jst.toISOString().slice(0, 10);
+  }
+  return String(d).slice(0, 10);
+}
+
 /** snake_case → camelCase */
 function snakeToCamel(str) {
   return str.replace(/_([a-z])/g, function(_, c) { return c.toUpperCase(); });
@@ -309,14 +319,7 @@ function jsonResponse(data) {
 /** エントリ行を正規化（型変換・camelCase化） */
 function normalizeEntry(row) {
   return {
-    date:                   (function(d) {
-      if (!d) return '';
-      if (d instanceof Date) {
-        var jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-        return jst.toISOString().slice(0, 10);
-      }
-      return String(d).slice(0, 10);
-    })(row.date),
+    date:                   dateToYMD(row.date),
     inspection:             Number(row.inspection) || 0,
     promotionAmount:        Number(row.promotion_amount) || 0,
     promotionCount:         Number(row.promotion_count) || 0,
