@@ -67,9 +67,11 @@ function buildInputKpiFields() {
     row.className = 'kgi-field-row';
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
-      <input type="number" class="kgi-field-input" id="entry-${field.key}"
-             value="0" min="0" inputmode="numeric" />
-      <span class="kgi-field-unit">${field.unit}</span>
+      <div class="kgi-field-input-wrap">
+        <input type="number" class="kgi-field-input" id="entry-${field.key}"
+               value="0" min="0" inputmode="numeric" />
+        <span class="kgi-field-unit">${field.unit}</span>
+      </div>
     `;
     container.appendChild(row);
   });
@@ -89,9 +91,11 @@ function buildInputKpiFields() {
     row.className = 'kgi-field-row';
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
-      <input type="number" class="kgi-field-input" id="entry-${field.key}"
-             value="0" min="0" inputmode="numeric" />
-      <span class="kgi-field-unit">${field.unit}</span>
+      <div class="kgi-field-input-wrap">
+        <input type="number" class="kgi-field-input" id="entry-${field.key}"
+               value="0" min="0" inputmode="numeric" />
+        <span class="kgi-field-unit">${field.unit}</span>
+      </div>
     `;
     forecastContainer.appendChild(row);
   });
@@ -1269,9 +1273,11 @@ function buildKgiFields() {
       row.className = 'kgi-field-row';
       row.innerHTML = `
         <span class="kgi-field-label">${field.label}</span>
-        <input type="number" class="kgi-field-input" id="kgi-${field.key}"
-               value="0" min="0" inputmode="numeric" />
-        <span class="kgi-field-unit">${field.unit}</span>
+        <div class="kgi-field-input-wrap">
+          <input type="number" class="kgi-field-input" id="kgi-${field.key}"
+                 value="0" min="0" inputmode="numeric" />
+          <span class="kgi-field-unit">${field.unit}</span>
+        </div>
       `;
       card.appendChild(row);
     });
