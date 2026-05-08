@@ -96,6 +96,13 @@ body {
   font-weight: 700;
   color: var(--accent-cyan);
   letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#header-title:active {
+  opacity: 0.6;
 }
 
 #header-date {
