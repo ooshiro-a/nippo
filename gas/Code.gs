@@ -194,7 +194,8 @@ function getBudget(yearMonth) {
   var sheet    = getSheet(SHEET_BUDGET);
   var rows     = sheetToObjects(sheet, BUDGET_COLS);
   var filtered = rows.filter(function(row) {
-    return String(row.year_month).trim() === yearMonth;
+    // year_month が Date型で返ってくる場合も dateToYMD で正規化してから比較
+    return dateToYMD(row.year_month).slice(0, 7) === yearMonth;
   });
 
   if (filtered.length === 0) return null;

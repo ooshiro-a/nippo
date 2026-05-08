@@ -121,7 +121,7 @@
 
         <!-- 個人計画達成率 -->
         <div class="card dash-card-emerald">
-          <div class="card-title">個人計画達成率（促進受注額）</div>
+          <div class="card-title">促進受注額達成率</div>
           <div class="plan-row">
             <span class="plan-actual" id="personal-plan-actual">¥0</span>
             <span class="plan-sep">/</span>
@@ -157,21 +157,6 @@
           </div>
         </div>
 
-        <!-- 営業所計画達成率 -->
-        <div class="card dash-card-amber">
-          <div class="card-title">営業所計画達成率（促進受注額）</div>
-          <div class="plan-row">
-            <span class="plan-actual" id="office-plan-actual">¥0</span>
-            <span class="plan-sep">/</span>
-            <span class="plan-budget" id="office-plan-budget">¥0</span>
-            <span class="plan-rate" id="office-plan-rate">0%</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill amber" id="office-plan-bar" style="width:0%"></div>
-          </div>
-          <div class="plan-shortage">不足額 <span id="office-plan-shortage">¥0</span></div>
-        </div>
-
         <!-- 営業所末見額達成率 -->
         <div class="card dash-card-amber">
           <div class="card-title">営業所末見額達成率（営業所計画額比）</div>
@@ -191,18 +176,33 @@
 
       <!-- 📅 履歴タブ -->
       <section id="tab-history" class="tab-pane">
-        <div class="placeholder-card">
-          <div class="placeholder-icon">📅</div>
-          <h2>履歴・サマリ</h2>
-          <p>Step 7 で実装予定</p>
-          <div class="placeholder-items">
-            <div class="placeholder-item">日次ビュー</div>
-            <div class="placeholder-item">週次ビュー</div>
-            <div class="placeholder-item">月次ビュー</div>
-            <div class="placeholder-item">四半期ビュー</div>
-            <div class="placeholder-item">年次ビュー</div>
-          </div>
+        <div class="hist-controls">
+          <select id="hist-view-select">
+            <option value="daily">日次</option>
+            <option value="weekly">週次</option>
+            <option value="monthly">月次</option>
+            <option value="quarterly">四半期</option>
+            <option value="yearly">年次</option>
+          </select>
+          <div id="hist-period-control"></div>
         </div>
+
+        <!-- レポート出力 -->
+        <div id="report-controls" class="report-controls">
+          <div class="report-btn-row">
+            <button class="btn btn-secondary report-btn" id="report-csv-btn">CSV</button>
+            <button class="btn btn-secondary report-btn" id="report-print-btn">印刷/PDF</button>
+            <button class="btn btn-secondary report-btn" id="report-copy-btn">上長報告</button>
+            <button class="btn btn-secondary report-btn" id="report-settings-btn">出力設定</button>
+          </div>
+          <div class="export-all-row">
+            <button class="btn btn-secondary report-btn" id="export-json-btn">全データJSON</button>
+            <button class="btn btn-secondary report-btn" id="export-csv-btn">全データCSV</button>
+          </div>
+          <div id="report-settings" class="report-settings" style="display:none"></div>
+        </div>
+
+        <div id="hist-content"></div>
       </section>
 
       <!-- ⚙️ KGI設定タブ -->
@@ -247,5 +247,14 @@
   <script src="js/utils.js"></script>
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/nippo/sw.js')
+          .then(function(reg) { console.log('SW registered:', reg.scope); })
+          .catch(function(err) { console.warn('SW registration failed:', err); });
+      });
+    }
+  </script>
 </body>
 </html>

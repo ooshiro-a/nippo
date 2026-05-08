@@ -22,11 +22,14 @@ async function _get(params) {
     console.warn('APPS_SCRIPT_URL 未設定。api.js の先頭にURLを貼り付けてください。');
     return null;
   }
+  console.log('[API GET]', params);
   const url = new URL(APPS_SCRIPT_URL);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
   const res = await fetch(url.toString(), { redirect: 'follow' });
   if (!res.ok) throw new Error(`GET エラー: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  console.log('[API GET] <=', JSON.stringify(data).slice(0, 300));
+  return data;
 }
 
 /**
@@ -39,6 +42,7 @@ async function _post(body) {
     console.warn('APPS_SCRIPT_URL 未設定。api.js の先頭にURLを貼り付けてください。');
     return { success: false };
   }
+  console.log('[API POST]', body.action, body.data?.date || body.data?.yearMonth || '');
   // Apps Script は302リダイレクトを返す場合があり、POSTがGETに変わってしまう。
   // redirect:'manual' で初回リダイレクト先URLを取得し、そこへ再POSTする。
   const res1 = await fetch(APPS_SCRIPT_URL, {
@@ -47,9 +51,11 @@ async function _post(body) {
     body: JSON.stringify(body),
     redirect: 'manual',
   });
+  console.log('[API POST] res1.type:', res1.type, 'status:', res1.status);
   const target = (res1.type === 'opaqueredirect' || (res1.status >= 300 && res1.status < 400))
     ? (res1.headers.get('location') || APPS_SCRIPT_URL)
     : null;
+  console.log('[API POST] target:', target ? (target === APPS_SCRIPT_URL ? 'fallback(same URL)' : 'redirect URL') : 'none');
   const res = target
     ? await fetch(target, {
         method: 'POST',
@@ -59,7 +65,9 @@ async function _post(body) {
       })
     : res1;
   if (!res.ok) throw new Error(`POST エラー: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  console.log('[API POST] <=', data);
+  return data;
 }
 
 // ============================================================
