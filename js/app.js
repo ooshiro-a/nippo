@@ -394,8 +394,35 @@ function initHistoryTab() {
     renderHistPeriodControl();
     renderHistContent();
   });
+  document.getElementById('hist-content').addEventListener('click', e => {
+    const editBtn = e.target.closest('.hist-edit-btn');
+    const deleteBtn = e.target.closest('.hist-delete-btn');
+    if (editBtn) handleEditHistoryEntry(editBtn.dataset.date);
+    if (deleteBtn) handleDeleteHistoryEntry(deleteBtn.dataset.date, deleteBtn);
+  });
   renderHistPeriodControl();
   initReportControls();
+}
+
+async function handleEditHistoryEntry(date) {
+  document.querySelector('[data-tab="tab-input"]').click();
+  document.getElementById('entry-date').value = date;
+  await loadEntry(date);
+}
+
+async function handleDeleteHistoryEntry(date, btn) {
+  if (!confirm(`${formatDate(date)} のデータを削除しますか？\nこの操作は元に戻せません。`)) return;
+  btn.disabled = true;
+  btn.textContent = '削除中...';
+  try {
+    await deleteEntry(date);
+    historyState.allData = null;
+    await renderHistContent();
+  } catch (e) {
+    alert('削除に失敗しました: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '削除';
+  }
 }
 
 function onHistViewChange() {
@@ -596,7 +623,13 @@ function buildDailyCard(entry) {
     ? `<div class="hist-text-item"><span class="hist-text-label">次の一手</span>${entry.nextAction}</div>` : '';
 
   return `<div class="card">
-    <div class="card-title">${formatDate(entry.date)}</div>
+    <div class="hist-card-header">
+      <span class="card-title">${formatDate(entry.date)}</span>
+      <div class="hist-card-actions">
+        <button class="hist-edit-btn" data-date="${entry.date}">編集</button>
+        <button class="hist-delete-btn" data-date="${entry.date}">削除</button>
+      </div>
+    </div>
     ${kpiRows || '<div style="font-size:12px;color:var(--text-muted)">KPI実績なし</div>'}
     ${metaItems.length > 0 ? `<div class="hist-entry-meta">${metaItems.join('')}</div>` : ''}
     ${importantNote}${normalNote}${visit}${insight}${nextAction}

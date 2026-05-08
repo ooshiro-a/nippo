@@ -711,6 +711,47 @@ input.kgi-field-input {
   margin-right: 4px;
 }
 
+.hist-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.hist-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.hist-edit-btn,
+.hist-delete-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid;
+  background: var(--bg-card);
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 28px;
+  line-height: 1;
+}
+
+.hist-edit-btn {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.hist-delete-btn {
+  color: var(--accent-rose);
+  border-color: var(--accent-rose);
+}
+
+.hist-edit-btn:active,
+.hist-delete-btn:active {
+  opacity: 0.7;
+}
+
 /* ------------------------------------------------------------
    レポート出力
    ------------------------------------------------------------ */

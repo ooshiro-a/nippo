@@ -128,3 +128,12 @@ async function saveBudget(data) {
 async function getAllData() {
   return _get({ action: 'getAllData' });
 }
+
+/**
+ * 日次エントリを削除（date で行を特定）
+ * @param {string} date - "YYYY-MM-DD"
+ * @returns {Promise<{success: boolean, date: string}>}
+ */
+async function deleteEntry(date) {
+  return _post({ action: 'deleteEntry', data: { date } });
+}

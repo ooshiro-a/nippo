@@ -9,8 +9,9 @@
  *   GET  ?action=getEntries[&yearMonth=YYYY-MM]
  *   GET  ?action=getBudget&yearMonth=YYYY-MM
  *   GET  ?action=getAllData
- *   POST { action: 'saveEntry',  data: {...} }
- *   POST { action: 'saveBudget', data: {...} }
+ *   POST { action: 'saveEntry',   data: {...} }
+ *   POST { action: 'saveBudget',  data: {...} }
+ *   POST { action: 'deleteEntry', data: { date: 'YYYY-MM-DD' } }
  */
 
 // シート名定数
@@ -104,6 +105,9 @@ function doPost(e) {
     } else if (action === 'saveBudget') {
       result = saveBudget(data);
 
+    } else if (action === 'deleteEntry') {
+      result = deleteEntry(data.date);
+
     } else {
       result = { error: '不明なアクション: ' + action };
     }
@@ -177,6 +181,21 @@ function saveEntry(data) {
   }
 
   return { success: true, date: date };
+}
+
+/**
+ * エントリを削除（date で行を特定して削除）
+ * @param {string} date - "YYYY-MM-DD"
+ */
+function deleteEntry(date) {
+  var sheet = getSheet(SHEET_ENTRIES);
+  var rowIndex = findRowByKey(sheet, 0, date);
+  if (rowIndex > 0) {
+    sheet.deleteRow(rowIndex);
+    return { success: true, date: date };
+  } else {
+    return { success: false, message: '該当データが見つかりません: ' + date };
+  }
 }
 
 // ============================================================
