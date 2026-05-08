@@ -194,13 +194,13 @@ function getBudget(yearMonth) {
   var sheet    = getSheet(SHEET_BUDGET);
   var rows     = sheetToObjects(sheet, BUDGET_COLS);
   var filtered = rows.filter(function(row) {
-    return row.year_month === yearMonth;
+    return String(row.year_month).trim() === yearMonth;
   });
 
   if (filtered.length === 0) return null;
 
-  var row = filtered[0];
-  // camelCase に変換して返す
+  // 重複行がある場合は最後の行を使う
+  var row = filtered[filtered.length - 1];
   return normalizeBudget(row);
 }
 
@@ -213,16 +213,29 @@ function saveBudget(data) {
   var yearMonth = String(data.yearMonth || data.year_month || '');
   if (!yearMonth) throw new Error('yearMonth が指定されていません');
 
-  var rowIndex = findRowByKey(sheet, 0, yearMonth); // A列で検索
-
   var row = BUDGET_COLS.map(function(col) {
     var val = data[snakeToCamel(col)];
     if (val === undefined) val = data[col];
     return val !== undefined && val !== null ? val : '';
   });
 
-  if (rowIndex > 0) {
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  // 重複行を後ろから削除し、最初の1行だけ残してupsert
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    var col = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    var matchRows = [];
+    for (var i = 0; i < col.length; i++) {
+      if (String(col[i][0]).trim() === yearMonth) matchRows.push(i + 2);
+    }
+    // 後ろから削除（行番号がずれないよう降順）
+    for (var j = matchRows.length - 1; j >= 1; j--) {
+      sheet.deleteRow(matchRows[j]);
+    }
+    if (matchRows.length > 0) {
+      sheet.getRange(matchRows[0], 1, 1, row.length).setValues([row]);
+    } else {
+      sheet.appendRow(row);
+    }
   } else {
     sheet.appendRow(row);
   }
@@ -301,7 +314,12 @@ function dateToYMD(d) {
     var jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
     return jst.toISOString().slice(0, 10);
   }
-  return String(d).slice(0, 10);
+  var s = String(d).trim();
+  // ハイフンなし形式 "20260508" → "2026-05-08"
+  if (/^\d{8}$/.test(s)) {
+    return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+  }
+  return s.slice(0, 10);
 }
 
 /** snake_case → camelCase */
