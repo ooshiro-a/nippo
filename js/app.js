@@ -64,14 +64,12 @@ function buildInputKpiFields() {
   const container = document.getElementById('entry-kpi-container');
   KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
     const row = document.createElement('div');
-    row.className = 'kgi-field-row-edit';
+    row.className = 'kgi-field-row';
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
-      <div class="kgi-field-input-row">
-        <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" min="0" inputmode="numeric" />
-        <span class="kgi-field-unit">${field.unit}</span>
-      </div>
+      <input type="number" class="kgi-field-input" id="entry-${field.key}"
+             value="0" min="0" inputmode="numeric" />
+      <span class="kgi-field-unit">${field.unit}</span>
     `;
     container.appendChild(row);
   });
@@ -88,14 +86,12 @@ function buildInputKpiFields() {
   const forecastContainer = document.getElementById('entry-forecast-container');
   FORECAST_FIELDS.forEach(field => {
     const row = document.createElement('div');
-    row.className = 'kgi-field-row-edit';
+    row.className = 'kgi-field-row';
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
-      <div class="kgi-field-input-row">
-        <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" min="0" inputmode="numeric" />
-        <span class="kgi-field-unit">${field.unit}</span>
-      </div>
+      <input type="number" class="kgi-field-input" id="entry-${field.key}"
+             value="0" min="0" inputmode="numeric" />
+      <span class="kgi-field-unit">${field.unit}</span>
     `;
     forecastContainer.appendChild(row);
   });
@@ -1270,14 +1266,12 @@ function buildKgiFields() {
 
     fields.forEach(field => {
       const row = document.createElement('div');
-      row.className = 'kgi-field-row-edit';
+      row.className = 'kgi-field-row';
       row.innerHTML = `
         <span class="kgi-field-label">${field.label}</span>
-        <div class="kgi-field-input-row">
-          <input type="number" class="kgi-field-input" id="kgi-${field.key}"
-                 value="0" min="0" inputmode="numeric" />
-          <span class="kgi-field-unit">${field.unit}</span>
-        </div>
+        <input type="number" class="kgi-field-input" id="kgi-${field.key}"
+               value="0" min="0" inputmode="numeric" />
+        <span class="kgi-field-unit">${field.unit}</span>
       `;
       card.appendChild(row);
     });

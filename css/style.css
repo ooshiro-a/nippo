@@ -472,25 +472,6 @@ label {
   width: 20px;
 }
 
-/* 入力フォーム用（ラベル上・入力欄下） */
-.kgi-field-row-edit {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-.kgi-field-row-edit:last-child { border-bottom: none; }
-.kgi-field-row-edit .kgi-field-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.kgi-field-input-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 
 #kgi-save-btn {
   margin-top: 8px;
