@@ -470,6 +470,7 @@ label {
   display: flex;
   align-items: center;
   gap: 6px;
+  align-self: flex-end;
 }
 
 input.kgi-field-input {
