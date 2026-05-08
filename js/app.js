@@ -504,8 +504,10 @@ async function renderHistContent() {
 async function ensureHistData() {
   if (!historyState.allData) {
     const data = await getAllData();
+    const dateMap = new Map();
+    (Array.isArray(data.entries) ? data.entries : []).forEach(e => dateMap.set(e.date, e));
     historyState.allData = {
-      entries: Array.isArray(data.entries) ? data.entries : [],
+      entries: [...dateMap.values()],
       budgets: Array.isArray(data.budgets) ? data.budgets : [],
     };
   }

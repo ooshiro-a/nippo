@@ -108,6 +108,9 @@ function doPost(e) {
     } else if (action === 'deleteEntry') {
       result = deleteEntry(data.date);
 
+    } else if (action === 'cleanupDuplicates') {
+      result = cleanupDuplicateEntries();
+
     } else {
       result = { error: '不明なアクション: ' + action };
     }
@@ -150,12 +153,22 @@ function getEntries(yearMonth) {
  * エントリを保存（date でupsert）
  * @param {Object} data
  */
+function findEntryRowByDate(sheet, date) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var col = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < col.length; i++) {
+    if (dateToYMD(col[i][0]) === String(date)) return i + 2;
+  }
+  return -1;
+}
+
 function saveEntry(data) {
   var sheet = getSheet(SHEET_ENTRIES);
   var date  = String(data.date || '');
   if (!date) throw new Error('date が指定されていません');
 
-  var rowIndex = findRowByKey(sheet, 0, date); // A列(index=0)でdate検索
+  var rowIndex = findEntryRowByDate(sheet, date); // Date型にも対応した日付検索
 
   var row = ENTRIES_COLS.map(function(col) {
     var val = data[snakeToCamel(col)];
@@ -189,7 +202,7 @@ function saveEntry(data) {
  */
 function deleteEntry(date) {
   var sheet = getSheet(SHEET_ENTRIES);
-  var rowIndex = findRowByKey(sheet, 0, date);
+  var rowIndex = findEntryRowByDate(sheet, date);
   if (rowIndex > 0) {
     sheet.deleteRow(rowIndex);
     return { success: true, date: date };
@@ -261,6 +274,34 @@ function saveBudget(data) {
   }
 
   return { success: true, yearMonth: yearMonth };
+}
+
+/**
+ * 同じ日付の重複行を削除（最後の行を残す）
+ */
+function cleanupDuplicateEntries() {
+  var sheet = getSheet(SHEET_ENTRIES);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { cleaned: 0 };
+
+  var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var seen = {};
+  var rowsToDelete = [];
+
+  for (var i = data.length - 1; i >= 0; i--) {
+    var d = dateToYMD(data[i][0]);
+    if (!d) continue;
+    if (seen[d]) {
+      rowsToDelete.push(i + 2);
+    } else {
+      seen[d] = true;
+    }
+  }
+
+  rowsToDelete.sort(function(a, b) { return b - a; });
+  rowsToDelete.forEach(function(r) { sheet.deleteRow(r); });
+
+  return { cleaned: rowsToDelete.length };
 }
 
 // ============================================================
