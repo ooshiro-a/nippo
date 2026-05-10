@@ -328,7 +328,7 @@ function renderWeeklyGauge(entries, budget) {
   });
 
   const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
-    const weekTarget = budget ? Math.round((budget[f.key] || 0) / 4) : 0;
+    const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
     if (weekTarget === 0) return '';
     const actual = weekTotals[f.key] || 0;
     const rate = Math.round(actual / weekTarget * 100);
