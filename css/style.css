@@ -869,3 +869,38 @@ input.kgi-field-input {
   padding-bottom: env(safe-area-inset-bottom);
   height: calc(var(--nav-height) + env(safe-area-inset-bottom));
 }
+
+/* ------------------------------------------------------------
+   週次ゲージ・連続入力バッジ（Step14）
+   ------------------------------------------------------------ */
+.dash-card-cyan { border-left: 3px solid var(--accent-cyan); }
+
+.dash-weekly-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dash-weekly-header .card-title { margin-bottom: 0; }
+
+.streak-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+.weekly-gauge-row { margin-bottom: 12px; }
+.weekly-gauge-row:last-child { margin-bottom: 0; }
+
+.weekly-gauge-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.weekly-gauge-label > span:first-child { flex: 1; }

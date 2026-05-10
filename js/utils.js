@@ -122,3 +122,16 @@ function formatNumber(num) {
 function formatCurrency(amount) {
   return '¥' + formatNumber(amount);
 }
+
+/**
+ * 今週の月曜日を YYYY-MM-DD で返す
+ * @returns {string} e.g. "2026-05-11"
+ */
+function getWeekStartJST() {
+  const today = getTodayJST();
+  const [y, m, d] = today.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dow = date.getUTCDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return new Date(date.getTime() + diff * 86400000).toISOString().slice(0, 10);
+}

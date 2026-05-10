@@ -105,6 +105,15 @@
       <!-- 📊 進捗タブ -->
       <section id="tab-dashboard" class="tab-pane">
 
+        <!-- 週次進捗ゲージ -->
+        <div class="card dash-card-cyan" id="dash-weekly-card">
+          <div class="dash-weekly-header">
+            <span class="card-title">今週の進捗</span>
+            <span id="streak-badge" class="streak-badge" style="display:none"></span>
+          </div>
+          <div id="weekly-gauge-container"><div style="color:var(--text-muted);font-size:13px">読み込み中...</div></div>
+        </div>
+
         <!-- 信頼関係指数 -->
         <div class="card dash-card-rose">
           <div class="card-title">信頼関係指数</div>

@@ -280,6 +280,9 @@ function initDashboardTab() {
 async function refreshDashboard() {
   const yearMonth = getCurrentYearMonthJST();
   try {
+    await ensureHistData();
+    const allEntries = historyState.allData ? historyState.allData.entries : [];
+
     const [entries, budget] = await Promise.all([
       getEntries(yearMonth),
       getBudget(yearMonth),
@@ -309,8 +312,71 @@ async function refreshDashboard() {
       { actual: 'office-unsettled-actual', budget: 'office-unsettled-budget',
         rate: 'office-unsettled-rate', bar: 'office-unsettled-bar', shortage: 'office-unsettled-shortage' }
     );
+    renderWeeklyGauge(entries, budget);
+    renderStreakBadge(allEntries);
   } catch (e) {
     console.warn('ダッシュボードロード失敗:', e);
+  }
+}
+
+function renderWeeklyGauge(entries, budget) {
+  const weekStart = getWeekStartJST();
+  const weekEntries = entries.filter(e => e.date >= weekStart);
+  const weekTotals = {};
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(f => {
+    weekTotals[f.key] = weekEntries.reduce((s, e) => s + (e[f.key] || 0), 0);
+  });
+
+  const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
+    const weekTarget = budget ? Math.round((budget[f.key] || 0) / 4) : 0;
+    if (weekTarget === 0) return '';
+    const actual = weekTotals[f.key] || 0;
+    const rate = Math.round(actual / weekTarget * 100);
+    const colorClass = getProgressColorClass(rate);
+    const color = getAccentColor(colorClass);
+    const isYen = f.unit === '円';
+    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const targetStr = isYen ? formatCurrency(weekTarget) : formatNumber(weekTarget) + f.unit;
+    return `<div class="weekly-gauge-row">
+      <div class="weekly-gauge-label">
+        <span>${f.label}</span>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr} / ${targetStr}</span>
+        <span style="font-family:var(--font-mono);font-weight:700;color:${color}">${rate}%</span>
+      </div>
+      <div class="progress-bar" style="margin-top:4px">
+        <div class="progress-fill ${colorClass}" style="width:${Math.min(rate, 100)}%"></div>
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  document.getElementById('weekly-gauge-container').innerHTML =
+    rows || '<div style="color:var(--text-muted);font-size:13px">KGI設定タブで計画を入力してください</div>';
+}
+
+function renderStreakBadge(entries) {
+  const badge = document.getElementById('streak-badge');
+  if (!badge) return;
+  const dateSet = new Set((entries || []).map(e => e.date));
+  let streak = 0;
+  const today = getTodayJST();
+  const [y, m, d] = today.split('-').map(Number);
+  let cur = new Date(Date.UTC(y, m - 1, d));
+  while (streak <= 365) {
+    const dateStr = cur.toISOString().slice(0, 10);
+    const dow = cur.getUTCDay();
+    if (dow === 0 || dow === 6) {
+      cur = new Date(cur.getTime() - 86400000);
+      continue;
+    }
+    if (!dateSet.has(dateStr)) break;
+    streak++;
+    cur = new Date(cur.getTime() - 86400000);
+  }
+  if (streak > 0) {
+    badge.textContent = `🔥 ${streak}日連続`;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
   }
 }
 
