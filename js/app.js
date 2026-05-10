@@ -72,7 +72,7 @@ function buildInputKpiFields() {
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
         <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" inputmode="numeric" />
+               value="0" />
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
@@ -96,7 +96,7 @@ function buildInputKpiFields() {
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
         <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" inputmode="numeric" />
+               value="0" />
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
