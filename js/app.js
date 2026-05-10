@@ -314,6 +314,7 @@ async function refreshDashboard() {
     );
     renderWeeklyGauge(entries, budget);
     renderStreakBadge(allEntries);
+    loadLatestAiReport();
   } catch (e) {
     console.warn('ダッシュボードロード失敗:', e);
   }
@@ -378,6 +379,44 @@ function renderStreakBadge(entries) {
   } else {
     badge.style.display = 'none';
   }
+}
+
+function initAiReportCard() {
+  document.querySelectorAll('.ai-gen-btn').forEach(btn => {
+    btn.addEventListener('click', () => handleAiReport(btn.dataset.type));
+  });
+}
+
+async function handleAiReport(type) {
+  const el = document.getElementById('ai-report-content');
+  el.innerHTML = '<div class="ai-loading">生成中...</div>';
+  document.querySelectorAll('.ai-gen-btn').forEach(b => b.disabled = true);
+  try {
+    const res = await generateReport(type);
+    if (res && res.content) {
+      renderAiReportContent(res.content, res.period, type);
+    } else {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">生成に失敗しました。GAS設定を確認してください。</div>';
+    }
+  } catch (e) {
+    el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">エラー: ' + e.message + '</div>';
+  } finally {
+    document.querySelectorAll('.ai-gen-btn').forEach(b => b.disabled = false);
+  }
+}
+
+async function loadLatestAiReport() {
+  try {
+    const res = await getLatestReport('weekly');
+    if (res && res.content) renderAiReportContent(res.content, res.period, 'weekly');
+  } catch (_) {}
+}
+
+function renderAiReportContent(content, period, type) {
+  const typeLabel = type === 'weekly' ? '週次' : '月次';
+  document.getElementById('ai-report-content').innerHTML =
+    '<div class="ai-report-label">' + typeLabel + 'レポート（' + period + '）</div>' +
+    '<div class="ai-report-body">' + content.replace(/\n/g, '<br>') + '</div>';
 }
 
 function calcMonthlyTotals(entries) {
@@ -1513,6 +1552,7 @@ function initApp() {
   initDashboardTab();
   initHistoryTab();
   initKgiTab();
+  initAiReportCard();
   console.log('Nice Serviceman 日報 - 初期化完了');
 }
 

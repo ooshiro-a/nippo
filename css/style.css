@@ -904,3 +904,35 @@ input.kgi-field-input {
   font-size: 13px;
 }
 .weekly-gauge-label > span:first-child { flex: 1; }
+
+/* AI レポートカード */
+.dash-ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dash-ai-header .card-title { margin-bottom: 0; }
+
+.ai-btn-group { display: flex; gap: 6px; }
+.ai-gen-btn { font-size: 12px; padding: 4px 12px; }
+
+.ai-report-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.ai-report-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.ai-loading {
+  color: var(--text-muted);
+  font-size: 13px;
+  animation: ai-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ai-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}

@@ -91,6 +91,9 @@ function doGet(e) {
     } else if (action === 'getAllData') {
       result = getAllData();
 
+    } else if (action === 'getLatestReport') {
+      result = getLatestReport(e.parameter);
+
     } else {
       result = { status: 'ok', message: 'Nice Serviceman 日報 API', timestamp: new Date().toISOString() };
     }
@@ -123,6 +126,9 @@ function doPost(e) {
 
     } else if (action === 'cleanupDuplicates') {
       result = cleanupDuplicateEntries();
+
+    } else if (action === 'generateReport') {
+      result = generateReport(data);
 
     } else {
       result = { error: '不明なアクション: ' + action };
@@ -510,4 +516,163 @@ function normalizeBudget(row) {
     personalPlan:           Number(row.personal_plan) || 0,
     officePlan:             Number(row.office_plan) || 0
   };
+}
+
+// ============================================================
+// AI レポート（Gemini API）
+// ============================================================
+
+function _ensureAiReportsSheet() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('AI_Reports');
+  if (!sheet) {
+    sheet = ss.insertSheet('AI_Reports');
+    sheet.getRange(1, 1, 1, 4).setValues([['timestamp', 'type', 'period', 'content']]);
+  }
+  return sheet;
+}
+
+function _callGemini(prompt) {
+  var key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('GEMINI_API_KEY が設定されていません');
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + key;
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    muteHttpExceptions: true,
+  });
+  var json = JSON.parse(res.getContentText());
+  if (!json.candidates || !json.candidates[0]) {
+    throw new Error('Gemini応答エラー: ' + res.getContentText().slice(0, 200));
+  }
+  return json.candidates[0].content.parts[0].text;
+}
+
+function generateReport(data) {
+  var type = data.type; // 'weekly' | 'monthly'
+  var jst  = new Date(new Date().getTime() + 9 * 3600000);
+  var todayStr  = jst.toISOString().slice(0, 10);
+  var yearMonth = todayStr.slice(0, 7);
+
+  var curEntries = getEntries(yearMonth); // 配列を返す
+  var budget     = getBudget(yearMonth);  // オブジェクト or null
+
+  var curData, prevData, periodLabel;
+
+  if (type === 'weekly') {
+    var dow  = jst.getUTCDay(); // 0=日 〜 6=土
+    var diff = dow === 0 ? -6 : 1 - dow;
+    var weekStartMs = jst.getTime() + diff * 86400000;
+    var weekStart   = new Date(weekStartMs).toISOString().slice(0, 10);
+
+    curData = curEntries.filter(function(e) { return e.date >= weekStart && e.date <= todayStr; });
+
+    var prevStart = new Date(weekStartMs - 7 * 86400000).toISOString().slice(0, 10);
+    var prevEnd   = new Date(jst.getTime()  - 7 * 86400000).toISOString().slice(0, 10);
+    var prevYm    = prevStart.slice(0, 7);
+    var prevAll   = prevYm === yearMonth ? curEntries : getEntries(prevYm);
+    prevData = prevAll.filter(function(e) { return e.date >= prevStart && e.date <= prevEnd; });
+
+    periodLabel = weekStart + ' 〜 ' + todayStr;
+  } else {
+    curData = curEntries;
+    var ym  = yearMonth.split('-').map(Number);
+    var pY  = ym[0], pM = ym[1] - 1;
+    if (pM === 0) { pY--; pM = 12; }
+    var prevYm = pY + '-' + (pM < 10 ? '0' + pM : String(pM));
+    prevData   = getEntries(prevYm);
+    periodLabel = yearMonth;
+  }
+
+  var KPI_KEYS   = ['inspection','promotionAmount','promotionCount',
+    'maintenanceThisMonth','maintenanceNextMonth','maintenanceNext2Month',
+    'newAcquisition','acCleaning','fullMaintenance','tossUp'];
+  var KPI_LABELS = {
+    inspection:'点検件数', promotionAmount:'促進受注額', promotionCount:'促進件数',
+    maintenanceThisMonth:'当月保守継続', maintenanceNextMonth:'次月保守継続',
+    maintenanceNext2Month:'次々月保守継続', newAcquisition:'新規保守',
+    acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ'
+  };
+
+  var sum = function(arr, key) {
+    return arr.reduce(function(s, e) { return s + (Number(e[key]) || 0); }, 0);
+  };
+  var fmt = function(key, v) {
+    return key === 'promotionAmount' ? '¥' + v.toLocaleString() : v + '件';
+  };
+
+  var kpiLines = KPI_KEYS.map(function(key) {
+    var cur  = sum(curData, key);
+    var prev = sum(prevData, key);
+    var plan = type === 'weekly'
+      ? (budget && budget[key] ? Math.round(budget[key] / 3) : 0)
+      : (budget ? (budget[key] || 0) : 0);
+    var rateStr = plan > 0 ? '（' + Math.round(cur / plan * 100) + '%）' : '';
+    var compStr = (type === 'weekly' ? ' 先週比' : ' 先月比') +
+                  (cur - prev >= 0 ? '+' : '') + (cur - prev);
+    return '  - ' + KPI_LABELS[key] + ': 実績' + fmt(key, cur) + ' / 目標' + fmt(key, plan) + rateStr + compStr;
+  }).join('\n');
+
+  var insights    = curData.filter(function(e) { return e.insight; })
+    .slice(0, 3).map(function(e) { return '  ・' + e.insight; }).join('\n');
+  var nextActions = curData.filter(function(e) { return e.nextAction; })
+    .slice(0, 3).map(function(e) { return '  ・' + e.nextAction; }).join('\n');
+
+  var tLabel = type === 'weekly' ? '週次' : '月次';
+  var pKey   = type === 'weekly' ? '週' : '月';
+
+  var prompt =
+    'あなたは優秀な営業マネージャーです。以下の' + tLabel + '営業データを分析し、' +
+    '具体的で実践的なフィードバックを300字以内で返してください。\n\n' +
+    '【対象期間】' + periodLabel + '\n\n' +
+    '【KPI実績 vs ' + tLabel + '目標】\n' + kpiLines + '\n\n' +
+    '【今' + pKey + 'の気づき・次の一手】\n' +
+    (insights    || '  （記録なし）') + '\n' +
+    (nextActions || '') + '\n\n' +
+    '以下の観点でフィードバックをお願いします：\n' +
+    '1. 今' + pKey + 'の総合評価（一言で）\n' +
+    '2. 特に注力すべきKPIとその理由\n' +
+    '3. 来' + pKey + 'への具体的アクション提案（2〜3点）';
+
+  var content = _callGemini(prompt);
+
+  _ensureAiReportsSheet().appendRow([new Date().toISOString(), type, periodLabel, content]);
+
+  return { success: true, content: content, period: periodLabel };
+}
+
+function getLatestReport(params) {
+  var type = params.type || '';
+  try {
+    var sheet   = _ensureAiReportsSheet();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, content: null };
+    var data = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
+    for (var i = data.length - 1; i >= 0; i--) {
+      if (data[i][1] === type) {
+        return { success: true, type: data[i][1], period: String(data[i][2]),
+                 content: String(data[i][3]), timestamp: String(data[i][0]) };
+      }
+    }
+  } catch (err) {
+    Logger.log('getLatestReport エラー: ' + err.message);
+  }
+  return { success: true, content: null };
+}
+
+// 毎週金曜 18 時に自動実行（setupAiTriggers() で登録）
+function weeklyReportTrigger() {
+  try { generateReport({ type: 'weekly' }); }
+  catch (e) { Logger.log('週次レポート自動生成エラー: ' + e.message); }
+}
+
+// GAS エディタから一度だけ手動実行 → 時刻トリガーを登録
+function setupAiTriggers() {
+  ScriptApp.getProjectTriggers()
+    .filter(function(t) { return t.getHandlerFunction() === 'weeklyReportTrigger'; })
+    .forEach(function(t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('weeklyReportTrigger')
+    .timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(18).create();
+  Logger.log('週次レポートトリガー登録完了（毎週金曜18時）');
 }

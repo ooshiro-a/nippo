@@ -126,3 +126,15 @@ async function getAllData() {
 async function deleteEntry(date) {
   return _post({ action: 'deleteEntry', data: { date } });
 }
+
+// ============================================================
+// AI レポート
+// ============================================================
+
+async function generateReport(type) {
+  return _post({ action: 'generateReport', data: { type } });
+}
+
+async function getLatestReport(type) {
+  return _get({ action: 'getLatestReport', type });
+}

@@ -4,7 +4,7 @@
  * キャッシュ戦略: Stale-While-Revalidate
  */
 
-const CACHE_NAME = 'nippo-v9';
+const CACHE_NAME = 'nippo-v10';
 
 const PRECACHE_URLS = [
   '/nippo/',
