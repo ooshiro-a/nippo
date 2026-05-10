@@ -43,27 +43,16 @@ async function _post(body) {
     return { success: false };
   }
   console.log('[API POST]', body.action, body.data?.date || body.data?.yearMonth || '');
-  // Apps Script は302リダイレクトを返す場合があり、POSTがGETに変わってしまう。
-  // redirect:'manual' で初回リダイレクト先URLを取得し、そこへ再POSTする。
-  const res1 = await fetch(APPS_SCRIPT_URL, {
+  // redirect:'follow' でリダイレクト先へ自動追従。
+  // GAS は doPost 実行後に 302→echo URL を返すが、echo URL はレスポンスボディを保持しており
+  // GETで追従しても JSON を正常に取得できる。
+  // ※ redirect:'manual' + 再POST は doPost を2回実行させてしまうため使用しない。
+  const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(body),
-    redirect: 'manual',
+    redirect: 'follow',
   });
-  console.log('[API POST] res1.type:', res1.type, 'status:', res1.status);
-  const target = (res1.type === 'opaqueredirect' || (res1.status >= 300 && res1.status < 400))
-    ? (res1.headers.get('location') || APPS_SCRIPT_URL)
-    : null;
-  console.log('[API POST] target:', target ? (target === APPS_SCRIPT_URL ? 'fallback(same URL)' : 'redirect URL') : 'none');
-  const res = target
-    ? await fetch(target, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(body),
-        redirect: 'follow',
-      })
-    : res1;
   if (!res.ok) throw new Error(`POST エラー: ${res.status}`);
   const data = await res.json();
   console.log('[API POST] <=', data);
