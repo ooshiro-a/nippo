@@ -396,7 +396,8 @@ async function handleAiReport(type) {
     if (res && res.content) {
       renderAiReportContent(res.content, res.period, type);
     } else {
-      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">生成に失敗しました。GAS設定を確認してください。</div>';
+      const errMsg = (res && res.error) ? res.error : 'レスポンスが空です';
+      el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">GASエラー: ' + errMsg + '</div>';
     }
   } catch (e) {
     el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">エラー: ' + e.message + '</div>';
