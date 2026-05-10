@@ -9,9 +9,10 @@
  *   GET  ?action=getEntries[&yearMonth=YYYY-MM]
  *   GET  ?action=getBudget&yearMonth=YYYY-MM
  *   GET  ?action=getAllData
- *   POST { action: 'saveEntry',   data: {...} }
- *   POST { action: 'saveBudget',  data: {...} }
- *   POST { action: 'deleteEntry', data: { date: 'YYYY-MM-DD' } }
+ *   POST { action: 'saveEntry',    data: {...} }
+ *   POST { action: 'saveBudget',   data: {...} }
+ *   POST { action: 'deleteEntry',  data: { date: 'YYYY-MM-DD' } }
+ *   POST { action: 'migrateToV1' }  ← 1回だけ手動実行してDB移行
  */
 
 // シート名定数
@@ -35,8 +36,10 @@ var BUDGET_COLS = [
   'office_plan'
 ];
 
-// entries シートの列順（A列から順に）
+// entries シートの列順（A列から順に）  ← Phase3: id/timestamp を先頭に追加
 var ENTRIES_COLS = [
+  'id',
+  'timestamp',
   'date',
   'inspection',
   'promotion_amount',
@@ -60,6 +63,14 @@ var ENTRIES_COLS = [
   'next_action'
 ];
 
+// 積み上げ計算する数値フィールド（camelCase）
+var NUMERIC_ENTRY_KEYS = [
+  'inspection', 'promotionAmount', 'promotionCount',
+  'maintenanceThisMonth', 'maintenanceNextMonth', 'maintenanceNext2Month',
+  'newAcquisition', 'acCleaning', 'fullMaintenance', 'tossUp',
+  'positiveFeedback', 'negativeFeedback'
+];
+
 // ============================================================
 // メインハンドラ
 // ============================================================
@@ -81,7 +92,6 @@ function doGet(e) {
       result = getAllData();
 
     } else {
-      // URLを直接開いたときの疎通確認用
       result = { status: 'ok', message: 'Nice Serviceman 日報 API', timestamp: new Date().toISOString() };
     }
 
@@ -108,6 +118,9 @@ function doPost(e) {
     } else if (action === 'deleteEntry') {
       result = deleteEntry(data.date);
 
+    } else if (action === 'migrateToV1') {
+      result = migrateToV1();
+
     } else if (action === 'cleanupDuplicates') {
       result = cleanupDuplicateEntries();
 
@@ -123,11 +136,38 @@ function doPost(e) {
 }
 
 // ============================================================
+// DB移行（1回だけ手動実行）
+// ============================================================
+
+/**
+ * 既存 entries シートを entries_v1 にリネームし、
+ * 新スキーマ（id/timestamp付き）の entries シートを作成する。
+ * Apps Script エディタから手動で1回だけ実行すること。
+ */
+function migrateToV1() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var oldSheet = ss.getSheetByName('entries');
+  if (!oldSheet) throw new Error('entriesシートが見つかりません');
+
+  var existingV1 = ss.getSheetByName('entries_v1');
+  if (existingV1) throw new Error('entries_v1 が既に存在します。手動で確認・削除してください');
+
+  // entries → entries_v1 にリネーム
+  oldSheet.setName('entries_v1');
+
+  // 新しい entries シートを作成してヘッダーをセット
+  var newSheet = ss.insertSheet('entries');
+  newSheet.getRange(1, 1, 1, ENTRIES_COLS.length).setValues([ENTRIES_COLS]);
+
+  return { success: true, message: 'entries → entries_v1 リネーム完了。新 entries シートを作成しました' };
+}
+
+// ============================================================
 // エントリ（日次記録）
 // ============================================================
 
 /**
- * エントリ一覧を取得
+ * エントリ一覧を取得（同日の複数行を累計集約して返す）
  * @param {string} yearMonth - "YYYY-MM"（空文字なら全件）
  * @returns {Object[]}
  */
@@ -141,106 +181,152 @@ function getEntries(yearMonth) {
     });
   }
 
-  // 数値変換・型変換
-  rows = rows.map(function(row) {
+  var normalized = rows.map(function(row) {
     return normalizeEntry(row);
   });
 
-  return rows;
+  return aggregateByDate(normalized);
 }
 
 /**
- * エントリを保存（date でupsert）
- * @param {Object} data
+ * 同日の複数行を累計集約する
+ * - 数値KPIフィールド: sum
+ * - テキスト・boolean: 最新行（timestamp降順）の値を使用
+ * - hasNegative: いずれかの数値フィールドが累計マイナスなら true
  */
-function findEntryRowByDate(sheet, date) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return -1;
-  var col = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < col.length; i++) {
-    if (dateToYMD(col[i][0]) === String(date)) return i + 2;
-  }
-  return -1;
+function aggregateByDate(entries) {
+  var dateMap = {};
+  var dateOrder = [];
+
+  entries.forEach(function(entry) {
+    var d = entry.date;
+    if (!d) return;
+    if (!dateMap[d]) {
+      dateMap[d] = [];
+      dateOrder.push(d);
+    }
+    dateMap[d].push(entry);
+  });
+
+  return dateOrder.map(function(date) {
+    var rows = dateMap[date];
+    // timestamp降順でソートし最新行を取得
+    rows.sort(function(a, b) {
+      return (b.timestamp || '').localeCompare(a.timestamp || '');
+    });
+    var latest = rows[0];
+
+    var aggregated = {
+      date:                date,
+      id:                  latest.id,
+      timestamp:           latest.timestamp,
+      relationshipActions: latest.relationshipActions,
+      memorableVisit:      latest.memorableVisit,
+      notes:               latest.notes,
+      notesImportant:      latest.notesImportant,
+      insight:             latest.insight,
+      personalUnsettled:   latest.personalUnsettled,
+      officeUnsettled:     latest.officeUnsettled,
+      nextAction:          latest.nextAction,
+    };
+
+    // 数値フィールドを合計
+    NUMERIC_ENTRY_KEYS.forEach(function(key) {
+      aggregated[key] = rows.reduce(function(sum, r) {
+        return sum + (r[key] || 0);
+      }, 0);
+    });
+
+    // 累計マイナス警告フラグ
+    aggregated.hasNegative = NUMERIC_ENTRY_KEYS.some(function(key) {
+      return aggregated[key] < 0;
+    });
+
+    return aggregated;
+  });
 }
 
+/**
+ * エントリを保存（積み上げ型: 常に新規行をinsert）
+ * @param {Object} data
+ */
 function saveEntry(data) {
   var sheet = getSheet(SHEET_ENTRIES);
   var date  = String(data.date || '');
   if (!date) throw new Error('date が指定されていません');
 
-  var rowIndex = findEntryRowByDate(sheet, date); // Date型にも対応した日付検索
+  var id        = Utilities.getUuid();
+  var timestamp = new Date().toISOString();
 
   var row = ENTRIES_COLS.map(function(col) {
-    var val = data[snakeToCamel(col)];
-    if (val === undefined) val = data[col]; // snake_case でも受け付ける
+    if (col === 'id')        return id;
+    if (col === 'timestamp') return timestamp;
 
-    // relationship_actions は配列 → カンマ区切り文字列に変換
+    var val = data[snakeToCamel(col)];
+    if (val === undefined) val = data[col];
+
     if (col === 'relationship_actions' && Array.isArray(val)) {
       val = val.join(',');
     }
-    // notes_important は boolean → TRUE/FALSE 文字列
     if (col === 'notes_important') {
       val = val ? 'TRUE' : 'FALSE';
     }
     return val !== undefined && val !== null ? val : '';
   });
 
-  if (rowIndex > 0) {
-    // 既存行を更新
-    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  } else {
-    // 新規行を追加
-    sheet.appendRow(row);
-  }
-
-  return { success: true, date: date };
+  sheet.appendRow(row);
+  return { success: true, date: date, id: id };
 }
 
 /**
- * エントリを削除（date で行を特定して削除）
+ * エントリを削除（指定日の全行を削除）
  * @param {string} date - "YYYY-MM-DD"
  */
 function deleteEntry(date) {
-  var sheet = getSheet(SHEET_ENTRIES);
-  var rowIndex = findEntryRowByDate(sheet, date);
-  if (rowIndex > 0) {
-    sheet.deleteRow(rowIndex);
-    return { success: true, date: date };
-  } else {
+  var sheet    = getSheet(SHEET_ENTRIES);
+  var lastRow  = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '該当データが見つかりません: ' + date };
+
+  var dateColIndex = ENTRIES_COLS.indexOf('date') + 1; // 1-based列番号
+  var col = sheet.getRange(2, dateColIndex, lastRow - 1, 1).getValues();
+  var rowsToDelete = [];
+
+  for (var i = 0; i < col.length; i++) {
+    if (dateToYMD(col[i][0]) === String(date)) {
+      rowsToDelete.push(i + 2);
+    }
+  }
+
+  if (rowsToDelete.length === 0) {
     return { success: false, message: '該当データが見つかりません: ' + date };
   }
+
+  // 後ろから削除（行番号ずれ防止）
+  rowsToDelete.sort(function(a, b) { return b - a; });
+  rowsToDelete.forEach(function(r) { sheet.deleteRow(r); });
+
+  return { success: true, date: date, deleted: rowsToDelete.length };
 }
 
 // ============================================================
 // 予算（KGI設定）
 // ============================================================
 
-/**
- * 指定月の予算を取得
- * @param {string} yearMonth - "YYYY-MM"
- * @returns {Object|null}
- */
 function getBudget(yearMonth) {
   if (!yearMonth) throw new Error('yearMonth が指定されていません');
 
   var sheet    = getSheet(SHEET_BUDGET);
   var rows     = sheetToObjects(sheet, BUDGET_COLS);
   var filtered = rows.filter(function(row) {
-    // year_month が Date型で返ってくる場合も dateToYMD で正規化してから比較
     return dateToYMD(row.year_month).slice(0, 7) === yearMonth;
   });
 
   if (filtered.length === 0) return null;
 
-  // 重複行がある場合は最後の行を使う
   var row = filtered[filtered.length - 1];
   return normalizeBudget(row);
 }
 
-/**
- * 予算を保存（year_month でupsert）
- * @param {Object} data
- */
 function saveBudget(data) {
   var sheet     = getSheet(SHEET_BUDGET);
   var yearMonth = String(data.yearMonth || data.year_month || '');
@@ -252,7 +338,6 @@ function saveBudget(data) {
     return val !== undefined && val !== null ? val : '';
   });
 
-  // 重複行を後ろから削除し、最初の1行だけ残してupsert
   var lastRow = sheet.getLastRow();
   if (lastRow >= 2) {
     var col = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
@@ -260,7 +345,6 @@ function saveBudget(data) {
     for (var i = 0; i < col.length; i++) {
       if (String(col[i][0]).trim() === yearMonth) matchRows.push(i + 2);
     }
-    // 後ろから削除（行番号がずれないよう降順）
     for (var j = matchRows.length - 1; j >= 1; j--) {
       sheet.deleteRow(matchRows[j]);
     }
@@ -277,14 +361,15 @@ function saveBudget(data) {
 }
 
 /**
- * 同じ日付の重複行を削除（最後の行を残す）
+ * 同じ日付の重複行を削除（Phase2互換。Phase3では通常不要）
  */
 function cleanupDuplicateEntries() {
   var sheet = getSheet(SHEET_ENTRIES);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { cleaned: 0 };
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var dateColIndex = ENTRIES_COLS.indexOf('date') + 1;
+  var data = sheet.getRange(2, dateColIndex, lastRow - 1, 1).getValues();
   var seen = {};
   var rowsToDelete = [];
 
@@ -318,7 +403,6 @@ function getAllData() {
 // ユーティリティ
 // ============================================================
 
-/** シートを取得（なければエラー） */
 function getSheet(name) {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(name);
@@ -326,19 +410,14 @@ function getSheet(name) {
   return sheet;
 }
 
-/**
- * シートの全行をオブジェクト配列に変換（1行目=ヘッダーとして使わず、cols定数を使用）
- * データが空のシートは [] を返す
- */
 function sheetToObjects(sheet, cols) {
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return []; // 1行目=ヘッダー行のみ or 空
+  if (lastRow < 2) return [];
 
   var data    = sheet.getRange(2, 1, lastRow - 1, cols.length).getValues();
   var results = [];
 
   data.forEach(function(row) {
-    // 全列が空の行はスキップ
     if (row.every(function(cell) { return cell === '' || cell === null; })) return;
 
     var obj = {};
@@ -351,10 +430,6 @@ function sheetToObjects(sheet, cols) {
   return results;
 }
 
-/**
- * 指定列で値を検索し、見つかった行番号を返す（1始まり）
- * 見つからなければ -1
- */
 function findRowByKey(sheet, colIndex, value) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return -1;
@@ -362,13 +437,12 @@ function findRowByKey(sheet, colIndex, value) {
   var col  = sheet.getRange(2, colIndex + 1, lastRow - 1, 1).getValues();
   for (var i = 0; i < col.length; i++) {
     if (String(col[i][0]) === String(value)) {
-      return i + 2; // 1行目=ヘッダーなので +2
+      return i + 2;
     }
   }
   return -1;
 }
 
-/** Date型またはISO文字列を "YYYY-MM-DD" に変換（JST基準） */
 function dateToYMD(d) {
   if (!d) return '';
   if (d instanceof Date) {
@@ -376,28 +450,26 @@ function dateToYMD(d) {
     return jst.toISOString().slice(0, 10);
   }
   var s = String(d).trim();
-  // ハイフンなし形式 "20260508" → "2026-05-08"
   if (/^\d{8}$/.test(s)) {
     return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
   }
   return s.slice(0, 10);
 }
 
-/** snake_case → camelCase */
 function snakeToCamel(str) {
   return str.replace(/_([a-z])/g, function(_, c) { return c.toUpperCase(); });
 }
 
-/** JSONレスポンスを生成 */
 function jsonResponse(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-/** エントリ行を正規化（型変換・camelCase化） */
 function normalizeEntry(row) {
   return {
+    id:                     String(row.id || ''),
+    timestamp:              String(row.timestamp || ''),
     date:                   dateToYMD(row.date),
     inspection:             Number(row.inspection) || 0,
     promotionAmount:        Number(row.promotion_amount) || 0,
@@ -422,7 +494,6 @@ function normalizeEntry(row) {
   };
 }
 
-/** 予算行を正規化（型変換・camelCase化） */
 function normalizeBudget(row) {
   return {
     yearMonth:              String(row.year_month || ''),

@@ -47,6 +47,9 @@ const RELATIONSHIP_ACTIONS = [
   '電話', 'メール', 'フォロー', '紹介依頼', 'クレーム対応',
 ];
 
+// 日付ごとの前回ロード時の累計値（差分計算用）
+const daySnapshot = {};
+
 function initInputTab() {
   document.getElementById('entry-date').value = getTodayJST();
   buildInputKpiFields();
@@ -69,7 +72,7 @@ function buildInputKpiFields() {
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
         <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" min="0" inputmode="numeric" />
+               value="0" inputmode="numeric" />
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
@@ -93,7 +96,7 @@ function buildInputKpiFields() {
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
         <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" min="0" inputmode="numeric" />
+               value="0" inputmode="numeric" />
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
@@ -158,9 +161,46 @@ async function loadEntry(date) {
     document.getElementById('entry-next-action').value = entry ? (entry.nextAction || '') : '';
 
     updateNotesImportant();
+
+    // 累計値をスナップショットとして保存（次の保存時に差分を計算するため）
+    const snap = {};
+    KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+      snap[field.key] = entry ? (entry[field.key] ?? 0) : 0;
+    });
+    FORECAST_FIELDS.forEach(field => {
+      snap[field.key] = entry ? (entry[field.key] ?? 0) : 0;
+    });
+    snap.positiveFeedback = entry ? (entry.positiveFeedback || 0) : 0;
+    snap.negativeFeedback = entry ? (entry.negativeFeedback || 0) : 0;
+    daySnapshot[date] = snap;
+
+    // 累計マイナス警告
+    if (entry && entry.hasNegative) {
+      showNegativeWarning(date);
+    } else {
+      clearNegativeWarning();
+    }
   } catch (e) {
     console.warn('エントリロード失敗:', e);
   }
+}
+
+function showNegativeWarning(date) {
+  let el = document.getElementById('negative-warning');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'negative-warning';
+    el.style.cssText = 'background:rgba(248,113,113,0.15);border:1px solid #f87171;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;color:#f87171;';
+    const saveBtn = document.getElementById('entry-save-btn');
+    saveBtn.insertAdjacentElement('beforebegin', el);
+  }
+  el.textContent = `⚠ ${formatDate(date)} の累計がマイナスになっています`;
+  el.style.display = 'block';
+}
+
+function clearNegativeWarning() {
+  const el = document.getElementById('negative-warning');
+  if (el) el.style.display = 'none';
 }
 
 function updateNotesImportant() {
@@ -176,14 +216,20 @@ async function handleSaveEntry() {
   btn.disabled = true;
   btn.textContent = '保存中...';
 
+  const snap = daySnapshot[date] || {};
+
   const actions = Array.from(document.querySelectorAll('#relationship-tags .tag-btn.selected'))
     .map(b => b.textContent);
 
+  const positiveFeedback = Number(document.getElementById('positive-count').textContent) || 0;
+  const negativeFeedback = Number(document.getElementById('negative-count').textContent) || 0;
+
+  // 積み上げ型: フォーム値とスナップショットの差分をinsert
   const data = {
     date,
     relationshipActions: actions,
-    positiveFeedback: Number(document.getElementById('positive-count').textContent) || 0,
-    negativeFeedback: Number(document.getElementById('negative-count').textContent) || 0,
+    positiveFeedback: positiveFeedback - (snap.positiveFeedback || 0),
+    negativeFeedback: negativeFeedback - (snap.negativeFeedback || 0),
     memorableVisit: document.getElementById('entry-memorable-visit').value,
     notes: document.getElementById('entry-notes').value,
     notesImportant: document.getElementById('entry-notes-important').checked,
@@ -193,12 +239,14 @@ async function handleSaveEntry() {
 
   KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    data[field.key] = el ? Number(el.value) || 0 : 0;
+    const current = el ? Number(el.value) || 0 : 0;
+    data[field.key] = current - (snap[field.key] || 0);
   });
 
   FORECAST_FIELDS.forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    data[field.key] = el ? Number(el.value) || 0 : 0;
+    const current = el ? Number(el.value) || 0 : 0;
+    data[field.key] = current - (snap[field.key] || 0);
   });
 
   try {
@@ -207,9 +255,8 @@ async function handleSaveEntry() {
       throw new Error(result && result.error ? result.error : JSON.stringify(result));
     }
     console.log('[saveEntry] 成功:', date);
-    historyState.allData = null; // 履歴キャッシュを無効化
+    historyState.allData = null;
     showSaveFeedback(btn);
-    // 保存後にサーバーから再読み込みして確認
     try { await loadEntry(date); } catch (_) {}
   } catch (e) {
     btn.disabled = false;
@@ -288,18 +335,26 @@ function renderTrustScore(entries) {
 }
 
 function renderPlanCard(actual, plan, ids) {
-  const rate = plan > 0 ? Math.min(Math.round(actual / plan * 100), 999) : 0;
-  const shortage = Math.max(0, plan - actual);
+  const rate = plan > 0 ? Math.round(actual / plan * 100) : 0;
+  const shortage = plan - actual;
   const colorClass = getProgressColorClass(rate);
 
   document.getElementById(ids.actual).textContent = formatCurrency(actual);
   document.getElementById(ids.budget).textContent = formatCurrency(plan);
   document.getElementById(ids.rate).textContent = rate + '%';
   document.getElementById(ids.rate).style.color = getAccentColor(colorClass);
-  document.getElementById(ids.shortage).textContent = formatCurrency(shortage);
+
+  const shortageEl = document.getElementById(ids.shortage);
+  if (shortage < 0) {
+    shortageEl.textContent = formatCurrency(-shortage) + '（超過）';
+    shortageEl.style.color = 'var(--accent-cyan)';
+  } else {
+    shortageEl.textContent = formatCurrency(shortage);
+    shortageEl.style.color = '';
+  }
 
   const bar = document.getElementById(ids.bar);
-  bar.style.width = Math.min(rate, 100) + '%';
+  bar.style.width = Math.max(0, Math.min(rate, 100)) + '%';
   bar.className = `progress-fill ${colorClass}`;
 }
 
