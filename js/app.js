@@ -209,7 +209,6 @@ function updateNotesImportant() {
 }
 
 async function handleSaveEntry() {
-  console.log('[handleSaveEntry] 呼び出し回数確認:', new Error().stack.split('\n')[1]);
   const btn = document.getElementById('entry-save-btn');
   const date = document.getElementById('entry-date').value;
   if (!date) return;
