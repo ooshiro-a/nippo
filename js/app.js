@@ -300,9 +300,9 @@ async function refreshDashboard() {
     );
     renderKpiChart(totals, budget);
 
-    const latestEntry = [...entries].sort((a, b) => b.date.localeCompare(a.date))[0];
-    const personalUnsettled = latestEntry ? (latestEntry.personalUnsettled || 0) : 0;
-    const officeUnsettled   = latestEntry ? (latestEntry.officeUnsettled   || 0) : 0;
+    const sortedEntries = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+    const personalUnsettled = (sortedEntries.find(e => e.personalUnsettled > 0) || {}).personalUnsettled || 0;
+    const officeUnsettled   = (sortedEntries.find(e => e.officeUnsettled   > 0) || {}).officeUnsettled   || 0;
     renderPlanCard(
       personalUnsettled,
       budget ? (budget.personalPlan || 0) : 0,
