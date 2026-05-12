@@ -295,7 +295,7 @@ async function refreshDashboard() {
     const promotionActual = totals.promotionAmount || 0;
     renderPlanCard(
       promotionActual,
-      budget ? (budget.personalPlan || 0) : 0,
+      budget ? (budget.promotionAmount || 0) : 0,
       { actual: 'personal-plan-actual', budget: 'personal-plan-budget', rate: 'personal-plan-rate', bar: 'personal-plan-bar', shortage: 'personal-plan-shortage' }
     );
     renderKpiChart(totals, budget);
