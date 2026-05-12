@@ -144,7 +144,15 @@ async function loadEntry(date) {
 
     FORECAST_FIELDS.forEach(field => {
       const el = document.getElementById(`entry-${field.key}`);
-      if (el) el.value = entry ? (entry[field.key] ?? 0) : 0;
+      if (!el) return;
+      let val = entry ? (entry[field.key] ?? 0) : 0;
+      if (!val) {
+        const recent = [...entries]
+          .filter(e => e.date < date && (e[field.key] || 0) !== 0)
+          .sort((a, b) => b.date.localeCompare(a.date))[0];
+        val = recent ? (recent[field.key] || 0) : 0;
+      }
+      el.value = val;
     });
 
     const actions = entry ? (entry.relationshipActions || []) : [];
