@@ -535,7 +535,7 @@ function _ensureAiReportsSheet() {
 function _callGemini(prompt) {
   var key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('GEMINI_API_KEY が設定されていません');
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + key;
+  var url = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=' + key;
   var res = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
@@ -624,16 +624,17 @@ function generateReport(data) {
 
   var prompt =
     'あなたは優秀な営業マネージャーです。以下の' + tLabel + '営業データを分析し、' +
-    '具体的で実践的なフィードバックを300字以内で返してください。\n\n' +
+    '必ず下記の形式のみで出力してください。形式以外の文言は不要です。\n\n' +
     '【対象期間】' + periodLabel + '\n\n' +
     '【KPI実績 vs ' + tLabel + '目標】\n' + kpiLines + '\n\n' +
     '【今' + pKey + 'の気づき・次の一手】\n' +
     (insights    || '  （記録なし）') + '\n' +
     (nextActions || '') + '\n\n' +
-    '以下の観点でフィードバックをお願いします：\n' +
-    '1. 今' + pKey + 'の総合評価（一言で）\n' +
-    '2. 特に注力すべきKPIとその理由\n' +
-    '3. 来' + pKey + 'への具体的アクション提案（2〜3点）';
+    '# 出力形式（厳守）\n' +
+    '① 良点\n・〇〇\n・〇〇\n\n' +
+    '② 改善点\n・〇〇\n・〇〇\n\n' +
+    '③ まとめ\n150〜200文字で簡潔に記載\n\n' +
+    '④ 次回アクション提案\n・〇〇\n・〇〇';
 
   var content = _callGemini(prompt);
 
