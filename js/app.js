@@ -274,6 +274,7 @@ async function handleSaveEntry() {
 // ------------------------------------------------------------------
 
 let dashboardChart = null;
+let _dashboardRefreshing = false;
 
 function initDashboardTab() {
   document.querySelector('[data-tab="tab-dashboard"]').addEventListener('click', refreshDashboard);
@@ -281,6 +282,8 @@ function initDashboardTab() {
 }
 
 async function refreshDashboard() {
+  if (_dashboardRefreshing) return;
+  _dashboardRefreshing = true;
   const yearMonth = getCurrentYearMonthJST();
   try {
     await ensureHistData();
@@ -319,6 +322,8 @@ async function refreshDashboard() {
     renderStreakBadge(allEntries);
   } catch (e) {
     console.warn('ダッシュボードロード失敗:', e);
+  } finally {
+    _dashboardRefreshing = false;
   }
 }
 
@@ -331,14 +336,26 @@ function renderWeeklyGauge(entries, budget) {
   });
 
   const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
-    const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
-    if (weekTarget === 0) return '';
     const actual = weekTotals[f.key] || 0;
+    const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
+    const isYen = f.unit === '円';
+    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+
+    if (weekTarget === 0) {
+      // 予算未設定: 実績が0の項目はスキップ、あれば目標なしで表示
+      if (actual === 0) return '';
+      return `<div class="weekly-gauge-row">
+        <div class="weekly-gauge-label">
+          <span>${f.label}</span>
+          <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr}</span>
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">目標未設定</span>
+        </div>
+      </div>`;
+    }
+
     const rate = Math.round(actual / weekTarget * 100);
     const colorClass = getProgressColorClass(rate);
     const color = getAccentColor(colorClass);
-    const isYen = f.unit === '円';
-    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
     const targetStr = isYen ? formatCurrency(weekTarget) : formatNumber(weekTarget) + f.unit;
     return `<div class="weekly-gauge-row">
       <div class="weekly-gauge-label">
@@ -527,19 +544,20 @@ function renderKpiChart(totals, budget) {
     colors.push(getAccentColor(getProgressColorClass(rate)) + 'cc');
   });
 
-  const ctx = document.getElementById('kpi-chart').getContext('2d');
+  const canvas = document.getElementById('kpi-chart');
+  const ctx = canvas.getContext('2d');
 
-  if (dashboardChart) {
-    dashboardChart.destroy();
-    dashboardChart = null;
-  }
+  // Chart.js 4.x: getChart() でキャンバスに紐づく既存チャートを確実に破棄
+  const existingChart = Chart.getChart(canvas);
+  if (existingChart) existingChart.destroy();
+  dashboardChart = null;
 
   if (labels.length === 0) {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#475569';
     ctx.font = '14px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('KGI設定タブで計画を入力してください', ctx.canvas.width / 2, 60);
+    ctx.fillText('KGI設定タブで計画を入力してください', canvas.width / 2, 60);
     return;
   }
 
