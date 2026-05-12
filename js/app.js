@@ -314,7 +314,6 @@ async function refreshDashboard() {
     );
     renderWeeklyGauge(entries, budget);
     renderStreakBadge(allEntries);
-    loadLatestAiReport();
   } catch (e) {
     console.warn('ダッシュボードロード失敗:', e);
   }
