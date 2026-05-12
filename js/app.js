@@ -432,28 +432,7 @@ function handleAiPdf() {
     alert('先にレポートを生成してください');
     return;
   }
-  const typeLabel = _aiReportCache.type === 'weekly' ? '週次' : '月次';
-  const body = _aiReportCache.content.replace(/\n/g, '<br>');
-  const win = window.open('', '_blank');
-  win.document.write(
-    '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">' +
-    '<title>' + typeLabel + 'AIレポート</title>' +
-    '<style>' +
-    'body{font-family:"Helvetica Neue",Arial,"Hiragino Kaku Gothic ProN",sans-serif;' +
-    'padding:32px;max-width:640px;margin:0 auto;color:#111;font-size:14px;line-height:1.9}' +
-    'h2{font-size:17px;margin-bottom:4px}' +
-    '.period{font-size:12px;color:#666;margin-bottom:24px}' +
-    '.report{white-space:pre-wrap}' +
-    '@media print{body{padding:20px}}' +
-    '</style></head><body>' +
-    '<h2>' + typeLabel + ' AIレポート</h2>' +
-    '<div class="period">' + _aiReportCache.period + '</div>' +
-    '<div class="report">' + body + '</div>' +
-    '</body></html>'
-  );
-  win.document.close();
-  win.focus();
-  win.print();
+  window.print();
 }
 
 function calcMonthlyTotals(entries) {

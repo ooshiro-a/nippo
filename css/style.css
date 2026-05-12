@@ -941,3 +941,21 @@ input.kgi-field-input {
   font-weight: 700;
   color: var(--accent-cyan);
 }
+
+@media print {
+  body * { visibility: hidden; }
+  #dash-ai-report-card,
+  #dash-ai-report-card * { visibility: visible; }
+  #dash-ai-report-card {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    padding: 30px;
+    background: #fff;
+    color: #111;
+    font-size: 14px;
+    line-height: 1.9;
+  }
+  .ai-btn-group { display: none !important; }
+  .ai-section-marker { color: #000; }
+}
