@@ -668,12 +668,48 @@ function weeklyReportTrigger() {
   catch (e) { Logger.log('週次レポート自動生成エラー: ' + e.message); }
 }
 
+// ============================================================
+// 月末自動判定（Step16）
+// ============================================================
+
+function isHolidayOrWeekend(date) {
+  var dow = date.getDay(); // 0=日, 6=土
+  if (dow === 0 || dow === 6) return true;
+  var calId = 'ja.japanese.official#holiday@group.v.calendar.google.com';
+  var cal = CalendarApp.getCalendarById(calId);
+  if (!cal) return false;
+  var start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  var end   = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  return cal.getEvents(start, end).length > 0;
+}
+
+function isLastBusinessDayOfMonth() {
+  var jst   = new Date(new Date().getTime() + 9 * 3600000);
+  var today = jst.toISOString().slice(0, 10);
+  var lastDay = new Date(jst.getFullYear(), jst.getMonth() + 1, 0);
+  while (isHolidayOrWeekend(lastDay)) {
+    lastDay.setDate(lastDay.getDate() - 1);
+  }
+  return today === lastDay.toISOString().slice(0, 10);
+}
+
+// 毎日 19 時に自動実行 → 月末最終営業日のみ月次レポートを生成
+function monthlyReportTrigger() {
+  if (!isLastBusinessDayOfMonth()) return;
+  try { generateReport({ type: 'monthly' }); }
+  catch (e) { Logger.log('月次レポート自動生成エラー: ' + e.message); }
+}
+
 // GAS エディタから一度だけ手動実行 → 時刻トリガーを登録
 function setupAiTriggers() {
-  ScriptApp.getProjectTriggers()
-    .filter(function(t) { return t.getHandlerFunction() === 'weeklyReportTrigger'; })
-    .forEach(function(t) { ScriptApp.deleteTrigger(t); });
+  ['weeklyReportTrigger', 'monthlyReportTrigger'].forEach(function(fn) {
+    ScriptApp.getProjectTriggers()
+      .filter(function(t) { return t.getHandlerFunction() === fn; })
+      .forEach(function(t) { ScriptApp.deleteTrigger(t); });
+  });
   ScriptApp.newTrigger('weeklyReportTrigger')
     .timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(18).create();
-  Logger.log('週次レポートトリガー登録完了（毎週金曜18時）');
+  ScriptApp.newTrigger('monthlyReportTrigger')
+    .timeBased().everyDays(1).atHour(19).create();
+  Logger.log('AIトリガー登録完了（週次: 金曜18時 / 月次判定: 毎日19時）');
 }
