@@ -139,7 +139,7 @@ async function loadEntry(date) {
 
     KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
       const el = document.getElementById(`entry-${field.key}`);
-      if (el) el.value = entry ? (entry[field.key] ?? 0) : 0;
+      if (el) el.value = 0;
     });
 
     FORECAST_FIELDS.forEach(field => {
@@ -152,8 +152,8 @@ async function loadEntry(date) {
       btn.classList.toggle('selected', actions.includes(btn.textContent));
     });
 
-    document.getElementById('positive-count').textContent = entry ? (entry.positiveFeedback || 0) : 0;
-    document.getElementById('negative-count').textContent = entry ? (entry.negativeFeedback || 0) : 0;
+    document.getElementById('positive-count').textContent = 0;
+    document.getElementById('negative-count').textContent = 0;
     document.getElementById('entry-memorable-visit').value = entry ? (entry.memorableVisit || '') : '';
     document.getElementById('entry-notes').value = entry ? (entry.notes || '') : '';
     document.getElementById('entry-notes-important').checked = entry ? !!entry.notesImportant : false;
@@ -162,16 +162,11 @@ async function loadEntry(date) {
 
     updateNotesImportant();
 
-    // 累計値をスナップショットとして保存（次の保存時に差分を計算するため）
     const snap = {};
-    KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
-      snap[field.key] = entry ? (entry[field.key] ?? 0) : 0;
-    });
-    FORECAST_FIELDS.forEach(field => {
-      snap[field.key] = entry ? (entry[field.key] ?? 0) : 0;
-    });
-    snap.positiveFeedback = entry ? (entry.positiveFeedback || 0) : 0;
-    snap.negativeFeedback = entry ? (entry.negativeFeedback || 0) : 0;
+    KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => { snap[field.key] = 0; });
+    FORECAST_FIELDS.forEach(field => { snap[field.key] = 0; });
+    snap.positiveFeedback = 0;
+    snap.negativeFeedback = 0;
     daySnapshot[date] = snap;
 
     // 累計マイナス警告
