@@ -1363,16 +1363,35 @@ function buildReportText() {
   const { entries, budgets } = historyState.allData;
   const view = historyState.view;
 
+  // ── 週次 ──
   if (view === 'weekly') {
     const filtered = entries.filter(e => e.date.startsWith(historyState.yearMonth));
     const weeks = groupEntriesByWeek(filtered, historyState.yearMonth);
+    if (weeks.length === 0) {
+      return `【週次営業報告】${formatYearMonth(historyState.yearMonth)}\n報告日: ${getTodayJST()}\nデータがありません`;
+    }
     return weeks.map(w => buildWeeklyReportText(w, historyState.yearMonth)).join('\n\n');
   }
 
-  // 月次・その他 → 月次報告
-  const ym = (view === 'monthly' || view === 'quarterly' || view === 'yearly')
-    ? historyState.yearMonth  // 月次の場合は yearMonth を使う
-    : historyState.yearMonth;
+  // ── 月次（選択年の全月をループして生成）──
+  if (view === 'monthly') {
+    const filtered = entries.filter(e => e.date.startsWith(String(historyState.year)));
+    const monthMap = groupEntriesByMonth(filtered, historyState.year);
+    const months = Array.from({ length: 12 }, (_, i) =>
+      `${historyState.year}-${String(i + 1).padStart(2, '0')}`
+    );
+    const monthsWithData = months.filter(ym => monthMap[ym] && monthMap[ym].length > 0);
+    if (monthsWithData.length === 0) {
+      return `【月次営業報告】${historyState.year}年\n報告日: ${getTodayJST()}\nデータがありません`;
+    }
+    return monthsWithData.map(ym => {
+      const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+      return buildMonthlyReportText(ym, monthMap[ym], budget);
+    }).join('\n\n');
+  }
+
+  // ── 日次・四半期・年次 → 当月報告 ──
+  const ym = historyState.yearMonth;
   const filtered = entries.filter(e => e.date.startsWith(ym));
   const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
   return buildMonthlyReportText(ym, filtered, budget);
