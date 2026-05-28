@@ -1,0 +1,3085 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0f1e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="日報">
+  <title>Nice Serviceman 日報</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+/* ============================================================
+   Nice Serviceman 日報 - スタイルシート
+   テーマ: ディープオーシャン × 琉球レッドアクセント
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   カラーパレット（CSS変数）
+   ------------------------------------------------------------ */
+:root {
+  /* 背景 */
+  --bg-primary:   #0a0f1e;
+  --bg-secondary: #111827;
+  --bg-card:      #1e293b;
+  --bg-card-hover:#263248;
+  --bg-input:     #0f172a;
+
+  /* ボーダー */
+  --border:       #2d3f5a;
+  --border-light: #374151;
+
+  /* アクセントカラー */
+  --accent-cyan:    #22d3ee;   /* KPI系 */
+  --accent-rose:    #fb7185;   /* 信頼関係指数 */
+  --accent-emerald: #4ade80;   /* 個人計画 */
+  --accent-amber:   #fbbf24;   /* 営業所計画・年次 */
+  --accent-red:     #f87171;   /* 重要タグ・警告 */
+  --accent-violet:  #a78bfa;   /* 訪問記録 */
+
+  /* テキスト */
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+
+  /* ナビゲーション */
+  --nav-height:   64px;
+  --header-height: 52px;
+
+  /* フォント */
+  --font-ja:      'Zen Kaku Gothic New', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+}
+
+/* ------------------------------------------------------------
+   リセット & ベース
+   ------------------------------------------------------------ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  height: 100%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-ja);
+  font-size: 15px;
+  line-height: 1.6;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------
+   アプリレイアウト
+   ------------------------------------------------------------ */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh; /* dynamic viewport height（アドレスバー対応）*/
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ヘッダー */
+#app-header {
+  flex-shrink: 0;
+  height: var(--header-height);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 10;
+}
+
+#header-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#header-title:active {
+  opacity: 0.6;
+}
+
+#header-date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* メインコンテンツ */
+#content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* タブペイン */
+.tab-pane {
+  display: none;
+  padding: 16px;
+  min-height: 100%;
+  animation: fadeIn 0.15s ease;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 下部ナビゲーション */
+#bottom-nav {
+  flex-shrink: 0;
+  height: var(--nav-height);
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+  z-index: 10;
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+  padding: 8px 4px;
+}
+
+.nav-btn:active {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.nav-btn.active {
+  color: var(--accent-cyan);
+}
+
+.nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ------------------------------------------------------------
+   プレースホルダーカード（Step1〜各機能実装まで）
+   ------------------------------------------------------------ */
+.placeholder-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.placeholder-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.placeholder-card h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.placeholder-card p {
+  font-size: 13px;
+  color: var(--accent-cyan);
+  margin-bottom: 20px;
+}
+
+.placeholder-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.placeholder-item {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.placeholder-item::before {
+  content: '▸ ';
+  color: var(--accent-cyan);
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------
+   共通カード
+   ------------------------------------------------------------ */
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+/* ------------------------------------------------------------
+   共通フォーム要素
+   ------------------------------------------------------------ */
+input[type="text"],
+input[type="number"],
+input[type="month"],
+textarea,
+select {
+  width: 100%;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-ja);
+  font-size: 15px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="number"] {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  text-align: right;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.15);
+}
+
+textarea {
+  resize: none;
+  min-height: 80px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+/* ------------------------------------------------------------
+   ボタン
+   ------------------------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: none;
+  font-family: var(--font-ja);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  width: 100%;
+}
+
+.btn:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background-color: var(--accent-cyan);
+  color: var(--bg-primary);
+}
+
+.btn-secondary {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background-color: var(--accent-red);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------
+   タグ（信頼関係アクション等）
+   ------------------------------------------------------------ */
+.tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background-color: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font-ja);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tag-btn.selected {
+  background-color: rgba(34, 211, 238, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* ------------------------------------------------------------
+   進捗バー
+   ------------------------------------------------------------ */
+.progress-bar {
+  height: 8px;
+  background-color: var(--bg-input);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.progress-fill.green   { background-color: var(--accent-emerald); }
+.progress-fill.cyan    { background-color: var(--accent-cyan); }
+.progress-fill.amber   { background-color: var(--accent-amber); }
+.progress-fill.red     { background-color: var(--accent-red); }
+
+/* ------------------------------------------------------------
+   重要タグ（赤強調）
+   ------------------------------------------------------------ */
+.notes-important {
+  border-color: var(--accent-red) !important;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.2) !important;
+}
+
+/* ------------------------------------------------------------
+   数値表示（JetBrains Mono）
+   ------------------------------------------------------------ */
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------------
+   セクション見出し
+   ------------------------------------------------------------ */
+.section-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  margin-top: 20px;
+  padding-left: 2px;
+}
+
+.section-heading:first-child {
+  margin-top: 0;
+}
+
+/* ------------------------------------------------------------
+   スクロールバー（Webkit）
+   ------------------------------------------------------------ */
+#content::-webkit-scrollbar {
+  width: 3px;
+}
+
+#content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#content::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------
+   KGI設定タブ
+   ------------------------------------------------------------ */
+.kgi-card-cyan    { border-left: 3px solid var(--accent-cyan); }
+.kgi-card-emerald { border-left: 3px solid var(--accent-emerald); }
+.kgi-card-amber   { border-left: 3px solid var(--accent-amber); }
+
+.kgi-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.kgi-field-row:last-child { border-bottom: none; }
+
+.kgi-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.kgi-field-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-end;
+}
+
+input.kgi-field-input {
+  width: 140px !important;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+
+.kgi-field-unit {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+
+#kgi-save-btn {
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+.btn-save-success {
+  background-color: var(--accent-emerald) !important;
+  color: var(--bg-primary) !important;
+}
+
+/* ------------------------------------------------------------
+   ダッシュボードタブ
+   ------------------------------------------------------------ */
+.dash-card-rose    { border-left: 3px solid var(--accent-rose); }
+.dash-card-emerald { border-left: 3px solid var(--accent-emerald); }
+.dash-card-amber   { border-left: 3px solid var(--accent-amber); }
+
+.trust-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.trust-score-value {
+  font-family: var(--font-mono);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--accent-rose);
+  line-height: 1;
+}
+
+.trust-score-unit {
+  font-size: 18px;
+  color: var(--accent-rose);
+}
+
+.trust-breakdown {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.plan-actual {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.plan-sep {
+  color: var(--text-muted);
+}
+
+.plan-budget {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.plan-rate {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.plan-shortage {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.plan-shortage span {
+  color: var(--accent-amber);
+  font-family: var(--font-mono);
+}
+
+.chart-wrap {
+  position: relative;
+  height: 280px;
+}
+
+/* ------------------------------------------------------------
+   日次入力タブ - フィードバックカウンター
+   ------------------------------------------------------------ */
+.feedback-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.feedback-row:last-child { border-bottom: none; }
+
+.feedback-label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.counter-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.counter-btn:active {
+  background-color: var(--bg-card-hover);
+}
+
+.counter-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  min-width: 28px;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------
+   日次入力タブ - 重要マークトグル
+   ------------------------------------------------------------ */
+.important-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.important-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-red);
+}
+
+.important-toggle span {
+  font-size: 13px;
+  color: var(--accent-red);
+}
+
+#entry-save-btn {
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+/* ------------------------------------------------------------
+   履歴タブ
+   ------------------------------------------------------------ */
+.hist-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.hist-controls select,
+.hist-controls input {
+  flex: 1;
+}
+
+.hist-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+.hist-entry-meta-item {
+  white-space: nowrap;
+}
+
+.hist-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 32px 16px;
+  font-size: 14px;
+}
+
+.hist-important-note {
+  font-size: 12px;
+  color: var(--accent-red);
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: 6px;
+  border-left: 2px solid var(--accent-red);
+}
+
+.hist-text-item {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.hist-text-label {
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.hist-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.hist-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.hist-edit-btn,
+.hist-delete-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid;
+  background: var(--bg-card);
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 28px;
+  line-height: 1;
+}
+
+.hist-edit-btn {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.hist-delete-btn {
+  color: var(--accent-rose);
+  border-color: var(--accent-rose);
+}
+
+.hist-edit-btn:active,
+.hist-delete-btn:active {
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------------
+   レポート出力
+   ------------------------------------------------------------ */
+.report-controls {
+  margin-bottom: 12px;
+}
+
+.report-btn-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.report-btn {
+  padding: 9px 2px;
+  font-size: 11px;
+}
+
+.export-all-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.report-settings-btn-active {
+  background-color: rgba(34, 211, 238, 0.15) !important;
+  border-color: var(--accent-cyan) !important;
+  color: var(--accent-cyan) !important;
+}
+
+.report-settings {
+  margin-top: 10px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.report-settings-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  margin-top: 10px;
+}
+
+.report-settings-section-title:first-child {
+  margin-top: 0;
+}
+
+.report-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.report-chk-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.report-chk-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------
+   印刷用スタイル
+   ------------------------------------------------------------ */
+@media print {
+  #app-header, #bottom-nav, .hist-controls, .report-controls, #report-settings { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  #content { overflow: visible !important; height: auto !important; }
+  #app { max-width: 100% !important; height: auto !important; }
+  html { overflow: visible !important; }
+  .tab-pane { display: none !important; }
+  #tab-history { display: block !important; padding: 12px !important; }
+  .card {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    page-break-inside: avoid;
+    border-radius: 0 !important;
+    color: #000 !important;
+  }
+  .card-title { color: #333 !important; }
+  .kgi-field-label { color: #000 !important; }
+  .hist-empty { color: #999 !important; }
+  .hist-entry-meta { color: #555 !important; }
+  .hist-text-item { color: #555 !important; }
+  .hist-important-note {
+    background: #fff8f8 !important;
+    border-color: #c00 !important;
+    color: #c00 !important;
+  }
+}
+
+/* ------------------------------------------------------------
+   セーフエリア対応（iPhone等のノッチ）
+   ------------------------------------------------------------ */
+#app-header {
+  padding-top: env(safe-area-inset-top);
+  height: calc(var(--header-height) + env(safe-area-inset-top));
+}
+
+#bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(var(--nav-height) + env(safe-area-inset-bottom));
+}
+
+/* ------------------------------------------------------------
+   週次ゲージ・連続入力バッジ（Step14）
+   ------------------------------------------------------------ */
+.dash-card-cyan { border-left: 3px solid var(--accent-cyan); }
+
+.dash-weekly-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dash-weekly-header .card-title { margin-bottom: 0; }
+
+.streak-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+.weekly-gauge-row { margin-bottom: 12px; }
+.weekly-gauge-row:last-child { margin-bottom: 0; }
+
+.weekly-gauge-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.weekly-gauge-label > span:first-child { flex: 1; }
+
+/* AI レポートカード */
+.dash-ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dash-ai-header .card-title { margin-bottom: 0; }
+
+.ai-btn-group { display: flex; gap: 6px; }
+.ai-gen-btn { font-size: 12px; padding: 4px 12px; }
+
+.ai-report-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.ai-report-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.ai-loading {
+  color: var(--text-muted);
+  font-size: 13px;
+  animation: ai-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ai-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.ai-section-marker {
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+/* AI レポートの PDF 出力は handleAiPdf() が新規ウィンドウを開いて印刷するため
+   ここに print スタイルは不要（body * を hidden にすると履歴タブ印刷が壊れる） */
+
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- ヘッダー -->
+    <header id="app-header">
+      <span id="header-title" onclick="location.reload()" title="タップして更新">Nice Serviceman 日報</span>
+      <span id="header-date"></span>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main id="content">
+
+      <!-- 📝 入力タブ -->
+      <section id="tab-input" class="tab-pane active">
+        <!-- 日付 -->
+        <div class="card">
+          <div class="card-title">日付</div>
+          <input type="date" id="entry-date" />
+        </div>
+
+        <!-- KPI実績（JSで動的生成） -->
+        <div class="card">
+          <div class="card-title">KPI実績</div>
+          <div id="entry-kpi-container"></div>
+        </div>
+
+        <!-- 信頼関係アクション -->
+        <div class="card">
+          <div class="card-title">信頼関係アクション</div>
+          <div class="tag-group" id="relationship-tags"></div>
+        </div>
+
+        <!-- フィードバック -->
+        <div class="card">
+          <div class="card-title">フィードバック</div>
+          <div class="feedback-row">
+            <span class="feedback-label">ポジティブ</span>
+            <div class="counter">
+              <button class="counter-btn" data-target="positive-count" data-delta="-1">−</button>
+              <span class="counter-value" id="positive-count">0</span>
+              <button class="counter-btn" data-target="positive-count" data-delta="1">＋</button>
+            </div>
+          </div>
+          <div class="feedback-row">
+            <span class="feedback-label">ネガティブ</span>
+            <div class="counter">
+              <button class="counter-btn" data-target="negative-count" data-delta="-1">−</button>
+              <span class="counter-value" id="negative-count">0</span>
+              <button class="counter-btn" data-target="negative-count" data-delta="1">＋</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 訪問・メモ -->
+        <div class="card">
+          <div class="card-title">訪問・メモ</div>
+          <div class="form-group">
+            <label>印象的な訪問先</label>
+            <input type="text" id="entry-memorable-visit" placeholder="会社名・お客様名など" />
+          </div>
+          <div class="form-group">
+            <label>メモ</label>
+            <textarea id="entry-notes" placeholder="特記事項"></textarea>
+          </div>
+          <label class="important-toggle">
+            <input type="checkbox" id="entry-notes-important" />
+            <span>重要マーク</span>
+          </label>
+        </div>
+
+        <!-- 振り返り -->
+        <div class="card">
+          <div class="card-title">振り返り</div>
+          <div class="form-group">
+            <label>気づき</label>
+            <textarea id="entry-insight" placeholder="今日の気づき・学び"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>次の一手</label>
+            <textarea id="entry-next-action" placeholder="明日やること"></textarea>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="entry-save-btn">保存する</button>
+      </section>
+
+      <!-- 📊 進捗タブ -->
+      <section id="tab-dashboard" class="tab-pane">
+
+        <!-- 週次進捗ゲージ -->
+        <div class="card dash-card-cyan" id="dash-weekly-card">
+          <div class="dash-weekly-header">
+            <span class="card-title">今週の進捗</span>
+            <span id="streak-badge" class="streak-badge" style="display:none"></span>
+          </div>
+          <div id="weekly-gauge-container"><div style="color:var(--text-muted);font-size:13px">読み込み中...</div></div>
+        </div>
+
+        <!-- AIレポート -->
+        <div class="card" id="dash-ai-report-card">
+          <div class="dash-ai-header">
+            <span class="card-title">🤖 AIレポート</span>
+            <div class="ai-btn-group">
+              <button class="btn btn-secondary ai-gen-btn" id="ai-weekly-btn" data-type="weekly">週次</button>
+              <button class="btn btn-secondary ai-gen-btn" id="ai-monthly-btn" data-type="monthly">月次</button>
+              <button class="btn btn-secondary ai-gen-btn" id="ai-pdf-btn">📄PDF</button>
+            </div>
+          </div>
+          <div id="ai-report-content">
+            <div style="color:var(--text-muted);font-size:13px">「週次」「月次」ボタンでAIがKPIを分析します</div>
+          </div>
+        </div>
+
+        <!-- 信頼関係指数 -->
+        <div class="card dash-card-rose">
+          <div class="card-title">信頼関係指数</div>
+          <div class="trust-hero">
+            <span class="trust-score-value" id="trust-score-value">--</span>
+            <span class="trust-score-unit">pt</span>
+          </div>
+          <div class="trust-breakdown">
+            <span>アクション <span id="trust-action-count">0</span>件 ×2pt</span>
+            <span>ポジFB <span id="trust-pos-count">0</span>件 ×5pt</span>
+            <span>ネガFB <span id="trust-neg-count">0</span>件 ×3pt</span>
+          </div>
+        </div>
+
+        <!-- 個人計画達成率 -->
+        <div class="card dash-card-emerald">
+          <div class="card-title">促進受注額達成率</div>
+          <div class="plan-row">
+            <span class="plan-actual" id="personal-plan-actual">¥0</span>
+            <span class="plan-sep">/</span>
+            <span class="plan-budget" id="personal-plan-budget">¥0</span>
+            <span class="plan-rate" id="personal-plan-rate">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill green" id="personal-plan-bar" style="width:0%"></div>
+          </div>
+          <div class="plan-shortage">不足額 <span id="personal-plan-shortage">¥0</span></div>
+        </div>
+
+        <!-- 個人末見額達成率 -->
+        <div class="card dash-card-emerald">
+          <div class="card-title">個人末見額達成率（個人計画額比）</div>
+          <div class="plan-row">
+            <span class="plan-actual" id="personal-unsettled-actual">¥0</span>
+            <span class="plan-sep">/</span>
+            <span class="plan-budget" id="personal-unsettled-budget">¥0</span>
+            <span class="plan-rate" id="personal-unsettled-rate">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill green" id="personal-unsettled-bar" style="width:0%"></div>
+          </div>
+          <div class="plan-shortage">不足額 <span id="personal-unsettled-shortage">¥0</span></div>
+        </div>
+
+        <!-- KPI達成率チャート -->
+        <div class="card">
+          <div class="card-title">KPI達成率</div>
+          <div class="chart-wrap">
+            <canvas id="kpi-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- 営業所末見額達成率 -->
+        <div class="card dash-card-amber">
+          <div class="card-title">営業所末見額達成率（営業所計画額比）</div>
+          <div class="plan-row">
+            <span class="plan-actual" id="office-unsettled-actual">¥0</span>
+            <span class="plan-sep">/</span>
+            <span class="plan-budget" id="office-unsettled-budget">¥0</span>
+            <span class="plan-rate" id="office-unsettled-rate">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill amber" id="office-unsettled-bar" style="width:0%"></div>
+          </div>
+          <div class="plan-shortage">不足額 <span id="office-unsettled-shortage">¥0</span></div>
+        </div>
+
+      </section>
+
+      <!-- 📅 履歴タブ -->
+      <section id="tab-history" class="tab-pane">
+        <div class="hist-controls">
+          <select id="hist-view-select">
+            <option value="daily">日次</option>
+            <option value="weekly">週次</option>
+            <option value="monthly">月次</option>
+            <option value="quarterly">四半期</option>
+            <option value="yearly">年次</option>
+          </select>
+          <div id="hist-period-control"></div>
+        </div>
+
+        <!-- レポート出力 -->
+        <div id="report-controls" class="report-controls">
+          <div class="report-btn-row">
+            <button class="btn btn-secondary report-btn" id="report-csv-btn">CSV</button>
+            <button class="btn btn-secondary report-btn" id="report-print-btn">印刷/PDF</button>
+            <button class="btn btn-secondary report-btn" id="report-copy-btn">上長報告</button>
+            <button class="btn btn-secondary report-btn" id="report-settings-btn">出力設定</button>
+          </div>
+          <div class="export-all-row">
+            <button class="btn btn-secondary report-btn" id="export-json-btn">全データJSON</button>
+            <button class="btn btn-secondary report-btn" id="export-csv-btn">全データCSV</button>
+          </div>
+          <div id="report-settings" class="report-settings" style="display:none"></div>
+        </div>
+
+        <div id="hist-content"></div>
+      </section>
+
+      <!-- ⚙️ KGI設定タブ -->
+      <section id="tab-kgi" class="tab-pane">
+        <!-- 月選択 -->
+        <div class="card">
+          <div class="card-title">対象月</div>
+          <input type="month" id="kgi-month" />
+        </div>
+
+        <!-- KPIフィールド群（JSで動的生成） -->
+        <div id="kgi-fields-container"></div>
+
+        <!-- 保存ボタン -->
+        <button class="btn btn-primary" id="kgi-save-btn">保存する</button>
+      </section>
+
+    </main>
+
+    <!-- 下部タブナビゲーション -->
+    <nav id="bottom-nav">
+      <button class="nav-btn active" data-tab="tab-input">
+        <span class="nav-icon">📝</span>
+        <span class="nav-label">入力</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-dashboard">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">進捗</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-history">
+        <span class="nav-icon">📅</span>
+        <span class="nav-label">履歴</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-kgi">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">KGI設定</span>
+      </button>
+    </nav>
+
+  </div>
+  <script>
+/**
+ * utils.js - 日付・計算ユーティリティ
+ * Nice Serviceman 日報
+ */
+
+/**
+ * 今日の日付を JST で YYYY-MM-DD 形式で返す
+ * @returns {string} e.g. "2026-05-06"
+ */
+function getTodayJST() {
+  const now = new Date();
+  // JST = UTC + 9時間
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return jst.toISOString().slice(0, 10);
+}
+
+/**
+ * 現在の年月を JST で YYYY-MM 形式で返す
+ * @returns {string} e.g. "2026-05"
+ */
+function getCurrentYearMonthJST() {
+  return getTodayJST().slice(0, 7);
+}
+
+/**
+ * YYYY-MM-DD → 表示用「5月6日（火）」形式
+ * @param {string} dateStr - "YYYY-MM-DD"
+ * @returns {string} e.g. "5月6日（火）"
+ */
+function formatDate(dateStr) {
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  // タイムゾーンズレを防ぐため UTC として扱う
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  const weekday = weekdays[d.getUTCDay()];
+  return `${month}月${day}日（${weekday}）`;
+}
+
+/**
+ * YYYY-MM → 表示用「2026年5月」形式
+ * @param {string} yearMonth - "YYYY-MM"
+ * @returns {string} e.g. "2026年5月"
+ */
+function formatYearMonth(yearMonth) {
+  const [year, month] = yearMonth.split('-').map(Number);
+  return `${year}年${month}月`;
+}
+
+/**
+ * 指定月の営業日数を計算（土日を除く）
+ * @param {string} yearMonth - "YYYY-MM"
+ * @returns {number} 営業日数
+ */
+function getBusinessDaysInMonth(yearMonth) {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const day = new Date(year, month - 1, d).getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
+/**
+ * 今月の残営業日数（今日を含む）
+ * @returns {number} 残営業日数
+ */
+function getRemainingBusinessDays() {
+  const today = getTodayJST();
+  const [year, month, todayDay] = today.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = todayDay; d <= daysInMonth; d++) {
+    const day = new Date(year, month - 1, d).getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
+/**
+ * 信頼関係指数を計算
+ * 計算式: 関係構築アクション数 × 2pt + ポジFB × 5pt - ネガFB × 3pt
+ * @param {string[]} actions - 関係構築アクションの配列
+ * @param {number} positiveFeedback
+ * @param {number} negativeFeedback
+ * @returns {number} 信頼関係指数
+ */
+function calcTrustIndex(actions, positiveFeedback, negativeFeedback) {
+  const actionPts = (actions || []).length * 2;
+  const posPts = (positiveFeedback || 0) * 5;
+  const negPts = (negativeFeedback || 0) * 3;
+  return actionPts + posPts - negPts;
+}
+
+/**
+ * 達成率から進捗バーの色クラスを返す
+ * @param {number} rate - 達成率（0〜100以上）
+ * @returns {string} CSSクラス名
+ */
+function getProgressColorClass(rate) {
+  if (rate >= 100) return 'green';
+  if (rate >= 70)  return 'cyan';
+  if (rate >= 40)  return 'amber';
+  return 'red';
+}
+
+/**
+ * 数値を3桁カンマ区切りで返す
+ * @param {number} num
+ * @returns {string} e.g. "1,234,567"
+ */
+function formatNumber(num) {
+  return (num || 0).toLocaleString('ja-JP');
+}
+
+/**
+ * 円表示（¥ + 3桁区切り）
+ * @param {number} amount
+ * @returns {string} e.g. "¥1,234,567"
+ */
+function formatCurrency(amount) {
+  return '¥' + formatNumber(amount);
+}
+
+/**
+ * 今週の月曜日を YYYY-MM-DD で返す
+ * @returns {string} e.g. "2026-05-11"
+ */
+function getWeekStartJST() {
+  const today = getTodayJST();
+  const [y, m, d] = today.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dow = date.getUTCDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return new Date(date.getTime() + diff * 86400000).toISOString().slice(0, 10);
+}
+
+  </script>
+  <script>
+/**
+ * api_gas.js - Google Apps Script 経由の API 通信
+ * Nice Serviceman 日報（GAS 配信版）
+ *
+ * fetch(APPS_SCRIPT_URL) の代替。google.script.run を使い、
+ * 既存の api.js と同一の関数シグネチャを提供する。
+ * app.js は一切変更しない。
+ */
+
+// ============================================================
+// 内部ユーティリティ
+// ============================================================
+
+function _callGas(funcName, payload) {
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        try {
+          resolve(typeof result === 'string' ? JSON.parse(result) : result);
+        } catch (e) {
+          resolve(result);
+        }
+      })
+      .withFailureHandler(function(err) {
+        reject(new Error(err.message || String(err)));
+      });
+
+    if (payload !== undefined) {
+      runner[funcName](payload);
+    } else {
+      runner[funcName]();
+    }
+  });
+}
+
+// ============================================================
+// エントリ（日次記録）
+// ============================================================
+
+async function getEntries(yearMonth) {
+  return _callGas('gasGetEntries', yearMonth || '');
+}
+
+async function saveEntry(data) {
+  return _callGas('gasSaveEntry', data);
+}
+
+// ============================================================
+// 予算（KGI設定）
+// ============================================================
+
+async function getBudget(yearMonth) {
+  return _callGas('gasGetBudget', yearMonth);
+}
+
+async function saveBudget(data) {
+  return _callGas('gasSaveBudget', data);
+}
+
+// ============================================================
+// エクスポート（全データ）
+// ============================================================
+
+async function getAllData() {
+  return _callGas('gasGetAllData');
+}
+
+async function deleteEntry(date) {
+  return _callGas('gasDeleteEntry', date);
+}
+
+// ============================================================
+// AI レポート
+// ============================================================
+
+async function generateReport(type) {
+  return _callGas('gasGenerateReport', type);
+}
+
+async function getLatestReport(type) {
+  return _callGas('gasGetLatestReport', type);
+}
+
+  </script>
+  <script>
+/**
+ * app.js - メインロジック・タブ切り替え
+ * Nice Serviceman 日報
+ */
+
+// ------------------------------------------------------------------
+// タブ切り替え
+// ------------------------------------------------------------------
+
+function initTabs() {
+  const navBtns = document.querySelectorAll('.nav-btn');
+  const tabPanes = document.querySelectorAll('.tab-pane');
+
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.dataset.tab;
+
+      // アクティブ切り替え
+      navBtns.forEach(b => b.classList.remove('active'));
+      tabPanes.forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      document.getElementById(targetTab).classList.add('active');
+
+      // コンテンツエリアをトップにスクロール
+      document.getElementById('content').scrollTop = 0;
+    });
+  });
+}
+
+// ------------------------------------------------------------------
+// ヘッダー日付表示
+// ------------------------------------------------------------------
+
+function updateHeaderDate() {
+  const el = document.getElementById('header-date');
+  if (!el) return;
+  el.textContent = formatDate(getTodayJST());
+}
+
+// ------------------------------------------------------------------
+// 日次入力タブ
+// ------------------------------------------------------------------
+
+const RELATIONSHIP_ACTIONS = [
+  '挨拶', '雑談', '提案', 'お礼', '訪問',
+  '電話', 'メール', 'フォロー', '紹介依頼', 'クレーム対応',
+];
+
+// 日付ごとの前回ロード時の累計値（差分計算用）
+const daySnapshot = {};
+
+function initInputTab() {
+  document.getElementById('entry-date').value = getTodayJST();
+  buildInputKpiFields();
+  buildRelationshipTags();
+  initCounterBtns();
+
+  document.getElementById('entry-notes-important').addEventListener('change', updateNotesImportant);
+  document.getElementById('entry-date').addEventListener('change', e => loadEntry(e.target.value));
+  document.getElementById('entry-save-btn').addEventListener('click', handleSaveEntry);
+
+  loadEntry(getTodayJST());
+}
+
+function buildInputKpiFields() {
+  const container = document.getElementById('entry-kpi-container');
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+    const row = document.createElement('div');
+    row.className = 'kgi-field-row';
+    row.innerHTML = `
+      <span class="kgi-field-label">${field.label}</span>
+      <div class="kgi-field-input-wrap">
+        <input type="number" class="kgi-field-input" id="entry-${field.key}"
+               value="0" />
+        <span class="kgi-field-unit">${field.unit}</span>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+  container.querySelectorAll('.kgi-field-input').forEach(input => {
+    input.addEventListener('focus', () => input.select());
+  });
+
+  // 末見額カードを KPI実績カードの直後に追加
+  const forecastCard = document.createElement('div');
+  forecastCard.className = 'card';
+  forecastCard.innerHTML = '<div class="card-title">末見額</div><div id="entry-forecast-container"></div>';
+  container.closest('.card').insertAdjacentElement('afterend', forecastCard);
+
+  const forecastContainer = document.getElementById('entry-forecast-container');
+  FORECAST_FIELDS.forEach(field => {
+    const row = document.createElement('div');
+    row.className = 'kgi-field-row';
+    row.innerHTML = `
+      <span class="kgi-field-label">${field.label}</span>
+      <div class="kgi-field-input-wrap">
+        <input type="number" class="kgi-field-input" id="entry-${field.key}"
+               value="0" />
+        <span class="kgi-field-unit">${field.unit}</span>
+      </div>
+    `;
+    forecastContainer.appendChild(row);
+  });
+  forecastContainer.querySelectorAll('.kgi-field-input').forEach(input => {
+    input.addEventListener('focus', () => input.select());
+  });
+}
+
+function buildRelationshipTags() {
+  const container = document.getElementById('relationship-tags');
+  RELATIONSHIP_ACTIONS.forEach(action => {
+    const btn = document.createElement('button');
+    btn.className = 'tag-btn';
+    btn.textContent = action;
+    btn.addEventListener('click', () => btn.classList.toggle('selected'));
+    container.appendChild(btn);
+  });
+}
+
+function initCounterBtns() {
+  document.querySelectorAll('.counter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const delta = Number(btn.dataset.delta);
+      const el = document.getElementById(targetId);
+      el.textContent = Math.max(0, Number(el.textContent) + delta);
+    });
+  });
+}
+
+async function loadEntry(date) {
+  if (!date) return;
+  try {
+    const yearMonth = date.slice(0, 7);
+    const entries = await getEntries(yearMonth);
+    const entry = entries.find(e => e.date === date);
+    console.log('[loadEntry]', date, '-> entries:', entries.length, '件 / match:', entry ? 'あり' : 'なし');
+
+    KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+      const el = document.getElementById(`entry-${field.key}`);
+      if (el) el.value = 0;
+    });
+
+    FORECAST_FIELDS.forEach(field => {
+      const el = document.getElementById(`entry-${field.key}`);
+      if (!el) return;
+      let val = entry ? (entry[field.key] ?? 0) : 0;
+      if (!val) {
+        const recent = [...entries]
+          .filter(e => e.date < date && (e[field.key] || 0) !== 0)
+          .sort((a, b) => b.date.localeCompare(a.date))[0];
+        val = recent ? (recent[field.key] || 0) : 0;
+      }
+      el.value = val;
+    });
+
+    const actions = entry ? (entry.relationshipActions || []) : [];
+    document.querySelectorAll('#relationship-tags .tag-btn').forEach(btn => {
+      btn.classList.toggle('selected', actions.includes(btn.textContent));
+    });
+
+    document.getElementById('positive-count').textContent = 0;
+    document.getElementById('negative-count').textContent = 0;
+    document.getElementById('entry-memorable-visit').value = entry ? (entry.memorableVisit || '') : '';
+    document.getElementById('entry-notes').value = entry ? (entry.notes || '') : '';
+    document.getElementById('entry-notes-important').checked = entry ? !!entry.notesImportant : false;
+    document.getElementById('entry-insight').value = entry ? (entry.insight || '') : '';
+    document.getElementById('entry-next-action').value = entry ? (entry.nextAction || '') : '';
+
+    updateNotesImportant();
+
+    const snap = {};
+    KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => { snap[field.key] = 0; });
+    FORECAST_FIELDS.forEach(field => { snap[field.key] = 0; });
+    snap.positiveFeedback = 0;
+    snap.negativeFeedback = 0;
+    daySnapshot[date] = snap;
+
+    // 累計マイナス警告
+    if (entry && entry.hasNegative) {
+      showNegativeWarning(date);
+    } else {
+      clearNegativeWarning();
+    }
+  } catch (e) {
+    console.warn('エントリロード失敗:', e);
+  }
+}
+
+function showNegativeWarning(date) {
+  let el = document.getElementById('negative-warning');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'negative-warning';
+    el.style.cssText = 'background:rgba(248,113,113,0.15);border:1px solid #f87171;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;color:#f87171;';
+    const saveBtn = document.getElementById('entry-save-btn');
+    saveBtn.insertAdjacentElement('beforebegin', el);
+  }
+  el.textContent = `⚠ ${formatDate(date)} の累計がマイナスになっています`;
+  el.style.display = 'block';
+}
+
+function clearNegativeWarning() {
+  const el = document.getElementById('negative-warning');
+  if (el) el.style.display = 'none';
+}
+
+function updateNotesImportant() {
+  const checked = document.getElementById('entry-notes-important').checked;
+  document.getElementById('entry-notes').classList.toggle('notes-important', checked);
+}
+
+async function handleSaveEntry() {
+  const btn = document.getElementById('entry-save-btn');
+  const date = document.getElementById('entry-date').value;
+  if (!date) return;
+
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  const snap = daySnapshot[date] || {};
+
+  const actions = Array.from(document.querySelectorAll('#relationship-tags .tag-btn.selected'))
+    .map(b => b.textContent);
+
+  const positiveFeedback = Number(document.getElementById('positive-count').textContent) || 0;
+  const negativeFeedback = Number(document.getElementById('negative-count').textContent) || 0;
+
+  // 積み上げ型: フォーム値とスナップショットの差分をinsert
+  const data = {
+    date,
+    relationshipActions: actions,
+    positiveFeedback: positiveFeedback - (snap.positiveFeedback || 0),
+    negativeFeedback: negativeFeedback - (snap.negativeFeedback || 0),
+    memorableVisit: document.getElementById('entry-memorable-visit').value,
+    notes: document.getElementById('entry-notes').value,
+    notesImportant: document.getElementById('entry-notes-important').checked,
+    insight: document.getElementById('entry-insight').value,
+    nextAction: document.getElementById('entry-next-action').value,
+  };
+
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+    const el = document.getElementById(`entry-${field.key}`);
+    const current = el ? Number(el.value) || 0 : 0;
+    data[field.key] = current - (snap[field.key] || 0);
+  });
+
+  FORECAST_FIELDS.forEach(field => {
+    const el = document.getElementById(`entry-${field.key}`);
+    const current = el ? Number(el.value) || 0 : 0;
+    data[field.key] = current - (snap[field.key] || 0);
+  });
+
+  try {
+    const result = await saveEntry(data);
+    if (!result || result.success !== true) {
+      throw new Error(result && result.error ? result.error : JSON.stringify(result));
+    }
+    console.log('[saveEntry] 成功:', date);
+    historyState.allData = null;
+    showSaveFeedback(btn);
+    try { await loadEntry(date); } catch (_) {}
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '保存する';
+    console.error('[saveEntry] 失敗:', e);
+    alert('保存に失敗しました: ' + e.message);
+  }
+}
+
+// ------------------------------------------------------------------
+// ダッシュボードタブ
+// ------------------------------------------------------------------
+
+let dashboardChart = null;
+let _dashboardRefreshing = false;
+
+function initDashboardTab() {
+  document.querySelector('[data-tab="tab-dashboard"]').addEventListener('click', refreshDashboard);
+  refreshDashboard();
+}
+
+async function refreshDashboard() {
+  if (_dashboardRefreshing) return;
+  _dashboardRefreshing = true;
+  const yearMonth = getCurrentYearMonthJST();
+  try {
+    await ensureHistData();
+    const allEntries = historyState.allData ? historyState.allData.entries : [];
+
+    const [entries, budget] = await Promise.all([
+      getEntries(yearMonth),
+      getBudget(yearMonth),
+    ]);
+    renderTrustScore(entries);
+    const totals = calcMonthlyTotals(entries);
+    const promotionActual = totals.promotionAmount || 0;
+    renderPlanCard(
+      promotionActual,
+      budget ? (budget.promotionAmount || 0) : 0,
+      { actual: 'personal-plan-actual', budget: 'personal-plan-budget', rate: 'personal-plan-rate', bar: 'personal-plan-bar', shortage: 'personal-plan-shortage' }
+    );
+    renderKpiChart(totals, budget);
+
+    const sortedEntries = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+    const personalUnsettled = (sortedEntries.find(e => e.personalUnsettled > 0) || {}).personalUnsettled || 0;
+    const officeUnsettled   = (sortedEntries.find(e => e.officeUnsettled   > 0) || {}).officeUnsettled   || 0;
+    renderPlanCard(
+      personalUnsettled,
+      budget ? (budget.personalPlan || 0) : 0,
+      { actual: 'personal-unsettled-actual', budget: 'personal-unsettled-budget',
+        rate: 'personal-unsettled-rate', bar: 'personal-unsettled-bar', shortage: 'personal-unsettled-shortage' }
+    );
+    renderPlanCard(
+      officeUnsettled,
+      budget ? (budget.officePlan || 0) : 0,
+      { actual: 'office-unsettled-actual', budget: 'office-unsettled-budget',
+        rate: 'office-unsettled-rate', bar: 'office-unsettled-bar', shortage: 'office-unsettled-shortage' }
+    );
+    renderWeeklyGauge(entries, budget);
+    renderStreakBadge(allEntries);
+  } catch (e) {
+    console.warn('ダッシュボードロード失敗:', e);
+  } finally {
+    _dashboardRefreshing = false;
+  }
+}
+
+function renderWeeklyGauge(entries, budget) {
+  const weekStart = getWeekStartJST();
+  const weekEntries = entries.filter(e => e.date >= weekStart);
+  const weekTotals = {};
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(f => {
+    weekTotals[f.key] = weekEntries.reduce((s, e) => s + (e[f.key] || 0), 0);
+  });
+
+  const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
+    const actual = weekTotals[f.key] || 0;
+    const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
+    const isYen = f.unit === '円';
+    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+
+    if (weekTarget === 0) {
+      // 予算未設定: 実績が0の項目はスキップ、あれば目標なしで表示
+      if (actual === 0) return '';
+      return `<div class="weekly-gauge-row">
+        <div class="weekly-gauge-label">
+          <span>${f.label}</span>
+          <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr}</span>
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">目標未設定</span>
+        </div>
+      </div>`;
+    }
+
+    const rate = Math.round(actual / weekTarget * 100);
+    const colorClass = getProgressColorClass(rate);
+    const color = getAccentColor(colorClass);
+    const targetStr = isYen ? formatCurrency(weekTarget) : formatNumber(weekTarget) + f.unit;
+    return `<div class="weekly-gauge-row">
+      <div class="weekly-gauge-label">
+        <span>${f.label}</span>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr} / ${targetStr}</span>
+        <span style="font-family:var(--font-mono);font-weight:700;color:${color}">${rate}%</span>
+      </div>
+      <div class="progress-bar" style="margin-top:4px">
+        <div class="progress-fill ${colorClass}" style="width:${Math.min(rate, 100)}%"></div>
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  document.getElementById('weekly-gauge-container').innerHTML =
+    rows || '<div style="color:var(--text-muted);font-size:13px">KGI設定タブで計画を入力してください</div>';
+}
+
+function renderStreakBadge(entries) {
+  const badge = document.getElementById('streak-badge');
+  if (!badge) return;
+  const dateSet = new Set((entries || []).map(e => e.date));
+  let streak = 0;
+  const today = getTodayJST();
+  const [y, m, d] = today.split('-').map(Number);
+  let cur = new Date(Date.UTC(y, m - 1, d));
+  while (streak <= 365) {
+    const dateStr = cur.toISOString().slice(0, 10);
+    const dow = cur.getUTCDay();
+    if (dow === 0 || dow === 6) {
+      cur = new Date(cur.getTime() - 86400000);
+      continue;
+    }
+    if (!dateSet.has(dateStr)) break;
+    streak++;
+    cur = new Date(cur.getTime() - 86400000);
+  }
+  if (streak > 0) {
+    badge.textContent = `🔥 ${streak}日連続`;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+let _aiReportCache = { content: '', period: '', type: '' };
+
+function initAiReportCard() {
+  document.querySelectorAll('.ai-gen-btn[data-type]').forEach(btn => {
+    btn.addEventListener('click', () => handleAiReport(btn.dataset.type));
+  });
+  document.getElementById('ai-pdf-btn').addEventListener('click', handleAiPdf);
+}
+
+async function handleAiReport(type) {
+  const el = document.getElementById('ai-report-content');
+  el.innerHTML = '<div class="ai-loading">生成中...</div>';
+  document.querySelectorAll('.ai-gen-btn').forEach(b => b.disabled = true);
+  try {
+    const res = await generateReport(type);
+    if (res && res.content) {
+      renderAiReportContent(res.content, res.period, type);
+    } else {
+      const errMsg = (res && res.error) ? res.error : 'レスポンスが空です';
+      el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">GASエラー: ' + errMsg + '</div>';
+    }
+  } catch (e) {
+    el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">エラー: ' + e.message + '</div>';
+  } finally {
+    document.querySelectorAll('.ai-gen-btn').forEach(b => b.disabled = false);
+  }
+}
+
+async function loadLatestAiReport() {
+  try {
+    const res = await getLatestReport('weekly');
+    if (res && res.content) renderAiReportContent(res.content, res.period, 'weekly');
+  } catch (_) {}
+}
+
+function renderAiReportContent(content, period, type) {
+  _aiReportCache = { content, period, type };
+  const typeLabel = type === 'weekly' ? '週次' : '月次';
+  const formatted = content
+    .replace(/([①②③④])/g, '<span class="ai-section-marker">$1</span>')
+    .replace(/\n/g, '<br>');
+  document.getElementById('ai-report-content').innerHTML =
+    '<div class="ai-report-label">' + typeLabel + 'レポート（' + period + '）</div>' +
+    '<div class="ai-report-body">' + formatted + '</div>';
+}
+
+function handleAiPdf() {
+  if (!_aiReportCache.content) {
+    alert('先にレポートを生成してください');
+    return;
+  }
+  const typeLabel = _aiReportCache.type === 'weekly' ? '週次' : '月次';
+  const body = _aiReportCache.content.replace(/\n/g, '<br>');
+  const html =
+    '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">' +
+    '<title>' + typeLabel + 'AIレポート</title>' +
+    '<style>' +
+    'body{font-family:"Hiragino Kaku Gothic ProN",sans-serif;padding:32px;' +
+    'max-width:640px;margin:0 auto;color:#111;font-size:14px;line-height:2}' +
+    'h2{font-size:17px;margin-bottom:4px}.period{font-size:12px;color:#666;margin-bottom:24px}' +
+    '</style></head><body>' +
+    '<h2>' + typeLabel + ' AIレポート</h2>' +
+    '<div class="period">' + _aiReportCache.period + '</div>' +
+    '<div>' + body + '</div>' +
+    '</body></html>';
+
+  const win = window.open('', '_blank');
+  if (win) {
+    // PC：新しいウィンドウで印刷ダイアログ
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(function() { win.print(); }, 400);
+  } else {
+    // モバイル（ポップアップブロック時）：現在ページで印刷
+    window.print();
+  }
+}
+
+function calcMonthlyTotals(entries) {
+  const totals = {};
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+    totals[field.key] = entries.reduce((sum, e) => sum + (e[field.key] || 0), 0);
+  });
+  return totals;
+}
+
+function renderTrustScore(entries) {
+  const allActions = entries.flatMap(e => e.relationshipActions || []);
+  const posTotal = entries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+  const negTotal = entries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+  const score = calcTrustIndex(allActions, posTotal, negTotal);
+
+  document.getElementById('trust-score-value').textContent = score;
+  document.getElementById('trust-action-count').textContent = allActions.length;
+  document.getElementById('trust-pos-count').textContent = posTotal;
+  document.getElementById('trust-neg-count').textContent = negTotal;
+}
+
+function renderPlanCard(actual, plan, ids) {
+  const rate = plan > 0 ? Math.round(actual / plan * 100) : 0;
+  const shortage = plan - actual;
+  const colorClass = getProgressColorClass(rate);
+
+  document.getElementById(ids.actual).textContent = formatCurrency(actual);
+  document.getElementById(ids.budget).textContent = formatCurrency(plan);
+  document.getElementById(ids.rate).textContent = rate + '%';
+  document.getElementById(ids.rate).style.color = getAccentColor(colorClass);
+
+  const shortageEl = document.getElementById(ids.shortage);
+  if (shortage < 0) {
+    shortageEl.textContent = formatCurrency(-shortage) + '（超過）';
+    shortageEl.style.color = 'var(--accent-cyan)';
+  } else {
+    shortageEl.textContent = formatCurrency(shortage);
+    shortageEl.style.color = '';
+  }
+
+  const bar = document.getElementById(ids.bar);
+  bar.style.width = Math.max(0, Math.min(rate, 100)) + '%';
+  bar.className = `progress-fill ${colorClass}`;
+}
+
+function getAccentColor(colorClass) {
+  return { green: '#4ade80', cyan: '#22d3ee', amber: '#fbbf24', red: '#f87171' }[colorClass] || '#94a3b8';
+}
+
+function renderKpiChart(totals, budget) {
+  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+
+  const labels = [];
+  const rates = [];
+  const colors = [];
+
+  kpiFields.forEach(field => {
+    const b = budget ? (budget[field.key] || 0) : 0;
+    if (b === 0) return;
+    const a = totals[field.key] || 0;
+    const rate = Math.round(a / b * 100);
+    labels.push(field.label);
+    rates.push(rate);
+    colors.push(getAccentColor(getProgressColorClass(rate)) + 'cc');
+  });
+
+  const canvas = document.getElementById('kpi-chart');
+  const ctx = canvas.getContext('2d');
+
+  // Chart.js 4.x: getChart() でキャンバスに紐づく既存チャートを確実に破棄
+  const existingChart = Chart.getChart(canvas);
+  if (existingChart) existingChart.destroy();
+  dashboardChart = null;
+
+  if (labels.length === 0) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#475569';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('KGI設定タブで計画を入力してください', canvas.width / 2, 60);
+    return;
+  }
+
+  dashboardChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '達成率 (%)',
+        data: rates,
+        backgroundColor: colors,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.parsed.x}%` },
+        },
+      },
+      scales: {
+        x: {
+          min: 0,
+          ticks: { color: '#94a3b8', callback: v => v + '%' },
+          grid: { color: '#2d3f5a' },
+        },
+        y: {
+          ticks: { color: '#f1f5f9', font: { size: 11 } },
+          grid: { color: '#2d3f5a' },
+        },
+      },
+    },
+  });
+}
+
+// ------------------------------------------------------------------
+// 履歴タブ
+// ------------------------------------------------------------------
+
+const historyState = {
+  view: 'daily',
+  yearMonth: getCurrentYearMonthJST(),
+  year: Number(getTodayJST().slice(0, 4)),
+  quarter: 'all',
+  allData: null,
+};
+
+function initHistoryTab() {
+  document.getElementById('hist-view-select').addEventListener('change', onHistViewChange);
+  document.querySelector('[data-tab="tab-history"]').addEventListener('click', () => {
+    renderHistPeriodControl();
+    renderHistContent();
+  });
+  document.getElementById('hist-content').addEventListener('click', e => {
+    const editBtn = e.target.closest('.hist-edit-btn');
+    const deleteBtn = e.target.closest('.hist-delete-btn');
+    if (editBtn) handleEditHistoryEntry(editBtn.dataset.date);
+    if (deleteBtn) handleDeleteHistoryEntry(deleteBtn.dataset.date, deleteBtn);
+  });
+  renderHistPeriodControl();
+  initReportControls();
+}
+
+async function handleEditHistoryEntry(date) {
+  document.querySelector('[data-tab="tab-input"]').click();
+  document.getElementById('entry-date').value = date;
+  await loadEntry(date);
+}
+
+async function handleDeleteHistoryEntry(date, btn) {
+  if (!confirm(`${formatDate(date)} のデータを削除しますか？\nこの操作は元に戻せません。`)) return;
+  btn.disabled = true;
+  btn.textContent = '削除中...';
+  try {
+    await deleteEntry(date);
+    historyState.allData = null;
+    await renderHistContent();
+  } catch (e) {
+    alert('削除に失敗しました: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '削除';
+  }
+}
+
+function onHistViewChange() {
+  historyState.view = document.getElementById('hist-view-select').value;
+  renderHistPeriodControl();
+  renderHistContent();
+}
+
+function onHistPeriodChange() {
+  const view = historyState.view;
+  if (view === 'daily' || view === 'weekly') {
+    historyState.yearMonth = document.getElementById('hist-month-input').value || getCurrentYearMonthJST();
+  } else if (view === 'monthly') {
+    historyState.year = Number(document.getElementById('hist-year-input').value) || Number(getTodayJST().slice(0, 4));
+  } else if (view === 'quarterly') {
+    const yearEl = document.getElementById('hist-year-input');
+    const qEl = document.getElementById('hist-quarter-select');
+    if (yearEl) historyState.year = Number(yearEl.value) || Number(getTodayJST().slice(0, 4));
+    if (qEl) historyState.quarter = qEl.value;
+  }
+  renderHistContent();
+}
+
+function renderHistPeriodControl() {
+  const container = document.getElementById('hist-period-control');
+  const view = historyState.view;
+  if (view === 'daily' || view === 'weekly') {
+    container.innerHTML = `<input type="month" id="hist-month-input" value="${historyState.yearMonth}" />`;
+    document.getElementById('hist-month-input').addEventListener('change', onHistPeriodChange);
+  } else if (view === 'monthly') {
+    container.innerHTML = `<input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" />`;
+    document.getElementById('hist-year-input').addEventListener('change', onHistPeriodChange);
+  } else if (view === 'quarterly') {
+    container.innerHTML = `
+      <input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" style="flex:1" />
+      <select id="hist-quarter-select" style="flex:1">
+        <option value="all"${historyState.quarter === 'all' ? ' selected' : ''}>全四半期</option>
+        <option value="Q1"${historyState.quarter === 'Q1' ? ' selected' : ''}>Q1（1〜3月）</option>
+        <option value="Q2"${historyState.quarter === 'Q2' ? ' selected' : ''}>Q2（4〜6月）</option>
+        <option value="Q3"${historyState.quarter === 'Q3' ? ' selected' : ''}>Q3（7〜9月）</option>
+        <option value="Q4"${historyState.quarter === 'Q4' ? ' selected' : ''}>Q4（10〜12月）</option>
+      </select>
+    `;
+    document.getElementById('hist-year-input').addEventListener('change', onHistPeriodChange);
+    document.getElementById('hist-quarter-select').addEventListener('change', onHistPeriodChange);
+  } else {
+    container.innerHTML = '';
+  }
+}
+
+async function renderHistContent() {
+  const content = document.getElementById('hist-content');
+  content.innerHTML = '<div class="hist-empty">読み込み中...</div>';
+  try {
+    await ensureHistData();
+    const { entries, budgets } = historyState.allData;
+    const view = historyState.view;
+    if (view === 'daily') {
+      const filtered = entries.filter(e => e.date.startsWith(historyState.yearMonth));
+      renderDailyView(filtered);
+    } else if (view === 'weekly') {
+      const filtered = entries.filter(e => e.date.startsWith(historyState.yearMonth));
+      renderWeeklyView(filtered);
+    } else if (view === 'monthly') {
+      const filtered = entries.filter(e => e.date.startsWith(String(historyState.year)));
+      renderMonthlyView(filtered, budgets);
+    } else if (view === 'quarterly') {
+      const filtered = entries.filter(e => e.date.startsWith(String(historyState.year)));
+      renderQuarterlyView(filtered, budgets);
+    } else if (view === 'yearly') {
+      renderYearlyView(entries, budgets);
+    }
+  } catch (e) {
+    console.warn('履歴ロード失敗:', e);
+    document.getElementById('hist-content').innerHTML = '<div class="hist-empty">データの読み込みに失敗しました</div>';
+  }
+}
+
+async function ensureHistData() {
+  if (!historyState.allData) {
+    const data = await getAllData();
+    const dateMap = new Map();
+    (Array.isArray(data.entries) ? data.entries : []).forEach(e => dateMap.set(e.date, e));
+    historyState.allData = {
+      entries: [...dateMap.values()],
+      budgets: Array.isArray(data.budgets) ? data.budgets : [],
+    };
+  }
+}
+
+// ------ 集計ヘルパー ------
+
+function groupEntriesByWeek(entries, yearMonth) {
+  const weeks = [];
+  entries.forEach(entry => {
+    const day = Number(entry.date.slice(8, 10));
+    const weekNum = Math.ceil(day / 7);
+    if (!weeks[weekNum - 1]) weeks[weekNum - 1] = [];
+    weeks[weekNum - 1].push(entry);
+  });
+  return weeks.map((wEntries, i) => {
+    if (!wEntries) return null;
+    const days = wEntries.map(e => Number(e.date.slice(8, 10)));
+    const minDay = Math.min(...days);
+    const maxDay = Math.max(...days);
+    const [y, m] = yearMonth.split('-');
+    return { label: `第${i + 1}週（${Number(m)}/${minDay}〜${Number(m)}/${maxDay}）`, entries: wEntries };
+  }).filter(Boolean);
+}
+
+function groupEntriesByMonth(entries, year) {
+  const map = {};
+  entries.forEach(entry => {
+    const ym = entry.date.slice(0, 7);
+    if (!map[ym]) map[ym] = [];
+    map[ym].push(entry);
+  });
+  return map;
+}
+
+function groupEntriesByQuarter(entries, year) {
+  const quarters = { Q1: [], Q2: [], Q3: [], Q4: [] };
+  entries.forEach(entry => {
+    const month = Number(entry.date.slice(5, 7));
+    if (month <= 3) quarters.Q1.push(entry);
+    else if (month <= 6) quarters.Q2.push(entry);
+    else if (month <= 9) quarters.Q3.push(entry);
+    else quarters.Q4.push(entry);
+  });
+  return quarters;
+}
+
+function groupEntriesByYear(entries) {
+  const map = {};
+  entries.forEach(entry => {
+    const yr = entry.date.slice(0, 4);
+    if (!map[yr]) map[yr] = [];
+    map[yr].push(entry);
+  });
+  return map;
+}
+
+function sumBudgets(budgets, yearMonths) {
+  const result = {};
+  KGI_FIELDS.forEach(f => { result[f.key] = 0; });
+  budgets.filter(b => yearMonths.includes(b.yearMonth.slice(0, 7))).forEach(b => {
+    KGI_FIELDS.forEach(f => { result[f.key] = (result[f.key] || 0) + (b[f.key] || 0); });
+  });
+  return result;
+}
+
+// ------ カード描画ヘルパー ------
+
+function buildKgiSummaryRows(totals, budget) {
+  return KGI_FIELDS.filter(f => f.color === 'cyan').map(field => {
+    const actual = totals[field.key] || 0;
+    const plan = budget ? (budget[field.key] || 0) : 0;
+    const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
+    const color = rate !== null ? getAccentColor(getProgressColorClass(rate)) : 'var(--text-secondary)';
+    const rateText = rate !== null ? `<span style="color:${color};font-family:var(--font-mono)">${rate}%</span>` : '';
+    const isYen = field.unit === '円';
+    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + field.unit;
+    const planStr = plan > 0 ? (isYen ? ' / ' + formatCurrency(plan) : ' / ' + formatNumber(plan) + field.unit) : '';
+    return `<div class="kgi-field-row">
+      <span class="kgi-field-label">${field.label}</span>
+      <span style="font-family:var(--font-mono);font-size:13px">${actualStr}${planStr}</span>
+      ${rateText ? `<span style="min-width:40px;text-align:right">${rateText}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function buildDailyCard(entry) {
+  const kpiRows = KGI_FIELDS.filter(f => f.color === 'cyan').map(field => {
+    const val = entry[field.key] || 0;
+    if (val === 0) return '';
+    const isYen = field.unit === '円';
+    return `<div class="kgi-field-row">
+      <span class="kgi-field-label">${field.label}</span>
+      <span style="font-family:var(--font-mono);font-size:13px">${isYen ? formatCurrency(val) : formatNumber(val) + field.unit}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  const actions = entry.relationshipActions || [];
+  const trustScore = calcTrustIndex(actions, entry.positiveFeedback || 0, entry.negativeFeedback || 0);
+  const metaItems = [];
+  if (actions.length > 0) metaItems.push(`<span class="hist-entry-meta-item">アクション ${actions.length}件</span>`);
+  if (entry.positiveFeedback > 0) metaItems.push(`<span class="hist-entry-meta-item">ポジFB ${entry.positiveFeedback}件</span>`);
+  if (entry.negativeFeedback > 0) metaItems.push(`<span class="hist-entry-meta-item">ネガFB ${entry.negativeFeedback}件</span>`);
+  if (trustScore > 0) metaItems.push(`<span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trustScore}pt</span>`);
+
+  const importantNote = entry.notesImportant && entry.notes
+    ? `<div class="hist-important-note">${entry.notes}</div>` : '';
+  const normalNote = !entry.notesImportant && entry.notes
+    ? `<div class="hist-text-item"><span class="hist-text-label">メモ</span>${entry.notes}</div>` : '';
+  const visit = entry.memorableVisit
+    ? `<div class="hist-text-item"><span class="hist-text-label">訪問先</span>${entry.memorableVisit}</div>` : '';
+  const insight = entry.insight
+    ? `<div class="hist-text-item"><span class="hist-text-label">気づき</span>${entry.insight}</div>` : '';
+  const nextAction = entry.nextAction
+    ? `<div class="hist-text-item"><span class="hist-text-label">次の一手</span>${entry.nextAction}</div>` : '';
+
+  return `<div class="card">
+    <div class="hist-card-header">
+      <span class="card-title">${formatDate(entry.date)}</span>
+      <div class="hist-card-actions">
+        <button class="hist-edit-btn" data-date="${entry.date}">編集</button>
+        <button class="hist-delete-btn" data-date="${entry.date}">削除</button>
+      </div>
+    </div>
+    ${kpiRows || '<div style="font-size:12px;color:var(--text-muted)">KPI実績なし</div>'}
+    ${metaItems.length > 0 ? `<div class="hist-entry-meta">${metaItems.join('')}</div>` : ''}
+    ${importantNote}${normalNote}${visit}${insight}${nextAction}
+  </div>`;
+}
+
+// ------ ビュー描画 ------
+
+function renderDailyView(entries) {
+  const content = document.getElementById('hist-content');
+  if (entries.length === 0) {
+    content.innerHTML = `<div class="hist-empty">この月のデータはありません</div>`;
+    return;
+  }
+  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+  content.innerHTML = sorted.map(buildDailyCard).join('');
+}
+
+function renderWeeklyView(entries) {
+  const content = document.getElementById('hist-content');
+  if (entries.length === 0) {
+    content.innerHTML = `<div class="hist-empty">この月のデータはありません</div>`;
+    return;
+  }
+  const weeks = groupEntriesByWeek(entries, historyState.yearMonth);
+  content.innerHTML = weeks.map(week => {
+    const totals = calcMonthlyTotals(week.entries);
+    const allActions = week.entries.flatMap(e => e.relationshipActions || []);
+    const pos = week.entries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = week.entries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    return `<div class="card">
+      <div class="card-title">${week.label}</div>
+      ${buildKgiSummaryRows(totals, null)}
+      <div class="hist-entry-meta" style="margin-top:10px">
+        <span class="hist-entry-meta-item">アクション ${allActions.length}件</span>
+        <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
+        <span class="hist-entry-meta-item">${week.entries.length}日分のデータ</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMonthlyView(entries, budgets) {
+  const content = document.getElementById('hist-content');
+  const year = historyState.year;
+  const monthMap = groupEntriesByMonth(entries, year);
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+  const cards = months.filter(ym => monthMap[ym] && monthMap[ym].length > 0).map(ym => {
+    const mEntries = monthMap[ym];
+    const totals = calcMonthlyTotals(mEntries);
+    const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+    const allActions = mEntries.flatMap(e => e.relationshipActions || []);
+    const pos = mEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = mEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    return `<div class="card">
+      <div class="card-title">${formatYearMonth(ym)}</div>
+      ${buildKgiSummaryRows(totals, budget)}
+      <div class="hist-entry-meta" style="margin-top:10px">
+        <span class="hist-entry-meta-item">${mEntries.length}日分のデータ</span>
+        <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
+      </div>
+    </div>`;
+  });
+  content.innerHTML = cards.length > 0 ? cards.join('') : `<div class="hist-empty">${year}年のデータはありません</div>`;
+}
+
+function renderQuarterlyView(entries, budgets) {
+  const content = document.getElementById('hist-content');
+  const year = historyState.year;
+  const selectedQ = historyState.quarter;
+  const quarters = groupEntriesByQuarter(entries, year);
+  const allQDefs = [
+    { key: 'Q1', label: 'Q1（1月〜3月）',   months: ['01','02','03'] },
+    { key: 'Q2', label: 'Q2（4月〜6月）',   months: ['04','05','06'] },
+    { key: 'Q3', label: 'Q3（7月〜9月）',   months: ['07','08','09'] },
+    { key: 'Q4', label: 'Q4（10月〜12月）', months: ['10','11','12'] },
+  ];
+  const qDefs = selectedQ === 'all' ? allQDefs : allQDefs.filter(q => q.key === selectedQ);
+
+  const cards = qDefs.filter(q => quarters[q.key].length > 0).map(q => {
+    const qEntries = quarters[q.key];
+    const totals = calcMonthlyTotals(qEntries);
+    const yearMonths = q.months.map(m => `${year}-${m}`);
+    const budget = sumBudgets(budgets, yearMonths);
+    const allActions = qEntries.flatMap(e => e.relationshipActions || []);
+    const pos = qEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = qEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+
+    // 特定四半期選択時は月別内訳も表示
+    let monthBreakdown = '';
+    if (selectedQ !== 'all') {
+      const monthMap = groupEntriesByMonth(qEntries, year);
+      const monthCards = q.months
+        .map(m => `${year}-${m}`)
+        .filter(ym => monthMap[ym] && monthMap[ym].length > 0)
+        .map(ym => {
+          const mEntries = monthMap[ym];
+          const mTotals = calcMonthlyTotals(mEntries);
+          const mBudget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+          const mActions = mEntries.flatMap(e => e.relationshipActions || []);
+          const mPos = mEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+          const mNeg = mEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+          const mTrust = calcTrustIndex(mActions, mPos, mNeg);
+          return `<div class="card" style="margin-top:8px;margin-bottom:0;border-left:3px solid var(--accent-cyan)">
+            <div class="card-title">${formatYearMonth(ym)}</div>
+            ${buildKgiSummaryRows(mTotals, mBudget)}
+            <div class="hist-entry-meta" style="margin-top:8px">
+              <span class="hist-entry-meta-item">${mEntries.length}日分のデータ</span>
+              <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${mTrust}pt</span>
+            </div>
+          </div>`;
+        });
+      if (monthCards.length > 0) {
+        monthBreakdown = `<div style="margin-top:12px">${monthCards.join('')}</div>`;
+      }
+    }
+
+    return `<div class="card">
+      <div class="card-title">${q.label}</div>
+      ${buildKgiSummaryRows(totals, budget)}
+      <div class="hist-entry-meta" style="margin-top:10px">
+        <span class="hist-entry-meta-item">${qEntries.length}日分のデータ</span>
+        <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
+      </div>
+      ${monthBreakdown}
+    </div>`;
+  });
+
+  const emptyMsg = selectedQ === 'all'
+    ? `${year}年のデータはありません`
+    : `${year}年 ${selectedQ} のデータはありません`;
+  content.innerHTML = cards.length > 0 ? cards.join('') : `<div class="hist-empty">${emptyMsg}</div>`;
+}
+
+function renderYearlyView(entries, budgets) {
+  const content = document.getElementById('hist-content');
+  const yearMap = groupEntriesByYear(entries);
+  const years = Object.keys(yearMap).sort((a, b) => b.localeCompare(a));
+  if (years.length === 0) {
+    content.innerHTML = `<div class="hist-empty">データがありません</div>`;
+    return;
+  }
+  content.innerHTML = years.map(yr => {
+    const yEntries = yearMap[yr];
+    const totals = calcMonthlyTotals(yEntries);
+    const yearMonths = Array.from({ length: 12 }, (_, i) => `${yr}-${String(i + 1).padStart(2, '0')}`);
+    const budget = sumBudgets(budgets, yearMonths);
+    const allActions = yEntries.flatMap(e => e.relationshipActions || []);
+    const pos = yEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = yEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    return `<div class="card">
+      <div class="card-title">${yr}年</div>
+      ${buildKgiSummaryRows(totals, budget)}
+      <div class="hist-entry-meta" style="margin-top:10px">
+        <span class="hist-entry-meta-item">${yEntries.length}日分のデータ</span>
+        <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ------------------------------------------------------------------
+// レポート出力
+// ------------------------------------------------------------------
+
+// 出力設定（デフォルト全ON）
+const reportSettings = {
+  // KGI フィールド（key: boolean）
+  inspection: true,
+  promotionAmount: true,
+  promotionCount: true,
+  maintenanceThisMonth: true,
+  maintenanceNextMonth: true,
+  maintenanceNext2Month: true,
+  newAcquisition: true,
+  acCleaning: true,
+  fullMaintenance: true,
+  tossUp: true,
+  // その他セクション
+  trustScore: true,
+  importantNotes: true,
+  insights: true,
+  nextActions: true,
+  memorableVisit: true,
+  notes: true,
+};
+
+const REPORT_EXTRA_FIELDS = [
+  { key: 'trustScore',     label: '信頼関係指数' },
+  { key: 'importantNotes', label: '重要メモ' },
+  { key: 'insights',       label: '気づき' },
+  { key: 'nextActions',    label: '次の一手' },
+  { key: 'memorableVisit', label: '訪問先' },
+  { key: 'notes',          label: 'メモ' },
+];
+
+function initReportControls() {
+  document.getElementById('report-csv-btn').addEventListener('click', handleCsvExport);
+  document.getElementById('report-print-btn').addEventListener('click', handlePrintReport);
+  document.getElementById('report-copy-btn').addEventListener('click', handleCopyReport);
+  document.getElementById('report-settings-btn').addEventListener('click', toggleReportSettings);
+  document.getElementById('export-json-btn').addEventListener('click', handleExportAllJson);
+  document.getElementById('export-csv-btn').addEventListener('click', handleExportAllCsv);
+  buildReportSettingsPanel();
+}
+
+async function handleExportAllJson() {
+  const btn = document.getElementById('export-json-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+  try {
+    await ensureHistData();
+    const { entries, budgets } = historyState.allData;
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      entries,
+      budgets,
+    };
+    const today = getTodayJST();
+    downloadJson(`日報_全データ_${today}.json`, payload);
+  } catch (e) {
+    console.error('[exportJson] 失敗:', e);
+    alert('JSONエクスポートに失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '全データJSON';
+  }
+}
+
+async function handleExportAllCsv() {
+  const btn = document.getElementById('export-csv-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+  try {
+    await ensureHistData();
+    const { entries } = historyState.allData;
+    const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+    const header = [
+      '日付', '点検件数', '促進受注額', '促進件数',
+      '当月保守継続', '次月保守継続', '次々月保守継続',
+      '新規保守', 'AC洗浄', 'フルメンテ', 'トスアップ',
+      '信頼関係アクション', 'ポジFB', 'ネガFB', 'Trust指数',
+      '訪問先', 'メモ', '重要', '気づき', '次の一手',
+      '末見額(個人)', '末見額(営業所)',
+    ];
+    const rows = sorted.map(e => {
+      const actions = e.relationshipActions || [];
+      const trust = calcTrustIndex(actions, e.positiveFeedback || 0, e.negativeFeedback || 0);
+      return [
+        e.date,
+        e.inspection || 0,
+        e.promotionAmount || 0,
+        e.promotionCount || 0,
+        e.maintenanceThisMonth || 0,
+        e.maintenanceNextMonth || 0,
+        e.maintenanceNext2Month || 0,
+        e.newAcquisition || 0,
+        e.acCleaning || 0,
+        e.fullMaintenance || 0,
+        e.tossUp || 0,
+        actions.join('|'),
+        e.positiveFeedback || 0,
+        e.negativeFeedback || 0,
+        trust,
+        e.memorableVisit || '',
+        e.notes || '',
+        e.notesImportant ? '★' : '',
+        e.insight || '',
+        e.nextAction || '',
+        e.personalUnsettled || 0,
+        e.officeUnsettled || 0,
+      ];
+    });
+    const today = getTodayJST();
+    downloadCsv(`日報_全エントリ_${today}.csv`, [header, ...rows]);
+  } catch (e) {
+    console.error('[exportCsv] 失敗:', e);
+    alert('CSVエクスポートに失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '全データCSV';
+  }
+}
+
+function downloadJson(filename, data) {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildReportSettingsPanel() {
+  const panel = document.getElementById('report-settings');
+  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+
+  const kpiCheckboxes = kpiFields.map(f => `
+    <label class="report-chk-label">
+      <input type="checkbox" data-key="${f.key}" ${reportSettings[f.key] !== false ? 'checked' : ''} />
+      ${f.label}
+    </label>`).join('');
+
+  const extraCheckboxes = REPORT_EXTRA_FIELDS.map(f => `
+    <label class="report-chk-label">
+      <input type="checkbox" data-key="${f.key}" ${reportSettings[f.key] !== false ? 'checked' : ''} />
+      ${f.label}
+    </label>`).join('');
+
+  panel.innerHTML = `
+    <div class="report-settings-section-title">KPI項目</div>
+    <div class="report-settings-grid">${kpiCheckboxes}</div>
+    <div class="report-settings-section-title">その他</div>
+    <div class="report-settings-grid">${extraCheckboxes}</div>
+  `;
+
+  panel.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      reportSettings[chk.dataset.key] = chk.checked;
+    });
+  });
+}
+
+function toggleReportSettings() {
+  const panel = document.getElementById('report-settings');
+  const btn = document.getElementById('report-settings-btn');
+  const isVisible = panel.style.display !== 'none';
+  panel.style.display = isVisible ? 'none' : 'block';
+  btn.classList.toggle('report-settings-btn-active', !isVisible);
+}
+
+// ------ PDF印刷 ------
+
+function handlePrintReport() {
+  window.print();
+}
+
+// ------ CSV出力 ------
+
+async function handleCsvExport() {
+  const btn = document.getElementById('report-csv-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+  try {
+    await ensureHistData();
+    const { entries, budgets } = historyState.allData;
+    const view = historyState.view;
+    let rows, filename;
+
+    if (view === 'weekly') {
+      const filtered = entries.filter(e => e.date.startsWith(historyState.yearMonth));
+      rows = buildWeeklyCsvRows(filtered, historyState.yearMonth);
+      filename = `日報_週次_${historyState.yearMonth}.csv`;
+    } else if (view === 'monthly') {
+      const filtered = entries.filter(e => e.date.startsWith(String(historyState.year)));
+      rows = buildMonthlyCsvRows(filtered, budgets, historyState.year);
+      filename = `日報_月次_${historyState.year}.csv`;
+    } else {
+      // 日次・その他 → 日次CSV
+      const filtered = entries.filter(e => e.date.startsWith(historyState.yearMonth));
+      rows = buildDailyCsvRows(filtered);
+      filename = `日報_日次_${historyState.yearMonth}.csv`;
+    }
+
+    downloadCsv(filename, rows);
+  } catch (e) {
+    console.error('[CSV] 失敗:', e);
+    alert('CSV出力に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'CSV';
+  }
+}
+
+function buildDailyCsvRows(entries) {
+  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false);
+  const header = ['日付', ...kpiFields.map(f => f.label)];
+  if (reportSettings.trustScore) header.push('アクション数', 'ポジFB', 'ネガFB', 'Trust指数');
+  if (reportSettings.memorableVisit) header.push('訪問先');
+  if (reportSettings.notes) header.push('メモ', '重要');
+  if (reportSettings.insights) header.push('気づき');
+  if (reportSettings.nextActions) header.push('次の一手');
+
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  const rows = sorted.map(e => {
+    const actions = e.relationshipActions || [];
+    const trust = calcTrustIndex(actions, e.positiveFeedback || 0, e.negativeFeedback || 0);
+    const row = [e.date, ...kpiFields.map(f => e[f.key] || 0)];
+    if (reportSettings.trustScore) row.push(actions.length, e.positiveFeedback || 0, e.negativeFeedback || 0, trust);
+    if (reportSettings.memorableVisit) row.push(e.memorableVisit || '');
+    if (reportSettings.notes) row.push(e.notes || '', e.notesImportant ? '★' : '');
+    if (reportSettings.insights) row.push(e.insight || '');
+    if (reportSettings.nextActions) row.push(e.nextAction || '');
+    return row;
+  });
+  return [header, ...rows];
+}
+
+function buildWeeklyCsvRows(entries, yearMonth) {
+  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false);
+  const header = ['年月', '週', '開始日', '終了日', ...kpiFields.map(f => f.label)];
+  if (reportSettings.trustScore) header.push('アクション数', 'ポジFB', 'ネガFB', 'Trust指数');
+  header.push('記録日数');
+
+  const weeks = groupEntriesByWeek(entries, yearMonth);
+  const rows = weeks.map(week => {
+    const totals = calcMonthlyTotals(week.entries);
+    const allActions = week.entries.flatMap(e => e.relationshipActions || []);
+    const pos = week.entries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = week.entries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    const days = week.entries.map(e => e.date).sort();
+    const row = [yearMonth, week.label, days[0] || '', days[days.length - 1] || '', ...kpiFields.map(f => totals[f.key] || 0)];
+    if (reportSettings.trustScore) row.push(allActions.length, pos, neg, trust);
+    row.push(week.entries.length);
+    return row;
+  });
+  return [header, ...rows];
+}
+
+function buildMonthlyCsvRows(entries, budgets, year) {
+  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false);
+  const header = ['年月', ...kpiFields.flatMap(f => [f.label + '(実績)', f.label + '(計画)', f.label + '(達成率%)'])];
+  if (reportSettings.trustScore) header.push('アクション数', 'ポジFB', 'ネガFB', 'Trust指数');
+  header.push('記録日数');
+
+  const monthMap = groupEntriesByMonth(entries, year);
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+  const rows = months.filter(ym => monthMap[ym] && monthMap[ym].length > 0).map(ym => {
+    const mEntries = monthMap[ym];
+    const totals = calcMonthlyTotals(mEntries);
+    const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+    const allActions = mEntries.flatMap(e => e.relationshipActions || []);
+    const pos = mEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = mEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    const kpiCells = kpiFields.flatMap(f => {
+      const actual = totals[f.key] || 0;
+      const plan = budget ? (budget[f.key] || 0) : 0;
+      const rate = plan > 0 ? Math.round(actual / plan * 100) : '';
+      return [actual, plan, rate];
+    });
+    const row = [ym, ...kpiCells];
+    if (reportSettings.trustScore) row.push(allActions.length, pos, neg, trust);
+    row.push(mEntries.length);
+    return row;
+  });
+  return [header, ...rows];
+}
+
+function downloadCsv(filename, rows) {
+  const BOM = '\uFEFF';
+  const csv = BOM + rows.map(r =>
+    r.map(cell => {
+      const s = String(cell ?? '');
+      return (s.includes(',') || s.includes('"') || s.includes('\n'))
+        ? '"' + s.replace(/"/g, '""') + '"'
+        : s;
+    }).join(',')
+  ).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ------ 上長報告（テキストコピー） ------
+
+async function handleCopyReport() {
+  const btn = document.getElementById('report-copy-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+  try {
+    await ensureHistData();
+    const text = buildReportText();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      // フォールバック
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    showCopyFeedback();
+  } catch (e) {
+    console.error('[上長報告] 失敗:', e);
+    alert('コピーに失敗しました: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '上長報告';
+  }
+}
+
+function buildReportText() {
+  const { entries, budgets } = historyState.allData;
+  const view = historyState.view;
+
+  // ── 週次 ──
+  if (view === 'weekly') {
+    const filtered = entries.filter(e => e.date.startsWith(historyState.yearMonth));
+    const weeks = groupEntriesByWeek(filtered, historyState.yearMonth);
+    if (weeks.length === 0) {
+      return `【週次営業報告】${formatYearMonth(historyState.yearMonth)}\n報告日: ${getTodayJST()}\nデータがありません`;
+    }
+    return weeks.map(w => buildWeeklyReportText(w, historyState.yearMonth)).join('\n\n');
+  }
+
+  // ── 月次（選択年の全月をループして生成）──
+  if (view === 'monthly') {
+    const filtered = entries.filter(e => e.date.startsWith(String(historyState.year)));
+    const monthMap = groupEntriesByMonth(filtered, historyState.year);
+    const months = Array.from({ length: 12 }, (_, i) =>
+      `${historyState.year}-${String(i + 1).padStart(2, '0')}`
+    );
+    const monthsWithData = months.filter(ym => monthMap[ym] && monthMap[ym].length > 0);
+    if (monthsWithData.length === 0) {
+      return `【月次営業報告】${historyState.year}年\n報告日: ${getTodayJST()}\nデータがありません`;
+    }
+    return monthsWithData.map(ym => {
+      const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+      return buildMonthlyReportText(ym, monthMap[ym], budget);
+    }).join('\n\n');
+  }
+
+  // ── 日次・四半期・年次 → 当月報告 ──
+  const ym = historyState.yearMonth;
+  const filtered = entries.filter(e => e.date.startsWith(ym));
+  const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+  return buildMonthlyReportText(ym, filtered, budget);
+}
+
+function buildWeeklyReportText(week, yearMonth) {
+  const totals = calcMonthlyTotals(week.entries);
+  const allActions = week.entries.flatMap(e => e.relationshipActions || []);
+  const pos = week.entries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+  const neg = week.entries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+  const trust = calcTrustIndex(allActions, pos, neg);
+  const importantNotes = week.entries.filter(e => e.notesImportant && e.notes).map(e => `  ・${e.notes}`);
+  const insights = week.entries.filter(e => e.insight).map(e => `  気づき: ${e.insight}`);
+  const nextActions = week.entries.filter(e => e.nextAction).map(e => `  次の一手: ${e.nextAction}`);
+
+  const kpiLines = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false).map(f => {
+    const val = totals[f.key] || 0;
+    const formatted = f.unit === '円' ? formatCurrency(val) : formatNumber(val) + f.unit;
+    return `  ${f.label.padEnd(12, '　')}: ${formatted}`;
+  });
+
+  const lines = [
+    `【週次営業報告】${formatYearMonth(yearMonth)} ${week.label}`,
+    `報告日: ${getTodayJST()}`,
+    '─────────────────────',
+  ];
+  if (kpiLines.length > 0) { lines.push('■ KPI実績'); lines.push(...kpiLines); }
+  if (reportSettings.trustScore) {
+    lines.push('■ 信頼関係指数');
+    lines.push(`  Trust: ${trust}pt（アクション${allActions.length}件×2 + ポジFB${pos}件×5 - ネガFB${neg}件×3）`);
+  }
+  if (reportSettings.importantNotes && importantNotes.length > 0) {
+    lines.push('■ 重要メモ');
+    lines.push(...importantNotes);
+  }
+  if ((reportSettings.insights || reportSettings.nextActions) && (insights.length > 0 || nextActions.length > 0)) {
+    lines.push('■ 気づき・次の一手');
+    if (reportSettings.insights) lines.push(...insights);
+    if (reportSettings.nextActions) lines.push(...nextActions);
+  }
+  lines.push('─────────────────────');
+  return lines.join('\n');
+}
+
+function buildMonthlyReportText(ym, mEntries, budget) {
+  const totals = calcMonthlyTotals(mEntries);
+  const allActions = mEntries.flatMap(e => e.relationshipActions || []);
+  const pos = mEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+  const neg = mEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+  const trust = calcTrustIndex(allActions, pos, neg);
+  const importantNotes = mEntries.filter(e => e.notesImportant && e.notes).map(e => `  ・[${e.date}] ${e.notes}`);
+  const insights = mEntries.filter(e => e.insight).map(e => `  [${e.date}] ${e.insight}`);
+  const nextActions = mEntries.filter(e => e.nextAction).map(e => `  [${e.date}] ${e.nextAction}`);
+
+  const kpiLines = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false).map(f => {
+    const actual = totals[f.key] || 0;
+    const plan = budget ? (budget[f.key] || 0) : 0;
+    const actualStr = f.unit === '円' ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const planStr = plan > 0
+      ? (f.unit === '円' ? ` / ${formatCurrency(plan)}（${Math.round(actual / plan * 100)}%）` : ` / ${formatNumber(plan)}${f.unit}（${Math.round(actual / plan * 100)}%）`)
+      : '';
+    return `  ${f.label.padEnd(12, '　')}: ${actualStr}${planStr}`;
+  });
+
+  const lines = [
+    `【月次営業報告】${formatYearMonth(ym)}`,
+    `報告日: ${getTodayJST()}`,
+    '─────────────────────',
+  ];
+  if (kpiLines.length > 0) { lines.push('■ KPI実績'); lines.push(...kpiLines); }
+  if (reportSettings.trustScore) {
+    lines.push('■ 信頼関係指数');
+    lines.push(`  Trust: ${trust}pt（アクション${allActions.length}件×2 + ポジFB${pos}件×5 - ネガFB${neg}件×3）`);
+  }
+  if (reportSettings.importantNotes && importantNotes.length > 0) {
+    lines.push('■ 重要メモ');
+    lines.push(...importantNotes);
+  }
+  if (reportSettings.insights && insights.length > 0) {
+    lines.push('■ 気づき・学び');
+    lines.push(...insights);
+  }
+  if (reportSettings.nextActions && nextActions.length > 0) {
+    lines.push('■ 次の一手');
+    lines.push(...nextActions);
+  }
+  lines.push('─────────────────────');
+  return lines.join('\n');
+}
+
+function showCopyFeedback() {
+  const btn = document.getElementById('report-copy-btn');
+  btn.disabled = false;
+  btn.textContent = 'コピー済み';
+  btn.classList.add('btn-save-success');
+  setTimeout(() => {
+    btn.textContent = '上長報告';
+    btn.classList.remove('btn-save-success');
+  }, 2000);
+}
+
+// ------------------------------------------------------------------
+// KGI設定タブ
+// ------------------------------------------------------------------
+
+const FORECAST_FIELDS = [
+  { key: 'personalUnsettled', label: '個人末見額',   unit: '円' },
+  { key: 'officeUnsettled',   label: '営業所末見額', unit: '円' },
+];
+
+const KGI_FIELDS = [
+  { key: 'inspection',            label: '点検件数',         unit: '件', color: 'cyan' },
+  { key: 'promotionAmount',       label: '促進受注額',       unit: '円', color: 'cyan' },
+  { key: 'promotionCount',        label: '促進件数',         unit: '件', color: 'cyan' },
+  { key: 'maintenanceThisMonth',  label: '当月保守継続',     unit: '件', color: 'cyan' },
+  { key: 'maintenanceNextMonth',  label: '次月保守継続',     unit: '件', color: 'cyan' },
+  { key: 'maintenanceNext2Month', label: '次々月保守継続',   unit: '件', color: 'cyan' },
+  { key: 'newAcquisition',        label: '新規保守',         unit: '件', color: 'cyan' },
+  { key: 'acCleaning',            label: 'エアコン洗浄',     unit: '件', color: 'cyan' },
+  { key: 'fullMaintenance',       label: 'フルメンテリース', unit: '件', color: 'cyan' },
+  { key: 'tossUp',                label: '営業トスアップ',   unit: '件', color: 'cyan' },
+  { key: 'personalPlan',          label: '個人計画額',       unit: '円', color: 'emerald' },
+  { key: 'officePlan',            label: '営業所計画額',     unit: '円', color: 'amber' },
+];
+
+function initKgiTab() {
+  const monthInput = document.getElementById('kgi-month');
+  monthInput.value = getTodayJST().slice(0, 7);
+
+  buildKgiFields();
+
+  monthInput.addEventListener('change', () => loadBudget(monthInput.value));
+  document.getElementById('kgi-save-btn').addEventListener('click', handleSaveBudget);
+
+  loadBudget(monthInput.value);
+}
+
+function buildKgiFields() {
+  const container = document.getElementById('kgi-fields-container');
+  container.innerHTML = '';
+
+  const groups = [
+    { color: 'cyan',    fields: KGI_FIELDS.filter(f => f.color === 'cyan') },
+    { color: 'emerald', fields: KGI_FIELDS.filter(f => f.color === 'emerald') },
+    { color: 'amber',   fields: KGI_FIELDS.filter(f => f.color === 'amber') },
+  ];
+
+  groups.forEach(({ color, fields }) => {
+    const card = document.createElement('div');
+    card.className = `card kgi-card-${color}`;
+
+    fields.forEach(field => {
+      const row = document.createElement('div');
+      row.className = 'kgi-field-row';
+      row.innerHTML = `
+        <span class="kgi-field-label">${field.label}</span>
+        <div class="kgi-field-input-wrap">
+          <input type="number" class="kgi-field-input" id="kgi-${field.key}"
+                 value="0" min="0" inputmode="numeric" />
+          <span class="kgi-field-unit">${field.unit}</span>
+        </div>
+      `;
+      card.appendChild(row);
+    });
+
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll('.kgi-field-input').forEach(input => {
+    input.addEventListener('focus', () => input.select());
+  });
+}
+
+async function loadBudget(yearMonth) {
+  if (!yearMonth) return;
+  try {
+    const data = await getBudget(yearMonth);
+    console.log('[loadBudget]', yearMonth, '->', data);
+    KGI_FIELDS.forEach(field => {
+      const el = document.getElementById(`kgi-${field.key}`);
+      if (el) el.value = data ? (data[field.key] ?? 0) : 0;
+    });
+  } catch (e) {
+    console.error('[loadBudget] 失敗:', e);
+  }
+}
+
+async function handleSaveBudget() {
+  const btn = document.getElementById('kgi-save-btn');
+  const yearMonth = document.getElementById('kgi-month').value;
+  if (!yearMonth) return;
+
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  const data = { yearMonth };
+  KGI_FIELDS.forEach(field => {
+    const el = document.getElementById(`kgi-${field.key}`);
+    data[field.key] = el ? Number(el.value) || 0 : 0;
+  });
+
+  try {
+    const result = await saveBudget(data);
+    if (!result || result.success !== true) {
+      throw new Error(result && result.error ? result.error : JSON.stringify(result));
+    }
+    console.log('[saveBudget] 成功:', yearMonth);
+    historyState.allData = null; // 履歴キャッシュを無効化
+    showSaveFeedback(btn);
+    // 保存後にサーバーから再読み込みして確認
+    try { await loadBudget(yearMonth); } catch (_) {}
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '保存する';
+    console.error('[saveBudget] 失敗:', e);
+    alert('保存に失敗しました: ' + e.message);
+  }
+}
+
+function showSaveFeedback(btn) {
+  btn.disabled = false;
+  btn.textContent = '✓ 保存しました';
+  btn.classList.add('btn-save-success');
+  setTimeout(() => {
+    btn.textContent = '保存する';
+    btn.classList.remove('btn-save-success');
+  }, 2000);
+}
+
+// ------------------------------------------------------------------
+// アプリ初期化
+// ------------------------------------------------------------------
+
+function initApp() {
+  initTabs();
+  updateHeaderDate();
+  initInputTab();
+  initDashboardTab();
+  initHistoryTab();
+  initKgiTab();
+  initAiReportCard();
+  console.log('Nice Serviceman 日報 - 初期化完了');
+}
+
+// DOMの準備ができたら起動
+document.addEventListener('DOMContentLoaded', initApp);
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+/**
+ * build_inline.js
+ * index.html + css/style.css + js/{utils,api_gas,app}.js を
+ * 1 ファイルにインライン化して gas/index.html を生成する。
+ *
+ * Usage: node scripts/build_inline.js
+ */
+
+const fs   = require('fs');
+const path = require('path');
+
+const ROOT = path.join(__dirname, '..');
+
+function read(rel) {
+  return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+}
+
+let html = read('index.html');
+
+// ── CSS インライン化 ──────────────────────────────────────────
+const css = read('css/style.css');
+html = html.replace(
+  /\s*<link rel="stylesheet" href="css\/style\.css">/,
+  `\n  <style>\n${css}\n  </style>`
+);
+
+// ── manifest 削除（PWA 廃止）──────────────────────────────────
+html = html.replace(/\s*<link rel="manifest" href="manifest\.json">\n?/, '\n');
+
+// ── apple-touch-icon 削除（不要）─────────────────────────────
+html = html.replace(/\s*<link rel="apple-touch-icon"[^>]*>\n?/, '\n');
+
+// ── utils.js インライン化 ─────────────────────────────────────
+const utils = read('js/utils.js');
+html = html.replace(
+  /\s*<script src="js\/utils\.js"><\/script>/,
+  `\n  <script>\n${utils}\n  </script>`
+);
+
+// ── api.js → api_gas.js に差し替えてインライン化 ──────────────
+const apiGas = read('js/api_gas.js');
+html = html.replace(
+  /\s*<script src="js\/api\.js"><\/script>/,
+  `\n  <script>\n${apiGas}\n  </script>`
+);
+
+// ── app.js インライン化 ───────────────────────────────────────
+const app = read('js/app.js');
+html = html.replace(
+  /\s*<script src="js\/app\.js"><\/script>/,
+  `\n  <script>\n${app}\n  </script>`
+);
+
+// ── Service Worker 登録ブロック削除 ───────────────────────────
+html = html.replace(
+  /\s*<script>\s*if \('serviceWorker' in navigator\)[\s\S]*?<\/script>/,
+  ''
+);
+
+// ── 出力 ─────────────────────────────────────────────────────
+const outPath = path.join(ROOT, 'gas', 'index.html');
+fs.writeFileSync(outPath, html, 'utf8');
+
+const lines = html.split('\n').length;
+const kb    = Math.round(Buffer.byteLength(html, 'utf8') / 1024);
+console.log(`生成完了: gas/index.html (${lines} 行 / ${kb} KB)`);

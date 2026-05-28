@@ -3,16 +3,12 @@
  *
  * デプロイ設定:
  *   「次のユーザーとして実行」→「自分」
- *   「アクセスできるユーザー」→「全員」
+ *   「アクセスできるユーザー」→「自分のみ」（Step S0 以降）
  *
- * エンドポイント:
- *   GET  ?action=getEntries[&yearMonth=YYYY-MM]
- *   GET  ?action=getBudget&yearMonth=YYYY-MM
- *   GET  ?action=getAllData
- *   POST { action: 'saveEntry',    data: {...} }
- *   POST { action: 'saveBudget',   data: {...} }
- *   POST { action: 'deleteEntry',  data: { date: 'YYYY-MM-DD' } }
- *   POST { action: 'migrateToV1' }  ← 1回だけ手動実行してDB移行
+ * 配信方式:
+ *   GET（action なし）→ HtmlService でアプリ本体を配信（個人 Gmail 認証必須）
+ *   GET（action あり）→ JSON API（後方互換。github pages 版から呼ばれる場合のみ）
+ *   google.script.run → gas* 公開関数（GAS 配信版アプリから呼ばれる）
  */
 
 // シート名定数
@@ -76,23 +72,31 @@ var NUMERIC_ENTRY_KEYS = [
 // ============================================================
 
 function doGet(e) {
+  // action なし = アプリ本体を HtmlService で配信（個人 Gmail 認証が通った人のみ到達できる）
+  if (!e.parameter.action) {
+    return HtmlService.createHtmlOutputFromFile('index')
+      .setTitle('Nice Serviceman 日報')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // action あり = 後方互換 JSON API（GitHub Pages 版から呼ばれる場合のみ使用）
   try {
     var action = e.parameter.action || '';
     var result;
 
     if (action === 'getEntries') {
       var yearMonth = e.parameter.yearMonth || '';
-      result = getEntries(yearMonth);
+      result = getEntriesImpl(yearMonth);
 
     } else if (action === 'getBudget') {
       var yearMonth = e.parameter.yearMonth || '';
-      result = getBudget(yearMonth);
+      result = getBudgetImpl(yearMonth);
 
     } else if (action === 'getAllData') {
-      result = getAllData();
+      result = getAllDataImpl();
 
     } else if (action === 'getLatestReport') {
-      result = getLatestReport(e.parameter);
+      result = getLatestReportImpl(e.parameter.type || '');
 
     } else {
       result = { status: 'ok', message: 'Nice Serviceman 日報 API', timestamp: new Date().toISOString() };
@@ -106,6 +110,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  // 後方互換 JSON API（GitHub Pages 版から呼ばれる場合のみ使用）
   try {
     var body = JSON.parse(e.postData.contents);
     var action = body.action || '';
@@ -113,13 +118,13 @@ function doPost(e) {
     var result;
 
     if (action === 'saveEntry') {
-      result = saveEntry(data);
+      result = saveEntryImpl(data);
 
     } else if (action === 'saveBudget') {
-      result = saveBudget(data);
+      result = saveBudgetImpl(data);
 
     } else if (action === 'deleteEntry') {
-      result = deleteEntry(data.date);
+      result = deleteEntryImpl(data.date);
 
     } else if (action === 'migrateToV1') {
       result = migrateToV1();
@@ -128,7 +133,7 @@ function doPost(e) {
       result = cleanupDuplicateEntries();
 
     } else if (action === 'generateReport') {
-      result = generateReport(data);
+      result = generateReportImpl(data);
 
     } else {
       result = { error: '不明なアクション: ' + action };
@@ -177,7 +182,7 @@ function migrateToV1() {
  * @param {string} yearMonth - "YYYY-MM"（空文字なら全件）
  * @returns {Object[]}
  */
-function getEntries(yearMonth) {
+function getEntriesImpl(yearMonth) {
   var sheet = getSheet(SHEET_ENTRIES);
   var rows  = sheetToObjects(sheet, ENTRIES_COLS);
 
@@ -256,7 +261,7 @@ function aggregateByDate(entries) {
  * エントリを保存（積み上げ型: 常に新規行をinsert）
  * @param {Object} data
  */
-function saveEntry(data) {
+function saveEntryImpl(data) {
   var sheet = getSheet(SHEET_ENTRIES);
   var date  = String(data.date || '');
   if (!date) throw new Error('date が指定されていません');
@@ -288,7 +293,7 @@ function saveEntry(data) {
  * エントリを削除（指定日の全行を削除）
  * @param {string} date - "YYYY-MM-DD"
  */
-function deleteEntry(date) {
+function deleteEntryImpl(date) {
   var sheet    = getSheet(SHEET_ENTRIES);
   var lastRow  = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '該当データが見つかりません: ' + date };
@@ -318,7 +323,7 @@ function deleteEntry(date) {
 // 予算（KGI設定）
 // ============================================================
 
-function getBudget(yearMonth) {
+function getBudgetImpl(yearMonth) {
   if (!yearMonth) throw new Error('yearMonth が指定されていません');
 
   var sheet    = getSheet(SHEET_BUDGET);
@@ -333,7 +338,7 @@ function getBudget(yearMonth) {
   return normalizeBudget(row);
 }
 
-function saveBudget(data) {
+function saveBudgetImpl(data) {
   var sheet     = getSheet(SHEET_BUDGET);
   var yearMonth = String(data.yearMonth || data.year_month || '');
   if (!yearMonth) throw new Error('yearMonth が指定されていません');
@@ -399,8 +404,8 @@ function cleanupDuplicateEntries() {
 // 全データエクスポート
 // ============================================================
 
-function getAllData() {
-  var entries = getEntries('');
+function getAllDataImpl() {
+  var entries = getEntriesImpl('');
   var budgets = sheetToObjects(getSheet(SHEET_BUDGET), BUDGET_COLS).map(normalizeBudget);
   return { entries: entries, budgets: budgets };
 }
@@ -549,14 +554,14 @@ function _callGemini(prompt) {
   return json.candidates[0].content.parts[0].text;
 }
 
-function generateReport(data) {
+function generateReportImpl(data) {
   var type = data.type; // 'weekly' | 'monthly'
   var jst  = new Date(new Date().getTime() + 9 * 3600000);
   var todayStr  = jst.toISOString().slice(0, 10);
   var yearMonth = todayStr.slice(0, 7);
 
-  var curEntries = getEntries(yearMonth); // 配列を返す
-  var budget     = getBudget(yearMonth);  // オブジェクト or null
+  var curEntries = getEntriesImpl(yearMonth); // 配列を返す
+  var budget     = getBudgetImpl(yearMonth);  // オブジェクト or null
 
   var curData, prevData, periodLabel;
 
@@ -571,7 +576,7 @@ function generateReport(data) {
     var prevStart = new Date(weekStartMs - 7 * 86400000).toISOString().slice(0, 10);
     var prevEnd   = new Date(jst.getTime()  - 7 * 86400000).toISOString().slice(0, 10);
     var prevYm    = prevStart.slice(0, 7);
-    var prevAll   = prevYm === yearMonth ? curEntries : getEntries(prevYm);
+    var prevAll   = prevYm === yearMonth ? curEntries : getEntriesImpl(prevYm);
     prevData = prevAll.filter(function(e) { return e.date >= prevStart && e.date <= prevEnd; });
 
     periodLabel = weekStart + ' 〜 ' + todayStr;
@@ -581,7 +586,7 @@ function generateReport(data) {
     var pY  = ym[0], pM = ym[1] - 1;
     if (pM === 0) { pY--; pM = 12; }
     var prevYm = pY + '-' + (pM < 10 ? '0' + pM : String(pM));
-    prevData   = getEntries(prevYm);
+    prevData   = getEntriesImpl(prevYm);
     periodLabel = yearMonth;
   }
 
@@ -643,8 +648,8 @@ function generateReport(data) {
   return { success: true, content: content, period: periodLabel };
 }
 
-function getLatestReport(params) {
-  var type = params.type || '';
+function getLatestReportImpl(type) {
+  type = type || '';
   try {
     var sheet   = _ensureAiReportsSheet();
     var lastRow = sheet.getLastRow();
@@ -664,7 +669,7 @@ function getLatestReport(params) {
 
 // 毎週金曜 18 時に自動実行（setupAiTriggers() で登録）
 function weeklyReportTrigger() {
-  try { generateReport({ type: 'weekly' }); }
+  try { generateReportImpl({ type: 'weekly' }); }
   catch (e) { Logger.log('週次レポート自動生成エラー: ' + e.message); }
 }
 
@@ -696,10 +701,48 @@ function isLastBusinessDayOfMonth() {
 // 毎日 19 時に自動実行 → 月末最終営業日のみ月次レポートを生成
 function monthlyReportTrigger() {
   if (!isLastBusinessDayOfMonth()) return;
-  try { generateReport({ type: 'monthly' }); }
+  try { generateReportImpl({ type: 'monthly' }); }
   catch (e) { Logger.log('月次レポート自動生成エラー: ' + e.message); }
 }
 
+// ============================================================
+// google.script.run 公開関数（GAS 配信版アプリから呼ばれる）
+// api_gas.js の _callGas() が対応する。戻り値は JSON 文字列。
+// ============================================================
+
+function gasGetEntries(yearMonth) {
+  return JSON.stringify(getEntriesImpl(yearMonth || ''));
+}
+
+function gasSaveEntry(data) {
+  return JSON.stringify(saveEntryImpl(data));
+}
+
+function gasGetBudget(yearMonth) {
+  return JSON.stringify(getBudgetImpl(yearMonth));
+}
+
+function gasSaveBudget(data) {
+  return JSON.stringify(saveBudgetImpl(data));
+}
+
+function gasGetAllData() {
+  return JSON.stringify(getAllDataImpl());
+}
+
+function gasDeleteEntry(date) {
+  return JSON.stringify(deleteEntryImpl(date));
+}
+
+function gasGenerateReport(type) {
+  return JSON.stringify(generateReportImpl({ type: type }));
+}
+
+function gasGetLatestReport(type) {
+  return JSON.stringify(getLatestReportImpl(type || ''));
+}
+
+// ============================================================
 // GAS エディタから一度だけ手動実行 → 時刻トリガーを登録
 function setupAiTriggers() {
   ['weeklyReportTrigger', 'monthlyReportTrigger'].forEach(function(fn) {

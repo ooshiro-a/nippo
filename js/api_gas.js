@@ -1,0 +1,82 @@
+/**
+ * api_gas.js - Google Apps Script 経由の API 通信
+ * Nice Serviceman 日報（GAS 配信版）
+ *
+ * fetch(APPS_SCRIPT_URL) の代替。google.script.run を使い、
+ * 既存の api.js と同一の関数シグネチャを提供する。
+ * app.js は一切変更しない。
+ */
+
+// ============================================================
+// 内部ユーティリティ
+// ============================================================
+
+function _callGas(funcName, payload) {
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        try {
+          resolve(typeof result === 'string' ? JSON.parse(result) : result);
+        } catch (e) {
+          resolve(result);
+        }
+      })
+      .withFailureHandler(function(err) {
+        reject(new Error(err.message || String(err)));
+      });
+
+    if (payload !== undefined) {
+      runner[funcName](payload);
+    } else {
+      runner[funcName]();
+    }
+  });
+}
+
+// ============================================================
+// エントリ（日次記録）
+// ============================================================
+
+async function getEntries(yearMonth) {
+  return _callGas('gasGetEntries', yearMonth || '');
+}
+
+async function saveEntry(data) {
+  return _callGas('gasSaveEntry', data);
+}
+
+// ============================================================
+// 予算（KGI設定）
+// ============================================================
+
+async function getBudget(yearMonth) {
+  return _callGas('gasGetBudget', yearMonth);
+}
+
+async function saveBudget(data) {
+  return _callGas('gasSaveBudget', data);
+}
+
+// ============================================================
+// エクスポート（全データ）
+// ============================================================
+
+async function getAllData() {
+  return _callGas('gasGetAllData');
+}
+
+async function deleteEntry(date) {
+  return _callGas('gasDeleteEntry', date);
+}
+
+// ============================================================
+// AI レポート
+// ============================================================
+
+async function generateReport(type) {
+  return _callGas('gasGenerateReport', type);
+}
+
+async function getLatestReport(type) {
+  return _callGas('gasGetLatestReport', type);
+}
