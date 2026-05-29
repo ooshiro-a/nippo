@@ -31,7 +31,9 @@ html = html.replace(/\s*<link rel="manifest" href="manifest\.json">\n?/, '\n');
 html = html.replace(/\s*<link rel="apple-touch-icon"[^>]*>\n?/, '\n');
 
 // ── xlsx.min.js インライン化（SheetJS）────────────────────────
-const xlsx = read('js/xlsx.min.js');
+// GAS テンプレートエンジンが「<?」をスクリプトレットとして誤認識するため
+// 「<?」→「<?」にエスケープ（JS実行時は同じ文字列に戻る）
+const xlsx = read('js/xlsx.min.js').replace(/<\?/g, '<\\u003F');
 html = html.replace(
   /\s*<script src="js\/xlsx\.min\.js"><\/script>/,
   `\n  <script>\n${xlsx}\n  </script>`
