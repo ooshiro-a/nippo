@@ -1437,6 +1437,42 @@ async function getLatestReport(type) {
   return _callGas('gasGetLatestReport', type);
 }
 
+// ============================================================
+// 営業所管理機能（Step A1〜）
+// ============================================================
+
+async function setupOfficeSheets() {
+  return _callGas('gasSetupOfficeSheets');
+}
+
+async function getOfficeDaily(params) {
+  return _callGas('gasGetOfficeDaily', params ? JSON.stringify(params) : '{}');
+}
+
+async function saveOfficeDaily(entries) {
+  return _callGas('gasSaveOfficeDaily', JSON.stringify(entries));
+}
+
+async function deleteOfficeDaily(params) {
+  return _callGas('gasDeleteOfficeDaily', JSON.stringify(params));
+}
+
+async function getOfficeSalesPlan(yearMonth) {
+  return _callGas('gasGetOfficeSalesPlan', yearMonth || '');
+}
+
+async function saveOfficeSalesPlan(entries) {
+  return _callGas('gasSaveOfficeSalesPlan', JSON.stringify(entries));
+}
+
+async function getOfficeReports(params) {
+  return _callGas('gasGetOfficeReports', params ? JSON.stringify(params) : '{}');
+}
+
+async function saveOfficeReport(report) {
+  return _callGas('gasSaveOfficeReport', JSON.stringify(report));
+}
+
   </script>
   <script>
 /**

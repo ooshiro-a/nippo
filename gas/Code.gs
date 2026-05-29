@@ -743,6 +743,345 @@ function gasGetLatestReport(type) {
 }
 
 // ============================================================
+// 営業所管理機能（Step A1〜）
+// ============================================================
+
+// シート名定数
+var SHEET_OFFICE_DAILY      = 'officeDaily';
+var SHEET_OFFICE_SALES_PLAN = 'officeSalesPlan';
+var SHEET_OFFICE_REPORTS    = 'officeReports';
+
+// officeDaily 列順
+var OFFICE_DAILY_COLS = [
+  'date', 'scope', 'memberId', 'memberName',
+  'activityDays', 'activityCount',
+  'promotionCount', 'promotionAcase',
+  'inspectionPlan', 'inspectionActual',
+  'renewalNextPlanTop', 'renewalNextActualTop',
+  'salesPlan', 'salesActual', 'salesAcase', 'salesForecast', 'vsPlan',
+  'maintActual', 'maintNew', 'maintCont',
+  'totalMaintPlan', 'totalMaintActual',
+  'newMaintPlan', 'newMaintActual',
+  'renewalThisPrev', 'renewalThisPlan', 'renewalThisActual',
+  'nextMonthBacklog', 'nextMonthCase',
+  'renewalNext2Plan', 'renewalNext2Actual', 'renewalNext2Rate',
+  'renewalRate', 'shortfall',
+  'source', 'importedAt', 'rawText'
+];
+
+// officeSalesPlan 列順
+var OFFICE_SALES_PLAN_COLS = [
+  'yearMonth', 'scope', 'memberId', 'memberName',
+  'maintenancePlanUnits', 'maintenancePlanAmount',
+  'inspectionPlanUnits', 'inspectionPlanAmount',
+  'renewalTargetUnits', 'renewalPlanUnits', 'renewalPlanAmount',
+  'newPlanUnits', 'newPlanAmount',
+  'prepaidNew', 'prepaidCont',
+  'callPlan', 'repairPlan', 'serPromoPlan',
+  'totalSalesPlan', 'unitPrices', 'annualSalesPlan',
+  'source', 'importedAt'
+];
+
+// officeReports 列順
+var OFFICE_REPORTS_COLS = [
+  'reportId', 'type', 'period', 'scope',
+  'generatedAt', 'modelUsed', 'content', 'metrics'
+];
+
+/**
+ * 3つの営業所シートをなければ作成しヘッダーを設定する
+ */
+function _ensureOfficeSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var sheetsToCreate = [
+    { name: SHEET_OFFICE_DAILY,      cols: OFFICE_DAILY_COLS },
+    { name: SHEET_OFFICE_SALES_PLAN, cols: OFFICE_SALES_PLAN_COLS },
+    { name: SHEET_OFFICE_REPORTS,    cols: OFFICE_REPORTS_COLS }
+  ];
+
+  var created = [];
+  sheetsToCreate.forEach(function(def) {
+    if (!ss.getSheetByName(def.name)) {
+      var sheet = ss.insertSheet(def.name);
+      sheet.getRange(1, 1, 1, def.cols.length).setValues([def.cols]);
+      // ヘッダー行を太字に
+      sheet.getRange(1, 1, 1, def.cols.length).setFontWeight('bold');
+      created.push(def.name);
+    }
+  });
+
+  return { success: true, created: created };
+}
+
+// ──────────────────────────────────────────
+// officeDaily 読み書き
+// ──────────────────────────────────────────
+
+/**
+ * officeDaily を取得
+ * @param {Object} params - { dateFrom, dateTo, scope }（すべて省略可 = 全件）
+ */
+function getOfficeDailyImpl(params) {
+  params = params || {};
+  var sheet = getSheet(SHEET_OFFICE_DAILY);
+  var rows  = sheetToObjects(sheet, OFFICE_DAILY_COLS);
+
+  if (params.dateFrom) {
+    rows = rows.filter(function(r) { return String(r.date) >= params.dateFrom; });
+  }
+  if (params.dateTo) {
+    rows = rows.filter(function(r) { return String(r.date) <= params.dateTo; });
+  }
+  if (params.scope) {
+    rows = rows.filter(function(r) { return r.scope === params.scope; });
+  }
+
+  return rows.map(function(r) {
+    var obj = {};
+    OFFICE_DAILY_COLS.forEach(function(col) {
+      obj[col] = r[col] !== undefined ? r[col] : '';
+    });
+    return obj;
+  });
+}
+
+/**
+ * officeDaily を保存（upsert: date+scope+memberId で一意）
+ * @param {Object[]} entries
+ */
+function saveOfficeDailyImpl(entries) {
+  if (!Array.isArray(entries)) entries = [entries];
+  var sheet   = getSheet(SHEET_OFFICE_DAILY);
+  var lastRow = sheet.getLastRow();
+  var saved   = 0;
+
+  entries.forEach(function(entry) {
+    var date     = String(entry.date || '');
+    var scope    = String(entry.scope || '');
+    var memberId = String(entry.memberId || '');
+
+    var newRow = OFFICE_DAILY_COLS.map(function(col) {
+      var v = entry[col];
+      return v !== undefined && v !== null ? v : '';
+    });
+
+    // 既存行を検索して上書き
+    var matchRow = -1;
+    if (lastRow >= 2) {
+      var dateIdx     = OFFICE_DAILY_COLS.indexOf('date')     + 1;
+      var scopeIdx    = OFFICE_DAILY_COLS.indexOf('scope')    + 1;
+      var memberIdx   = OFFICE_DAILY_COLS.indexOf('memberId') + 1;
+      var keyRange    = sheet.getRange(2, 1, lastRow - 1, OFFICE_DAILY_COLS.length).getValues();
+      for (var i = 0; i < keyRange.length; i++) {
+        if (String(keyRange[i][dateIdx - 1])   === date &&
+            String(keyRange[i][scopeIdx - 1])  === scope &&
+            String(keyRange[i][memberIdx - 1]) === memberId) {
+          matchRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (matchRow > 0) {
+      sheet.getRange(matchRow, 1, 1, newRow.length).setValues([newRow]);
+    } else {
+      sheet.appendRow(newRow);
+      lastRow++;
+    }
+    saved++;
+  });
+
+  return { success: true, saved: saved };
+}
+
+/**
+ * officeDaily の指定行を削除
+ * @param {Object} params - { date, scope, memberId }
+ */
+function deleteOfficeDailyImpl(params) {
+  params = params || {};
+  var sheet   = getSheet(SHEET_OFFICE_DAILY);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '該当データなし' };
+
+  var dateIdx   = OFFICE_DAILY_COLS.indexOf('date')     + 1;
+  var scopeIdx  = OFFICE_DAILY_COLS.indexOf('scope')    + 1;
+  var memberIdx = OFFICE_DAILY_COLS.indexOf('memberId') + 1;
+  var data      = sheet.getRange(2, 1, lastRow - 1, OFFICE_DAILY_COLS.length).getValues();
+  var rowsToDelete = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var match = true;
+    if (params.date     && String(data[i][dateIdx - 1])   !== String(params.date))     match = false;
+    if (params.scope    && String(data[i][scopeIdx - 1])  !== String(params.scope))    match = false;
+    if (params.memberId && String(data[i][memberIdx - 1]) !== String(params.memberId)) match = false;
+    if (match) rowsToDelete.push(i + 2);
+  }
+
+  rowsToDelete.sort(function(a, b) { return b - a; });
+  rowsToDelete.forEach(function(r) { sheet.deleteRow(r); });
+
+  return { success: true, deleted: rowsToDelete.length };
+}
+
+// ──────────────────────────────────────────
+// officeSalesPlan 読み書き
+// ──────────────────────────────────────────
+
+/**
+ * officeSalesPlan を取得
+ * @param {string} yearMonth - "YYYY-MM"（省略で全件）
+ */
+function getOfficeSalesPlanImpl(yearMonth) {
+  var sheet = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var rows  = sheetToObjects(sheet, OFFICE_SALES_PLAN_COLS);
+
+  if (yearMonth) {
+    rows = rows.filter(function(r) { return String(r.yearMonth).slice(0, 7) === yearMonth; });
+  }
+
+  return rows.map(function(r) {
+    var obj = {};
+    OFFICE_SALES_PLAN_COLS.forEach(function(col) {
+      obj[col] = r[col] !== undefined ? r[col] : '';
+    });
+    return obj;
+  });
+}
+
+/**
+ * officeSalesPlan を保存（upsert: yearMonth+scope+memberId で一意）
+ * @param {Object[]} entries
+ */
+function saveOfficeSalesPlanImpl(entries) {
+  if (!Array.isArray(entries)) entries = [entries];
+  var sheet   = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var lastRow = sheet.getLastRow();
+  var saved   = 0;
+
+  entries.forEach(function(entry) {
+    var ym       = String(entry.yearMonth || '');
+    var scope    = String(entry.scope || '');
+    var memberId = String(entry.memberId || '');
+
+    var newRow = OFFICE_SALES_PLAN_COLS.map(function(col) {
+      var v = entry[col];
+      return v !== undefined && v !== null ? v : '';
+    });
+
+    var matchRow = -1;
+    if (lastRow >= 2) {
+      var ymIdx     = OFFICE_SALES_PLAN_COLS.indexOf('yearMonth') + 1;
+      var scopeIdx  = OFFICE_SALES_PLAN_COLS.indexOf('scope')     + 1;
+      var memberIdx = OFFICE_SALES_PLAN_COLS.indexOf('memberId')  + 1;
+      var keyRange  = sheet.getRange(2, 1, lastRow - 1, OFFICE_SALES_PLAN_COLS.length).getValues();
+      for (var i = 0; i < keyRange.length; i++) {
+        if (String(keyRange[i][ymIdx - 1]).slice(0, 7) === ym &&
+            String(keyRange[i][scopeIdx - 1])          === scope &&
+            String(keyRange[i][memberIdx - 1])         === memberId) {
+          matchRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (matchRow > 0) {
+      sheet.getRange(matchRow, 1, 1, newRow.length).setValues([newRow]);
+    } else {
+      sheet.appendRow(newRow);
+      lastRow++;
+    }
+    saved++;
+  });
+
+  return { success: true, saved: saved };
+}
+
+// ──────────────────────────────────────────
+// officeReports 読み書き
+// ──────────────────────────────────────────
+
+/**
+ * officeReports を取得
+ * @param {Object} params - { type, period, scope }（省略可）
+ */
+function getOfficeReportsImpl(params) {
+  params = params || {};
+  var sheet = getSheet(SHEET_OFFICE_REPORTS);
+  var rows  = sheetToObjects(sheet, OFFICE_REPORTS_COLS);
+
+  if (params.type)   rows = rows.filter(function(r) { return r.type   === params.type;   });
+  if (params.period) rows = rows.filter(function(r) { return r.period === params.period; });
+  if (params.scope)  rows = rows.filter(function(r) { return r.scope  === params.scope;  });
+
+  return rows.map(function(r) {
+    var obj = {};
+    OFFICE_REPORTS_COLS.forEach(function(col) {
+      obj[col] = r[col] !== undefined ? r[col] : '';
+    });
+    return obj;
+  });
+}
+
+/**
+ * officeReports にレポートを追記
+ * @param {Object} report
+ */
+function saveOfficeReportImpl(report) {
+  var sheet  = getSheet(SHEET_OFFICE_REPORTS);
+  var row    = OFFICE_REPORTS_COLS.map(function(col) {
+    if (col === 'reportId' && !report[col]) return Utilities.getUuid();
+    var v = report[col];
+    return v !== undefined && v !== null ? v : '';
+  });
+  sheet.appendRow(row);
+  return { success: true, reportId: row[0] };
+}
+
+// ──────────────────────────────────────────
+// gas* 公開ラッパー（google.script.run 用）
+// ──────────────────────────────────────────
+
+function gasSetupOfficeSheets() {
+  return JSON.stringify(_ensureOfficeSheets());
+}
+
+function gasGetOfficeDaily(paramsJson) {
+  var params = paramsJson ? (typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson) : {};
+  return JSON.stringify(getOfficeDailyImpl(params));
+}
+
+function gasSaveOfficeDaily(entriesJson) {
+  var entries = typeof entriesJson === 'string' ? JSON.parse(entriesJson) : entriesJson;
+  return JSON.stringify(saveOfficeDailyImpl(entries));
+}
+
+function gasDeleteOfficeDaily(paramsJson) {
+  var params = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson;
+  return JSON.stringify(deleteOfficeDailyImpl(params));
+}
+
+function gasGetOfficeSalesPlan(yearMonth) {
+  return JSON.stringify(getOfficeSalesPlanImpl(yearMonth || ''));
+}
+
+function gasSaveOfficeSalesPlan(entriesJson) {
+  var entries = typeof entriesJson === 'string' ? JSON.parse(entriesJson) : entriesJson;
+  return JSON.stringify(saveOfficeSalesPlanImpl(entries));
+}
+
+function gasGetOfficeReports(paramsJson) {
+  var params = paramsJson ? (typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson) : {};
+  return JSON.stringify(getOfficeReportsImpl(params));
+}
+
+function gasSaveOfficeReport(reportJson) {
+  var report = typeof reportJson === 'string' ? JSON.parse(reportJson) : reportJson;
+  return JSON.stringify(saveOfficeReportImpl(report));
+}
+
+// ============================================================
 // GAS エディタから一度だけ手動実行 → 時刻トリガーを登録
 function setupAiTriggers() {
   ['weeklyReportTrigger', 'monthlyReportTrigger'].forEach(function(fn) {
