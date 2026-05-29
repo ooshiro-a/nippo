@@ -80,6 +80,9 @@ html = html.replace(
   ''
 );
 
+// ── DOCTYPE 削除（GAS HtmlService が createHtmlOutputFromFile で拒否するため）
+html = html.replace(/^<!DOCTYPE html>\n/i, '');
+
 // ── 出力 ─────────────────────────────────────────────────────
 const outPath = path.join(ROOT, 'gas', 'index.html');
 fs.writeFileSync(outPath, html, 'utf8');
