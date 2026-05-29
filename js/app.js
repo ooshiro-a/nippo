@@ -1622,6 +1622,193 @@ function showSaveFeedback(btn) {
 }
 
 // ------------------------------------------------------------------
+// 営業所 日次取込
+// ------------------------------------------------------------------
+
+var _officeDailyParsed = null;
+var _officeDailyScope  = 'office';
+
+var OFFICE_DAILY_LABELS = {
+  activityDays:         '活動日数',
+  activityCount:        '総活動件数',
+  promotionCount:       '新規促進件数',
+  promotionAcase:       '促進A案件',
+  inspectionPlan:       '点検 計画',
+  inspectionActual:     '点検 実績',
+  renewalNextPlanTop:   '次月継続 計画',
+  renewalNextActualTop: '次月継続 実績',
+  salesPlan:            '売上 計画',
+  salesActual:          '売上 実績',
+  salesAcase:           '売上 A案件',
+  salesForecast:        '末見通し',
+  vsPlan:               '対計画',
+  maintActual:          '保守売上 実績',
+  maintNew:             '保守 新規',
+  maintCont:            '保守 継続',
+  totalMaintPlan:       '総保守台数 計画',
+  totalMaintActual:     '総保守台数 実績',
+  newMaintPlan:         '新規保守台数 計画',
+  newMaintActual:       '新規保守台数 実績',
+  renewalThisPrev:      '当月継続 前受',
+  renewalThisPlan:      '当月継続 計画',
+  renewalThisActual:    '当月継続 実績',
+  nextMonthBacklog:     '翌月分 受注残',
+  nextMonthCase:        '翌月案件',
+  renewalNext2Plan:     '次々月継続 計画',
+  renewalNext2Actual:   '次々月継続 実績',
+  renewalNext2Rate:     '次々月継続 受注率',
+  renewalRate:          '継続率',
+  shortfall:            '過不足'
+};
+
+var OFFICE_ONLY_FIELDS = ['renewalRate'];
+var MEMBER_ONLY_FIELDS = ['shortfall'];
+
+function initOfficeDailyImport() {
+  var btn  = document.getElementById('btn-office-daily-import');
+  var file = document.getElementById('office-daily-file');
+  if (!btn || !file) return;
+
+  btn.addEventListener('click', function() { file.click(); });
+  file.addEventListener('change', onOfficeDailyFileSelect);
+
+  document.getElementById('office-import-cancel')
+    .addEventListener('click', closeOfficeDailyModal);
+  document.getElementById('office-import-save')
+    .addEventListener('click', saveOfficeDailyFromModal);
+
+  document.querySelectorAll('#office-import-modal .modal-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('#office-import-modal .modal-tab')
+        .forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      _officeDailyScope = tab.dataset.scope;
+      renderOfficeDailyFields();
+    });
+  });
+
+  document.getElementById('office-member-select')
+    .addEventListener('change', renderOfficeDailyFields);
+}
+
+async function onOfficeDailyFileSelect(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  try {
+    var buf = await file.arrayBuffer();
+    var wb  = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    _officeDailyParsed = parseDayReport(wb, getTodayJST());
+    openOfficeDailyConfirm(_officeDailyParsed);
+  } catch (err) {
+    alert('取込エラー: ' + err.message);
+  }
+}
+
+function openOfficeDailyConfirm(parsed) {
+  document.getElementById('office-import-date').textContent = parsed.date;
+  _officeDailyScope = 'office';
+  document.querySelectorAll('#office-import-modal .modal-tab').forEach(function(t, i) {
+    t.classList.toggle('active', i === 0);
+  });
+  document.getElementById('office-member-select-wrap').style.display = 'none';
+  renderOfficeDailyFields();
+  document.getElementById('office-import-modal').style.display = 'flex';
+}
+
+function renderOfficeDailyFields() {
+  var container = document.getElementById('office-import-fields');
+  var isOffice  = (_officeDailyScope === 'office');
+  var data;
+
+  if (isOffice) {
+    document.getElementById('office-member-select-wrap').style.display = 'none';
+    data = _officeDailyParsed ? _officeDailyParsed.office : {};
+  } else {
+    document.getElementById('office-member-select-wrap').style.display = 'block';
+    var memberId = document.getElementById('office-member-select').value;
+    data = (_officeDailyParsed ? _officeDailyParsed.members : [])
+           .find(function(m) { return m.memberId === memberId; }) || {};
+  }
+
+  var html = '';
+  Object.keys(OFFICE_DAILY_LABELS).forEach(function(key) {
+    if (isOffice  && MEMBER_ONLY_FIELDS.indexOf(key) >= 0) return;
+    if (!isOffice && OFFICE_ONLY_FIELDS.indexOf(key) >= 0) return;
+    var val = (data[key] !== undefined) ? data[key] : 0;
+    html += '<div class="import-field-row">' +
+            '<label class="import-field-label">' + OFFICE_DAILY_LABELS[key] + '</label>' +
+            '<input class="import-field-input" type="number" step="any"' +
+            ' data-key="' + key + '" value="' + val + '">' +
+            '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function _collectImportFields() {
+  var result = {};
+  document.querySelectorAll('#office-import-fields .import-field-input').forEach(function(f) {
+    result[f.dataset.key] = parseFloat(f.value) || 0;
+  });
+  return result;
+}
+
+function closeOfficeDailyModal() {
+  document.getElementById('office-import-modal').style.display = 'none';
+  _officeDailyParsed = null;
+}
+
+async function saveOfficeDailyFromModal() {
+  var saveBtn = document.getElementById('office-import-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '保存中...';
+
+  try {
+    var p        = _officeDailyParsed;
+    var now      = p.importedAt;
+    var src      = p.source;
+    var modified = _collectImportFields();
+
+    // 現在表示中のスコープの修正値を反映
+    if (_officeDailyScope === 'office') {
+      Object.assign(p.office, modified);
+    } else {
+      var memberId = document.getElementById('office-member-select').value;
+      var m = p.members.find(function(x) { return x.memberId === memberId; });
+      if (m) Object.assign(m, modified);
+    }
+
+    // 保存エントリを組み立て
+    var officeEntry = Object.assign(
+      { date: p.date, scope: 'office', memberId: '', memberName: '', source: src, importedAt: now },
+      p.office
+    );
+    var memberEntries = p.members.map(function(m) {
+      return Object.assign(
+        { date: p.date, scope: 'member', source: src, importedAt: now },
+        m
+      );
+    });
+
+    await saveOfficeDaily([officeEntry].concat(memberEntries));
+    closeOfficeDailyModal();
+
+    // 保存フィードバック
+    var bar = document.getElementById('btn-office-daily-import').parentNode;
+    var fb  = document.createElement('span');
+    fb.className   = 'import-feedback';
+    fb.textContent = '✓ 取込完了';
+    bar.appendChild(fb);
+    setTimeout(function() { if (fb.parentNode) fb.parentNode.removeChild(fb); }, 2500);
+  } catch (err) {
+    alert('保存エラー: ' + err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '保存する';
+  }
+}
+
+// ------------------------------------------------------------------
 // アプリ初期化
 // ------------------------------------------------------------------
 
@@ -1633,6 +1820,7 @@ function initApp() {
   initHistoryTab();
   initKgiTab();
   initAiReportCard();
+  initOfficeDailyImport();
   console.log('Nice Serviceman 日報 - 初期化完了');
 }
 

@@ -30,6 +30,13 @@ html = html.replace(/\s*<link rel="manifest" href="manifest\.json">\n?/, '\n');
 // ── apple-touch-icon 削除（不要）─────────────────────────────
 html = html.replace(/\s*<link rel="apple-touch-icon"[^>]*>\n?/, '\n');
 
+// ── xlsx.min.js インライン化（SheetJS）────────────────────────
+const xlsx = read('js/xlsx.min.js');
+html = html.replace(
+  /\s*<script src="js\/xlsx\.min\.js"><\/script>/,
+  `\n  <script>\n${xlsx}\n  </script>`
+);
+
 // ── utils.js インライン化 ─────────────────────────────────────
 const utils = read('js/utils.js');
 html = html.replace(
@@ -42,6 +49,20 @@ const apiGas = read('js/api_gas.js');
 html = html.replace(
   /\s*<script src="js\/api\.js"><\/script>/,
   `\n  <script>\n${apiGas}\n  </script>`
+);
+
+// ── parserConfig.js インライン化 ──────────────────────────────
+const parserConfig = read('js/parserConfig.js');
+html = html.replace(
+  /\s*<script src="js\/parserConfig\.js"><\/script>/,
+  `\n  <script>\n${parserConfig}\n  </script>`
+);
+
+// ── parseDayReport.js インライン化 ────────────────────────────
+const parseDayReport = read('js/parseDayReport.js');
+html = html.replace(
+  /\s*<script src="js\/parseDayReport\.js"><\/script>/,
+  `\n  <script>\n${parseDayReport}\n  </script>`
 );
 
 // ── app.js インライン化 ───────────────────────────────────────

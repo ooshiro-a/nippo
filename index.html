@@ -30,6 +30,13 @@
 
       <!-- 📝 入力タブ -->
       <section id="tab-input" class="tab-pane active">
+
+        <!-- 営業所 日次取込 -->
+        <div class="office-import-bar">
+          <button id="btn-office-daily-import" class="btn office-import-btn">📄 日次取込</button>
+          <input type="file" id="office-daily-file" accept=".xlsx,.xls" style="display:none">
+        </div>
+
         <!-- 日付 -->
         <div class="card">
           <div class="card-title">日付</div>
@@ -268,9 +275,40 @@
 
   </div>
 
+  <script src="js/xlsx.min.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/parserConfig.js"></script>
+  <script src="js/parseDayReport.js"></script>
   <script src="js/app.js"></script>
+  <!-- 営業所 日次取込 確認モーダル -->
+  <div id="office-import-modal" class="modal-overlay" style="display:none">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title">日次取込 確認</span>
+        <span id="office-import-date" class="modal-date"></span>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-scope="office">営業所合計</button>
+        <button class="modal-tab" data-scope="member">所員別</button>
+      </div>
+      <div id="office-member-select-wrap" class="member-select-wrap" style="display:none">
+        <select id="office-member-select" class="member-select">
+          <option value="a">a</option>
+          <option value="b">b</option>
+          <option value="c">c</option>
+          <option value="d">d</option>
+          <option value="e">e</option>
+        </select>
+      </div>
+      <div id="office-import-fields" class="modal-fields"></div>
+      <div class="modal-footer">
+        <button id="office-import-cancel" class="btn btn-secondary">破棄</button>
+        <button id="office-import-save"   class="btn btn-primary">保存する</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
