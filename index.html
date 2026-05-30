@@ -25,251 +25,385 @@
       <span id="header-date"></span>
     </header>
 
+    <!-- サブナビ（個人） -->
+    <nav id="sub-nav-personal" class="sub-nav">
+      <button class="sub-nav-btn active" data-tab="tab-input">📝 入力</button>
+      <button class="sub-nav-btn" data-tab="tab-dashboard">📊 進捗</button>
+      <button class="sub-nav-btn" data-tab="tab-history">📅 履歴</button>
+      <button class="sub-nav-btn" data-tab="tab-kgi">⚙️ KGI</button>
+    </nav>
+
+    <!-- サブナビ（営業所） -->
+    <nav id="sub-nav-office" class="sub-nav" style="display:none">
+      <button class="sub-nav-btn active" data-tab="tab-office-import">📄 取込</button>
+      <button class="sub-nav-btn" data-tab="tab-office-dashboard">📊 進捗</button>
+      <button class="sub-nav-btn" data-tab="tab-office-history">📅 履歴</button>
+      <button class="sub-nav-btn" data-tab="tab-office-kgi">⚙️ KGI</button>
+    </nav>
+
     <!-- メインコンテンツ -->
     <main id="content">
 
-      <!-- 📝 入力タブ -->
-      <section id="tab-input" class="tab-pane active">
+      <!-- ==============================
+           個人セクション
+           ============================== -->
+      <div id="section-personal" class="section-pane active">
 
-        <!-- 営業所 日次取込 -->
-        <div class="office-import-bar">
-          <button id="btn-office-daily-import" class="btn office-import-btn">📄 日次取込</button>
-          <input type="file" id="office-daily-file" accept=".xlsx,.xls" style="display:none">
-        </div>
+        <!-- 📝 入力タブ -->
+        <section id="tab-input" class="tab-pane active">
 
-        <!-- 日付 -->
-        <div class="card">
-          <div class="card-title">日付</div>
-          <input type="date" id="entry-date" />
-        </div>
+          <!-- 日付 -->
+          <div class="card">
+            <div class="card-title">日付</div>
+            <input type="date" id="entry-date" />
+          </div>
 
-        <!-- KPI実績（JSで動的生成） -->
-        <div class="card">
-          <div class="card-title">KPI実績</div>
-          <div id="entry-kpi-container"></div>
-        </div>
+          <!-- KPI実績（JSで動的生成） -->
+          <div class="card">
+            <div class="card-title">KPI実績</div>
+            <div id="entry-kpi-container"></div>
+          </div>
 
-        <!-- 信頼関係アクション -->
-        <div class="card">
-          <div class="card-title">信頼関係アクション</div>
-          <div class="tag-group" id="relationship-tags"></div>
-        </div>
+          <!-- 信頼関係アクション -->
+          <div class="card">
+            <div class="card-title">信頼関係アクション</div>
+            <div class="tag-group" id="relationship-tags"></div>
+          </div>
 
-        <!-- フィードバック -->
-        <div class="card">
-          <div class="card-title">フィードバック</div>
-          <div class="feedback-row">
-            <span class="feedback-label">ポジティブ</span>
-            <div class="counter">
-              <button class="counter-btn" data-target="positive-count" data-delta="-1">−</button>
-              <span class="counter-value" id="positive-count">0</span>
-              <button class="counter-btn" data-target="positive-count" data-delta="1">＋</button>
+          <!-- フィードバック -->
+          <div class="card">
+            <div class="card-title">フィードバック</div>
+            <div class="feedback-row">
+              <span class="feedback-label">ポジティブ</span>
+              <div class="counter">
+                <button class="counter-btn" data-target="positive-count" data-delta="-1">−</button>
+                <span class="counter-value" id="positive-count">0</span>
+                <button class="counter-btn" data-target="positive-count" data-delta="1">＋</button>
+              </div>
+            </div>
+            <div class="feedback-row">
+              <span class="feedback-label">ネガティブ</span>
+              <div class="counter">
+                <button class="counter-btn" data-target="negative-count" data-delta="-1">−</button>
+                <span class="counter-value" id="negative-count">0</span>
+                <button class="counter-btn" data-target="negative-count" data-delta="1">＋</button>
+              </div>
             </div>
           </div>
-          <div class="feedback-row">
-            <span class="feedback-label">ネガティブ</span>
-            <div class="counter">
-              <button class="counter-btn" data-target="negative-count" data-delta="-1">−</button>
-              <span class="counter-value" id="negative-count">0</span>
-              <button class="counter-btn" data-target="negative-count" data-delta="1">＋</button>
+
+          <!-- 訪問・メモ -->
+          <div class="card">
+            <div class="card-title">訪問・メモ</div>
+            <div class="form-group">
+              <label>印象的な訪問先</label>
+              <input type="text" id="entry-memorable-visit" placeholder="会社名・お客様名など" />
+            </div>
+            <div class="form-group">
+              <label>メモ</label>
+              <textarea id="entry-notes" placeholder="特記事項"></textarea>
+            </div>
+            <label class="important-toggle">
+              <input type="checkbox" id="entry-notes-important" />
+              <span>重要マーク</span>
+            </label>
+          </div>
+
+          <!-- 振り返り -->
+          <div class="card">
+            <div class="card-title">振り返り</div>
+            <div class="form-group">
+              <label>気づき</label>
+              <textarea id="entry-insight" placeholder="今日の気づき・学び"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>次の一手</label>
+              <textarea id="entry-next-action" placeholder="明日やること"></textarea>
             </div>
           </div>
-        </div>
 
-        <!-- 訪問・メモ -->
-        <div class="card">
-          <div class="card-title">訪問・メモ</div>
-          <div class="form-group">
-            <label>印象的な訪問先</label>
-            <input type="text" id="entry-memorable-visit" placeholder="会社名・お客様名など" />
+          <button class="btn btn-primary" id="entry-save-btn">保存する</button>
+        </section>
+
+        <!-- 📊 進捗タブ（個人） -->
+        <section id="tab-dashboard" class="tab-pane">
+
+          <!-- 週次進捗ゲージ -->
+          <div class="card dash-card-cyan" id="dash-weekly-card">
+            <div class="dash-weekly-header">
+              <span class="card-title">今週の進捗</span>
+              <span id="streak-badge" class="streak-badge" style="display:none"></span>
+            </div>
+            <div id="weekly-gauge-container"><div style="color:var(--text-muted);font-size:13px">読み込み中...</div></div>
           </div>
-          <div class="form-group">
-            <label>メモ</label>
-            <textarea id="entry-notes" placeholder="特記事項"></textarea>
-          </div>
-          <label class="important-toggle">
-            <input type="checkbox" id="entry-notes-important" />
-            <span>重要マーク</span>
-          </label>
-        </div>
 
-        <!-- 振り返り -->
-        <div class="card">
-          <div class="card-title">振り返り</div>
-          <div class="form-group">
-            <label>気づき</label>
-            <textarea id="entry-insight" placeholder="今日の気づき・学び"></textarea>
-          </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label>次の一手</label>
-            <textarea id="entry-next-action" placeholder="明日やること"></textarea>
-          </div>
-        </div>
-
-        <button class="btn btn-primary" id="entry-save-btn">保存する</button>
-      </section>
-
-      <!-- 📊 進捗タブ -->
-      <section id="tab-dashboard" class="tab-pane">
-
-        <!-- 週次進捗ゲージ -->
-        <div class="card dash-card-cyan" id="dash-weekly-card">
-          <div class="dash-weekly-header">
-            <span class="card-title">今週の進捗</span>
-            <span id="streak-badge" class="streak-badge" style="display:none"></span>
-          </div>
-          <div id="weekly-gauge-container"><div style="color:var(--text-muted);font-size:13px">読み込み中...</div></div>
-        </div>
-
-        <!-- AIレポート -->
-        <div class="card" id="dash-ai-report-card">
-          <div class="dash-ai-header">
-            <span class="card-title">🤖 AIレポート</span>
-            <div class="ai-btn-group">
-              <button class="btn btn-secondary ai-gen-btn" id="ai-weekly-btn" data-type="weekly">週次</button>
-              <button class="btn btn-secondary ai-gen-btn" id="ai-monthly-btn" data-type="monthly">月次</button>
-              <button class="btn btn-secondary ai-gen-btn" id="ai-pdf-btn">📄PDF</button>
+          <!-- AIレポート -->
+          <div class="card" id="dash-ai-report-card">
+            <div class="dash-ai-header">
+              <span class="card-title">🤖 AIレポート</span>
+              <div class="ai-btn-group">
+                <button class="btn btn-secondary ai-gen-btn" id="ai-weekly-btn" data-type="weekly">週次</button>
+                <button class="btn btn-secondary ai-gen-btn" id="ai-monthly-btn" data-type="monthly">月次</button>
+                <button class="btn btn-secondary ai-gen-btn" id="ai-pdf-btn">📄PDF</button>
+              </div>
+            </div>
+            <div id="ai-report-content">
+              <div style="color:var(--text-muted);font-size:13px">「週次」「月次」ボタンでAIがKPIを分析します</div>
+            </div>
+            <div id="ai-feedback-area" class="ai-feedback-area" style="display:none">
+              <span class="feedback-prompt">このレポートは役立ちましたか？</span>
+              <button class="feedback-btn" data-feedback-scope="personal" data-score="1">👍</button>
+              <button class="feedback-btn" data-feedback-scope="personal" data-score="-1">👎</button>
+              <div id="ai-feedback-comment-area" style="display:none;margin-top:8px">
+                <textarea id="ai-feedback-comment" rows="2"
+                  placeholder="良かった点・改善してほしい点（任意）"
+                  style="width:100%;box-sizing:border-box;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;resize:vertical"></textarea>
+                <button class="btn btn-secondary" id="ai-feedback-submit" style="margin-top:6px;font-size:12px">送信</button>
+              </div>
+              <div id="ai-feedback-status" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
             </div>
           </div>
-          <div id="ai-report-content">
-            <div style="color:var(--text-muted);font-size:13px">「週次」「月次」ボタンでAIがKPIを分析します</div>
-          </div>
-        </div>
 
-        <!-- 信頼関係指数 -->
-        <div class="card dash-card-rose">
-          <div class="card-title">信頼関係指数</div>
-          <div class="trust-hero">
-            <span class="trust-score-value" id="trust-score-value">--</span>
-            <span class="trust-score-unit">pt</span>
+          <!-- 信頼関係指数 -->
+          <div class="card dash-card-rose">
+            <div class="card-title">信頼関係指数</div>
+            <div class="trust-hero">
+              <span class="trust-score-value" id="trust-score-value">--</span>
+              <span class="trust-score-unit">pt</span>
+            </div>
+            <div class="trust-breakdown">
+              <span>アクション <span id="trust-action-count">0</span>件 ×2pt</span>
+              <span>ポジFB <span id="trust-pos-count">0</span>件 ×5pt</span>
+              <span>ネガFB <span id="trust-neg-count">0</span>件 ×3pt</span>
+            </div>
           </div>
-          <div class="trust-breakdown">
-            <span>アクション <span id="trust-action-count">0</span>件 ×2pt</span>
-            <span>ポジFB <span id="trust-pos-count">0</span>件 ×5pt</span>
-            <span>ネガFB <span id="trust-neg-count">0</span>件 ×3pt</span>
+
+          <!-- 個人計画達成率 -->
+          <div class="card dash-card-emerald">
+            <div class="card-title">促進受注額達成率</div>
+            <div class="plan-row">
+              <span class="plan-actual" id="personal-plan-actual">¥0</span>
+              <span class="plan-sep">/</span>
+              <span class="plan-budget" id="personal-plan-budget">¥0</span>
+              <span class="plan-rate" id="personal-plan-rate">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill green" id="personal-plan-bar" style="width:0%"></div>
+            </div>
+            <div class="plan-shortage">不足額 <span id="personal-plan-shortage">¥0</span></div>
           </div>
-        </div>
 
-        <!-- 個人計画達成率 -->
-        <div class="card dash-card-emerald">
-          <div class="card-title">促進受注額達成率</div>
-          <div class="plan-row">
-            <span class="plan-actual" id="personal-plan-actual">¥0</span>
-            <span class="plan-sep">/</span>
-            <span class="plan-budget" id="personal-plan-budget">¥0</span>
-            <span class="plan-rate" id="personal-plan-rate">0%</span>
+          <!-- 個人末見額達成率 -->
+          <div class="card dash-card-emerald">
+            <div class="card-title">個人末見額達成率（個人計画額比）</div>
+            <div class="plan-row">
+              <span class="plan-actual" id="personal-unsettled-actual">¥0</span>
+              <span class="plan-sep">/</span>
+              <span class="plan-budget" id="personal-unsettled-budget">¥0</span>
+              <span class="plan-rate" id="personal-unsettled-rate">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill green" id="personal-unsettled-bar" style="width:0%"></div>
+            </div>
+            <div class="plan-shortage">不足額 <span id="personal-unsettled-shortage">¥0</span></div>
           </div>
-          <div class="progress-bar">
-            <div class="progress-fill green" id="personal-plan-bar" style="width:0%"></div>
+
+          <!-- KPI達成率チャート -->
+          <div class="card">
+            <div class="card-title">KPI達成率</div>
+            <div class="chart-wrap">
+              <canvas id="kpi-chart"></canvas>
+            </div>
           </div>
-          <div class="plan-shortage">不足額 <span id="personal-plan-shortage">¥0</span></div>
-        </div>
 
-        <!-- 個人末見額達成率 -->
-        <div class="card dash-card-emerald">
-          <div class="card-title">個人末見額達成率（個人計画額比）</div>
-          <div class="plan-row">
-            <span class="plan-actual" id="personal-unsettled-actual">¥0</span>
-            <span class="plan-sep">/</span>
-            <span class="plan-budget" id="personal-unsettled-budget">¥0</span>
-            <span class="plan-rate" id="personal-unsettled-rate">0%</span>
+          <!-- 営業所末見額達成率 -->
+          <div class="card dash-card-amber">
+            <div class="card-title">営業所末見額達成率（営業所計画額比）</div>
+            <div class="plan-row">
+              <span class="plan-actual" id="office-unsettled-actual">¥0</span>
+              <span class="plan-sep">/</span>
+              <span class="plan-budget" id="office-unsettled-budget">¥0</span>
+              <span class="plan-rate" id="office-unsettled-rate">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill amber" id="office-unsettled-bar" style="width:0%"></div>
+            </div>
+            <div class="plan-shortage">不足額 <span id="office-unsettled-shortage">¥0</span></div>
           </div>
-          <div class="progress-bar">
-            <div class="progress-fill green" id="personal-unsettled-bar" style="width:0%"></div>
+
+        </section>
+
+        <!-- 📅 履歴タブ（個人） -->
+        <section id="tab-history" class="tab-pane">
+          <div class="hist-controls">
+            <select id="hist-view-select">
+              <option value="daily">日次</option>
+              <option value="weekly">週次</option>
+              <option value="monthly">月次</option>
+              <option value="quarterly">四半期</option>
+              <option value="yearly">年次</option>
+            </select>
+            <div id="hist-period-control"></div>
+            <button class="btn btn-secondary hist-compare-btn" id="hist-compare-btn">比較</button>
           </div>
-          <div class="plan-shortage">不足額 <span id="personal-unsettled-shortage">¥0</span></div>
-        </div>
 
-        <!-- KPI達成率チャート -->
-        <div class="card">
-          <div class="card-title">KPI達成率</div>
-          <div class="chart-wrap">
-            <canvas id="kpi-chart"></canvas>
+          <!-- レポート出力 -->
+          <div id="report-controls" class="report-controls">
+            <div class="report-btn-row">
+              <button class="btn btn-secondary report-btn" id="report-csv-btn">CSV</button>
+              <button class="btn btn-secondary report-btn" id="report-print-btn">印刷/PDF</button>
+              <button class="btn btn-secondary report-btn" id="report-copy-btn">上長報告</button>
+              <button class="btn btn-secondary report-btn" id="report-settings-btn">出力設定</button>
+            </div>
+            <div class="export-all-row">
+              <button class="btn btn-secondary report-btn" id="export-json-btn">全データJSON</button>
+              <button class="btn btn-secondary report-btn" id="export-csv-btn">全データCSV</button>
+            </div>
+            <div id="report-settings" class="report-settings" style="display:none"></div>
           </div>
-        </div>
 
-        <!-- 営業所末見額達成率 -->
-        <div class="card dash-card-amber">
-          <div class="card-title">営業所末見額達成率（営業所計画額比）</div>
-          <div class="plan-row">
-            <span class="plan-actual" id="office-unsettled-actual">¥0</span>
-            <span class="plan-sep">/</span>
-            <span class="plan-budget" id="office-unsettled-budget">¥0</span>
-            <span class="plan-rate" id="office-unsettled-rate">0%</span>
+          <div id="hist-compare-content"></div>
+          <div id="hist-content"></div>
+        </section>
+
+        <!-- ⚙️ KGI設定タブ（個人） -->
+        <section id="tab-kgi" class="tab-pane">
+          <div class="card">
+            <div class="card-title">対象月</div>
+            <input type="month" id="kgi-month" />
           </div>
-          <div class="progress-bar">
-            <div class="progress-fill amber" id="office-unsettled-bar" style="width:0%"></div>
+          <div id="kgi-fields-container"></div>
+          <button class="btn btn-primary" id="kgi-save-btn">保存する</button>
+          <div class="card" id="focus-items-card" style="margin-top:16px">
+            <div class="card-title">📌 注力事項（AIレポートに反映）</div>
+            <textarea id="focus-items-input" rows="4"
+              placeholder="例：&#10;・新規開拓の強化&#10;・次月継続率90%以上"
+              style="width:100%;box-sizing:border-box;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px;resize:vertical;margin-top:8px"></textarea>
+            <button class="btn btn-secondary" id="save-focus-items-btn" style="margin-top:8px">保存</button>
+            <div id="focus-items-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
           </div>
-          <div class="plan-shortage">不足額 <span id="office-unsettled-shortage">¥0</span></div>
-        </div>
+        </section>
 
-      </section>
+      </div><!-- /section-personal -->
 
-      <!-- 📅 履歴タブ -->
-      <section id="tab-history" class="tab-pane">
-        <div class="hist-controls">
-          <select id="hist-view-select">
-            <option value="daily">日次</option>
-            <option value="weekly">週次</option>
-            <option value="monthly">月次</option>
-            <option value="quarterly">四半期</option>
-            <option value="yearly">年次</option>
-          </select>
-          <div id="hist-period-control"></div>
-        </div>
+      <!-- ==============================
+           営業所セクション
+           ============================== -->
+      <div id="section-office" class="section-pane">
 
-        <!-- レポート出力 -->
-        <div id="report-controls" class="report-controls">
-          <div class="report-btn-row">
-            <button class="btn btn-secondary report-btn" id="report-csv-btn">CSV</button>
-            <button class="btn btn-secondary report-btn" id="report-print-btn">印刷/PDF</button>
-            <button class="btn btn-secondary report-btn" id="report-copy-btn">上長報告</button>
-            <button class="btn btn-secondary report-btn" id="report-settings-btn">出力設定</button>
+        <!-- 📄 取込タブ -->
+        <section id="tab-office-import" class="tab-pane active">
+
+          <!-- 日計表取込エリア -->
+          <div class="card">
+            <div class="card-title">📄 日計表取込</div>
+            <p class="import-desc">日次レポートExcelをアップロードします（毎日）</p>
+            <button id="btn-office-daily-import" class="btn btn-primary">ファイルを選択</button>
+            <input type="file" id="office-daily-file" accept=".xlsx,.xls" style="display:none">
+            <div id="office-daily-import-feedback"></div>
           </div>
-          <div class="export-all-row">
-            <button class="btn btn-secondary report-btn" id="export-json-btn">全データJSON</button>
-            <button class="btn btn-secondary report-btn" id="export-csv-btn">全データCSV</button>
+
+          <!-- 売上計画取込エリア（セパレータ） -->
+          <div class="card" style="margin-top:12px">
+            <div class="card-title">📋 売上計画取込</div>
+            <p class="import-desc">売上計画Excelをアップロードします（月初に1回）</p>
+            <button id="btn-office-plan-import" class="btn btn-secondary">ファイルを選択</button>
+            <input type="file" id="office-plan-file" accept=".xlsx,.xls" style="display:none">
+            <div id="office-plan-import-feedback"></div>
           </div>
-          <div id="report-settings" class="report-settings" style="display:none"></div>
-        </div>
 
-        <div id="hist-content"></div>
-      </section>
+        </section>
 
-      <!-- ⚙️ KGI設定タブ -->
-      <section id="tab-kgi" class="tab-pane">
-        <!-- 月選択 -->
-        <div class="card">
-          <div class="card-title">対象月</div>
-          <input type="month" id="kgi-month" />
-        </div>
+        <!-- 📊 進捗タブ（営業所） -->
+        <section id="tab-office-dashboard" class="tab-pane">
+          <div id="management-container">
+            <div style="color:var(--text-muted);font-size:13px">読み込み中...</div>
+          </div>
+          <div class="card" id="office-dash-ai-report-card">
+            <div class="dash-ai-header">
+              <span class="card-title">🤖 AIレポート</span>
+              <div class="ai-btn-group">
+                <button class="btn btn-secondary ai-gen-btn" id="office-ai-weekly-btn" data-office-ai-type="weekly">週次</button>
+                <button class="btn btn-secondary ai-gen-btn" id="office-ai-monthly-btn" data-office-ai-type="monthly">月次</button>
+                <button class="btn btn-secondary ai-gen-btn" id="office-ai-pdf-btn">📄PDF</button>
+              </div>
+            </div>
+            <div id="office-ai-report-content">
+              <div style="color:var(--text-muted);font-size:13px">「週次」「月次」ボタンでAIが営業所KPIを分析します</div>
+            </div>
+            <div id="office-ai-feedback-area" class="ai-feedback-area" style="display:none">
+              <span class="feedback-prompt">このレポートは役立ちましたか？</span>
+              <button class="feedback-btn" data-feedback-scope="office" data-score="1">👍</button>
+              <button class="feedback-btn" data-feedback-scope="office" data-score="-1">👎</button>
+              <div id="office-ai-feedback-comment-area" style="display:none;margin-top:8px">
+                <textarea id="office-ai-feedback-comment" rows="2"
+                  placeholder="良かった点・改善してほしい点（任意）"
+                  style="width:100%;box-sizing:border-box;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;resize:vertical"></textarea>
+                <button class="btn btn-secondary" id="office-ai-feedback-submit" style="margin-top:6px;font-size:12px">送信</button>
+              </div>
+              <div id="office-ai-feedback-status" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
+            </div>
+          </div>
+        </section>
 
-        <!-- KPIフィールド群（JSで動的生成） -->
-        <div id="kgi-fields-container"></div>
+        <!-- 📅 履歴タブ（営業所） -->
+        <section id="tab-office-history" class="tab-pane">
+          <div class="hist-controls">
+            <select id="office-hist-view-select">
+              <option value="daily">日次</option>
+              <option value="weekly">週次</option>
+              <option value="monthly">月次</option>
+              <option value="quarterly">四半期</option>
+              <option value="yearly">年次</option>
+            </select>
+            <div id="office-hist-period-control"></div>
+          </div>
+          <div id="office-report-controls" class="report-controls">
+            <div class="report-btn-row">
+              <button class="btn btn-secondary report-btn" id="office-report-csv-btn">CSV</button>
+              <button class="btn btn-secondary report-btn" id="office-report-print-btn">印刷/PDF</button>
+              <button class="btn btn-secondary report-btn" id="office-report-copy-btn">上長報告</button>
+            </div>
+          </div>
+          <div id="office-history-container"></div>
+        </section>
 
-        <!-- 保存ボタン -->
-        <button class="btn btn-primary" id="kgi-save-btn">保存する</button>
-      </section>
+        <!-- ⚙️ KGI設定タブ（営業所） -->
+        <section id="tab-office-kgi" class="tab-pane">
+          <div class="card">
+            <div class="card-title">対象月</div>
+            <input type="month" id="office-kgi-month" />
+          </div>
+          <div id="office-kgi-fields">
+            <div style="color:var(--text-muted);font-size:13px">読み込み中...</div>
+          </div>
+          <div class="card" id="office-focus-items-card" style="margin-top:16px">
+            <div class="card-title">📌 注力事項（AIレポートに反映）</div>
+            <textarea id="office-focus-items-input" rows="4"
+              placeholder="例：&#10;・継続率90%達成&#10;・新規保守件数の増加"
+              style="width:100%;box-sizing:border-box;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px;resize:vertical;margin-top:8px"></textarea>
+            <button class="btn btn-secondary" id="save-office-focus-items-btn" style="margin-top:8px">保存</button>
+            <div id="office-focus-items-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <div class="card-title" style="font-size:12px;color:var(--text-muted)">自動化設定</div>
+            <p class="import-desc">月末営業日にAIレポートを自動生成します（初回1回だけ設定が必要）</p>
+            <button class="btn btn-secondary" id="btn-office-setup-triggers">🕐 月末自動判定 トリガー設定</button>
+          </div>
+        </section>
+
+      </div><!-- /section-office -->
 
     </main>
 
-    <!-- 下部タブナビゲーション -->
+    <!-- 下部メインナビゲーション（個人 / 営業所） -->
     <nav id="bottom-nav">
-      <button class="nav-btn active" data-tab="tab-input">
-        <span class="nav-icon">📝</span>
-        <span class="nav-label">入力</span>
+      <button class="main-nav-btn active" data-section="personal">
+        <span class="nav-icon">👤</span>
+        <span class="nav-label">個人</span>
       </button>
-      <button class="nav-btn" data-tab="tab-dashboard">
-        <span class="nav-icon">📊</span>
-        <span class="nav-label">進捗</span>
-      </button>
-      <button class="nav-btn" data-tab="tab-history">
-        <span class="nav-icon">📅</span>
-        <span class="nav-label">履歴</span>
-      </button>
-      <button class="nav-btn" data-tab="tab-kgi">
-        <span class="nav-icon">⚙️</span>
-        <span class="nav-label">KGI設定</span>
+      <button class="main-nav-btn" data-section="office">
+        <span class="nav-icon">🏢</span>
+        <span class="nav-label">営業所</span>
       </button>
     </nav>
 

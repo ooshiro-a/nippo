@@ -138,3 +138,27 @@ async function generateReport(type) {
 async function getLatestReport(type) {
   return _get({ action: 'getLatestReport', type });
 }
+
+async function generateOfficeReport(type) {
+  return _post({ action: 'generateOfficeReport', data: { type } });
+}
+
+async function getAllOfficeData() {
+  return _get({ action: 'getAllOfficeData' });
+}
+
+async function getUserSettings() {
+  return _get({ action: 'getUserSettings' });
+}
+async function saveUserSettings(data) {
+  return _post({ action: 'saveUserSettings', data });
+}
+async function getOfficeSettings() {
+  return _get({ action: 'getOfficeSettings' });
+}
+async function saveOfficeSettings(data) {
+  return _post({ action: 'saveOfficeSettings', data });
+}
+async function saveFeedback(data) {
+  return _post({ action: 'saveFeedback', data });
+}

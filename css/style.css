@@ -137,19 +137,59 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* 下部ナビゲーション */
+/* サブナビゲーション（個人/営業所 共通） */
+.sub-nav {
+  flex-shrink: 0;
+  height: 44px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  z-index: 9;
+}
+
+.sub-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+  padding: 0 4px;
+  gap: 3px;
+}
+
+.sub-nav-btn.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+}
+
+.sub-nav-btn:active {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* セクションwrapper */
+.section-pane { display: none; }
+.section-pane.active { display: contents; }
+
+/* 下部メインナビゲーション（個人 / 営業所） */
 #bottom-nav {
   flex-shrink: 0;
   height: var(--nav-height);
   background-color: var(--bg-secondary);
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   align-items: center;
   z-index: 10;
 }
 
-.nav-btn {
+.main-nav-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -164,12 +204,12 @@ body {
   padding: 8px 4px;
 }
 
-.nav-btn:active {
-  background-color: rgba(255, 255, 255, 0.04);
+.main-nav-btn.active {
+  color: var(--accent-amber);
 }
 
-.nav-btn.active {
-  color: var(--accent-cyan);
+.main-nav-btn:active {
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 .nav-icon {
@@ -604,8 +644,8 @@ input.kgi-field-input {
 }
 
 .counter-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-input);
@@ -761,7 +801,7 @@ input.kgi-field-input {
 
 .report-btn-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
 }
 
@@ -927,6 +967,292 @@ input.kgi-field-input {
   line-height: 1.7;
   color: var(--text-primary);
 }
+
+/* AIフィードバックUI */
+.ai-feedback-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.feedback-prompt {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: 1 1 100%;
+}
+.feedback-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.feedback-btn:hover { background: var(--bg-tertiary); border-color: var(--accent-cyan); }
+.feedback-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* KPI警告バナー */
+.kpi-alert-banner {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid var(--accent-red);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--accent-red);
+}
+
+/* 取込タブ説明文 */
+.import-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   管理タブ / 取込モーダル共通 — office-section ブロック
+   ============================================================ */
+.office-section {
+  border-left: 3px solid var(--accent-amber);
+  background: var(--bg-card);
+  border-radius: 0 8px 8px 0;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.office-section-next {
+  background: rgba(251, 191, 36, 0.07);
+}
+.office-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-amber);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.office-gauge-block { margin-bottom: 8px; }
+.office-gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.office-gauge-label {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 11px;
+  min-width: 80px;
+}
+.office-gauge-vals {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.office-gauge-inputs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.office-gauge-inputs input {
+  width: 80px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 6px;
+  text-align: right;
+}
+.import-rate {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  min-width: 44px;
+  text-align: right;
+}
+.office-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 12px;
+}
+.office-field-row:last-child { border-bottom: none; }
+.office-field-label { color: var(--text-muted); }
+.office-field-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.office-field-input {
+  width: 90px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 6px;
+  text-align: right;
+}
+/* 管理タブ ヘッダー行 */
+.mgmt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.mgmt-last-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+/* ── 営業所 履歴タブ ─────────────────────── */
+.ohist-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.ohist-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-width: 1px;
+  border-style: solid;
+}
+.ohist-overall-rate {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+}
+.ohist-pace-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  width: 100%;
+}
+.ohist-pace-bar-wrap {
+  flex: 1;
+  position: relative;
+  height: 4px;
+  background: var(--bg-input);
+  border-radius: 2px;
+  overflow: visible;
+}
+.ohist-pace-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--border-light, rgba(255,255,255,0.15));
+}
+.ohist-pace-marker {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 12px;
+  background: var(--text-muted);
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+.ohist-pace-badge {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ohist-kpi-section {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ohist-kpi-section:last-of-type { border-bottom: none; }
+.ohist-kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.ohist-kpi-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-amber);
+  letter-spacing: 0.04em;
+}
+.ohist-kpi-vals {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.ohist-actual {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.ohist-plan {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.ohist-rate {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  min-width: 44px;
+  text-align: right;
+}
+.ohist-forecast-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  padding-left: 4px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ohist-delta-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.ohist-delta-item {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+.ohist-delta-pos { color: var(--accent-emerald, #4ade80); }
+.ohist-delta-neg { color: var(--accent-red, #f87171); }
+.ohist-delta-label {
+  color: var(--text-muted);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 11px;
+  margin-right: 2px;
+}
+/* 管理タブ KPIチャート */
+.office-kpi-wrap {
+  height: 220px;
+  margin-top: 8px;
+}
 .ai-loading {
   color: var(--text-muted);
   font-size: 13px;
@@ -1045,7 +1371,9 @@ input.kgi-field-input {
   flex: 1;
 }
 .import-field-input {
-  width: 130px;
+  flex: 1;
+  min-width: 80px;
+  max-width: 140px;
   text-align: right;
   padding: 6px 8px;
   background: var(--bg-input);
@@ -1071,3 +1399,224 @@ input.kgi-field-input {
 
 /* AI レポートの PDF 出力は handleAiPdf() が新規ウィンドウを開いて印刷するため
    ここに print スタイルは不要（body * を hidden にすると履歴タブ印刷が壊れる） */
+
+/* ------------------------------------------------------------
+   比較モードボタン
+   ------------------------------------------------------------ */
+.hist-compare-btn {
+  flex-shrink: 0;
+  width: auto;
+  padding: 0 14px;
+  height: 40px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hist-compare-btn-active {
+  background-color: rgba(34, 211, 238, 0.15) !important;
+  border-color: var(--accent-cyan) !important;
+  color: var(--accent-cyan) !important;
+}
+
+/* ------------------------------------------------------------
+   期間比較カード
+   ------------------------------------------------------------ */
+.cmp-card {
+  border-left: 3px solid var(--accent-cyan);
+}
+
+.cmp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cmp-legends {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  align-items: center;
+}
+
+.cmp-legend-curr {
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.cmp-legend-base {
+  color: var(--text-muted);
+}
+
+.cmp-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.cmp-table th {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 6px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.cmp-table th:first-child { text-align: left; }
+
+.cmp-table td {
+  padding: 5px 6px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.cmp-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cmp-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.cmp-base {
+  color: var(--text-muted);
+}
+
+.cmp-pos {
+  color: var(--accent-emerald);
+  font-weight: 700;
+}
+
+.cmp-neg {
+  color: var(--accent-red);
+  font-weight: 700;
+}
+
+.cmp-chart-wrap {
+  height: 200px;
+  margin-top: 8px;
+}
+
+/* ------------------------------------------------------------
+   レスポンシブ — タブレット（481〜768px）
+   ------------------------------------------------------------ */
+@media (min-width: 481px) {
+  #app {
+    max-width: 600px;
+  }
+}
+
+/* ------------------------------------------------------------
+   レスポンシブ — PC（769px〜）
+   ------------------------------------------------------------ */
+@media (min-width: 769px) {
+  #app {
+    max-width: 860px;
+  }
+
+  /* ヘッダー */
+  #app-header {
+    padding: 0 24px;
+  }
+  #header-title {
+    font-size: 16px;
+  }
+
+  /* ナビ：サブナビの高さを少し拡大 */
+  .sub-nav {
+    height: 48px;
+  }
+  .sub-nav-btn {
+    font-size: 13px;
+    gap: 5px;
+  }
+
+  /* ボトムナビを大きく */
+  #bottom-nav {
+    height: 72px;
+  }
+  .nav-label {
+    font-size: 12px;
+  }
+
+  /* タブコンテンツの余白を広げる */
+  .tab-pane {
+    padding: 20px 24px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  /* カード */
+  .card {
+    padding: 20px;
+  }
+
+  /* ダッシュボード：2カラムグリッド */
+  #tab-dashboard .card,
+  #tab-office-dashboard .card {
+    display: block;
+  }
+
+  /* チャートを少し高く */
+  .chart-wrap {
+    height: 340px;
+  }
+  .office-kpi-wrap {
+    height: 280px;
+  }
+
+  /* レポートボタンを4列に戻す（広い画面なら入る） */
+  .report-btn-row {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .report-btn {
+    font-size: 12px;
+    padding: 10px 4px;
+  }
+
+  /* モーダルをセンター表示に変更 */
+  .modal-overlay {
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-content {
+    border-radius: 16px;
+    max-width: 560px;
+    width: 90%;
+    max-height: 80dvh;
+  }
+
+  /* カウンターボタン（PC では少し小さくてよい） */
+  .counter-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* フォントサイズ調整 */
+  body {
+    font-size: 15px;
+  }
+  .hist-edit-btn,
+  .hist-delete-btn {
+    font-size: 13px;
+    padding: 6px 14px;
+    min-height: 32px;
+  }
+}

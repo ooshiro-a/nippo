@@ -4,28 +4,82 @@
  */
 
 // ------------------------------------------------------------------
-// タブ切り替え
+// ナビゲーション（2段: メインセクション + サブタブ）
 // ------------------------------------------------------------------
 
-function initTabs() {
-  const navBtns = document.querySelectorAll('.nav-btn');
-  const tabPanes = document.querySelectorAll('.tab-pane');
+var _activeSection   = 'personal';
+var _lastPersonalTab = 'tab-input';
+var _lastOfficeTab   = 'tab-office-import';
 
-  navBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const targetTab = btn.dataset.tab;
-
-      // アクティブ切り替え
-      navBtns.forEach(b => b.classList.remove('active'));
-      tabPanes.forEach(p => p.classList.remove('active'));
-
-      btn.classList.add('active');
-      document.getElementById(targetTab).classList.add('active');
-
-      // コンテンツエリアをトップにスクロール
-      document.getElementById('content').scrollTop = 0;
+function initNavigation() {
+  document.querySelectorAll('.main-nav-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      switchSection(btn.dataset.section);
     });
   });
+
+  document.querySelectorAll('#sub-nav-personal .sub-nav-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      switchSubTab('personal', btn.dataset.tab);
+    });
+  });
+
+  document.querySelectorAll('#sub-nav-office .sub-nav-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      switchSubTab('office', btn.dataset.tab);
+    });
+  });
+}
+
+function switchSection(section) {
+  _activeSection = section;
+
+  document.querySelectorAll('.main-nav-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.section === section);
+  });
+
+  var snPersonal = document.getElementById('sub-nav-personal');
+  var snOffice   = document.getElementById('sub-nav-office');
+  if (snPersonal) snPersonal.style.display = (section === 'personal') ? 'grid' : 'none';
+  if (snOffice)   snOffice.style.display   = (section === 'office')   ? 'grid' : 'none';
+
+  document.getElementById('section-personal').classList.toggle('active', section === 'personal');
+  document.getElementById('section-office').classList.toggle('active',   section === 'office');
+
+  var lastTab = (section === 'personal') ? _lastPersonalTab : _lastOfficeTab;
+  _activateSubTab(section, lastTab);
+
+  if (section === 'office' && lastTab === 'tab-office-dashboard') refreshManagement();
+  if (section === 'office' && lastTab === 'tab-office-history')   refreshOfficeHistory();
+  if (section === 'office' && lastTab === 'tab-office-kgi')       loadOfficeKgi();
+
+  document.getElementById('content').scrollTop = 0;
+}
+
+function switchSubTab(section, tabId) {
+  _activateSubTab(section, tabId);
+
+  if (section === 'personal') _lastPersonalTab = tabId;
+  else                        _lastOfficeTab   = tabId;
+
+  if (tabId === 'tab-office-dashboard') refreshManagement();
+  if (tabId === 'tab-office-history')   refreshOfficeHistory();
+  if (tabId === 'tab-office-kgi')       loadOfficeKgi();
+
+  document.getElementById('content').scrollTop = 0;
+}
+
+function _activateSubTab(section, tabId) {
+  var navId = (section === 'personal') ? 'sub-nav-personal' : 'sub-nav-office';
+  document.querySelectorAll('#' + navId + ' .sub-nav-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.tab === tabId);
+  });
+  var sectionEl = document.getElementById('section-' + section);
+  if (sectionEl) {
+    sectionEl.querySelectorAll('.tab-pane').forEach(function(p) {
+      p.classList.toggle('active', p.id === tabId);
+    });
+  }
 }
 
 // ------------------------------------------------------------------
@@ -402,11 +456,39 @@ function renderStreakBadge(entries) {
 
 let _aiReportCache = { content: '', period: '', type: '' };
 
+let _aiFeedbackScore = 0;
+
 function initAiReportCard() {
   document.querySelectorAll('.ai-gen-btn[data-type]').forEach(btn => {
     btn.addEventListener('click', () => handleAiReport(btn.dataset.type));
   });
   document.getElementById('ai-pdf-btn').addEventListener('click', handleAiPdf);
+
+  document.querySelectorAll('[data-feedback-scope="personal"]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _aiFeedbackScore = Number(this.dataset.score);
+      document.getElementById('ai-feedback-comment-area').style.display = '';
+    });
+  });
+  document.getElementById('ai-feedback-submit').addEventListener('click', async function() {
+    const comment  = document.getElementById('ai-feedback-comment').value;
+    const statusEl = document.getElementById('ai-feedback-status');
+    this.disabled  = true;
+    try {
+      await saveFeedback({
+        scope: 'personal', reportType: _aiReportCache.type,
+        reportPeriod: _aiReportCache.period, score: _aiFeedbackScore,
+        goodComment: _aiFeedbackScore > 0 ? comment : '',
+        badComment:  _aiFeedbackScore < 0 ? comment : '',
+      });
+      statusEl.textContent = '✓ フィードバックを保存しました';
+      document.getElementById('ai-feedback-comment-area').style.display = 'none';
+      document.querySelectorAll('[data-feedback-scope="personal"]').forEach(function(b) { b.disabled = true; });
+    } catch (e) {
+      statusEl.textContent = 'エラー: ' + e.message;
+      this.disabled = false;
+    }
+  });
 }
 
 async function handleAiReport(type) {
@@ -439,11 +521,21 @@ function renderAiReportContent(content, period, type) {
   _aiReportCache = { content, period, type };
   const typeLabel = type === 'weekly' ? '週次' : '月次';
   const formatted = content
-    .replace(/([①②③④])/g, '<span class="ai-section-marker">$1</span>')
+    .replace(/([①②③④⑤])/g, '<span class="ai-section-marker">$1</span>')
     .replace(/\n/g, '<br>');
   document.getElementById('ai-report-content').innerHTML =
     '<div class="ai-report-label">' + typeLabel + 'レポート（' + period + '）</div>' +
     '<div class="ai-report-body">' + formatted + '</div>';
+  // フィードバックUIをリセット表示
+  const fbArea = document.getElementById('ai-feedback-area');
+  if (fbArea) {
+    fbArea.style.display = '';
+    document.getElementById('ai-feedback-comment-area').style.display = 'none';
+    document.getElementById('ai-feedback-comment').value = '';
+    document.getElementById('ai-feedback-status').textContent = '';
+    document.querySelectorAll('[data-feedback-scope="personal"]').forEach(function(b) { b.disabled = false; });
+    _aiFeedbackScore = 0;
+  }
 }
 
 function handleAiPdf() {
@@ -475,6 +567,114 @@ function handleAiPdf() {
     setTimeout(function() { win.print(); }, 400);
   } else {
     // モバイル（ポップアップブロック時）：現在ページで印刷
+    window.print();
+  }
+}
+
+// ------------------------------------------------------------------
+// 営業所 AIレポートカード（B-1）
+// ------------------------------------------------------------------
+
+let _officeAiReportCache  = { content: '', period: '', type: '' };
+let _officeAiFeedbackScore = 0;
+
+function initOfficeAiReportCard() {
+  document.querySelectorAll('[data-office-ai-type]').forEach(btn => {
+    btn.addEventListener('click', () => handleOfficeAiReport(btn.dataset.officeAiType));
+  });
+  document.getElementById('office-ai-pdf-btn').addEventListener('click', handleOfficeAiPdf);
+
+  document.querySelectorAll('[data-feedback-scope="office"]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _officeAiFeedbackScore = Number(this.dataset.score);
+      document.getElementById('office-ai-feedback-comment-area').style.display = '';
+    });
+  });
+  document.getElementById('office-ai-feedback-submit').addEventListener('click', async function() {
+    const comment  = document.getElementById('office-ai-feedback-comment').value;
+    const statusEl = document.getElementById('office-ai-feedback-status');
+    this.disabled  = true;
+    try {
+      await saveFeedback({
+        scope: 'office', reportType: _officeAiReportCache.type,
+        reportPeriod: _officeAiReportCache.period, score: _officeAiFeedbackScore,
+        goodComment: _officeAiFeedbackScore > 0 ? comment : '',
+        badComment:  _officeAiFeedbackScore < 0 ? comment : '',
+      });
+      statusEl.textContent = '✓ フィードバックを保存しました';
+      document.getElementById('office-ai-feedback-comment-area').style.display = 'none';
+      document.querySelectorAll('[data-feedback-scope="office"]').forEach(function(b) { b.disabled = true; });
+    } catch (e) {
+      statusEl.textContent = 'エラー: ' + e.message;
+      this.disabled = false;
+    }
+  });
+}
+
+async function handleOfficeAiReport(type) {
+  const el = document.getElementById('office-ai-report-content');
+  el.innerHTML = '<div class="ai-loading">生成中...</div>';
+  document.querySelectorAll('[data-office-ai-type]').forEach(b => b.disabled = true);
+  try {
+    const res = await generateOfficeReport(type);
+    if (res && res.content) {
+      renderOfficeAiReportContent(res.content, res.period, type);
+    } else {
+      const errMsg = (res && res.error) ? res.error : 'レスポンスが空です';
+      el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">GASエラー: ' + errMsg + '</div>';
+    }
+  } catch (e) {
+    el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">エラー: ' + e.message + '</div>';
+  } finally {
+    document.querySelectorAll('[data-office-ai-type]').forEach(b => b.disabled = false);
+  }
+}
+
+function renderOfficeAiReportContent(content, period, type) {
+  _officeAiReportCache = { content, period, type };
+  const typeLabel = type === 'weekly' ? '週次' : '月次';
+  const formatted = content
+    .replace(/([①②③④⑤])/g, '<span class="ai-section-marker">$1</span>')
+    .replace(/\n/g, '<br>');
+  document.getElementById('office-ai-report-content').innerHTML =
+    '<div class="ai-report-label">' + typeLabel + 'レポート（' + period + '）</div>' +
+    '<div class="ai-report-body">' + formatted + '</div>';
+  // フィードバックUIをリセット表示
+  const fbArea = document.getElementById('office-ai-feedback-area');
+  if (fbArea) {
+    fbArea.style.display = '';
+    document.getElementById('office-ai-feedback-comment-area').style.display = 'none';
+    document.getElementById('office-ai-feedback-comment').value = '';
+    document.getElementById('office-ai-feedback-status').textContent = '';
+    document.querySelectorAll('[data-feedback-scope="office"]').forEach(function(b) { b.disabled = false; });
+    _officeAiFeedbackScore = 0;
+  }
+}
+
+function handleOfficeAiPdf() {
+  if (!_officeAiReportCache.content) {
+    alert('先にレポートを生成してください');
+    return;
+  }
+  const typeLabel = _officeAiReportCache.type === 'weekly' ? '週次' : '月次';
+  const body = _officeAiReportCache.content.replace(/\n/g, '<br>');
+  const html =
+    '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">' +
+    '<title>' + typeLabel + '営業所AIレポート</title>' +
+    '<style>body{font-family:"Hiragino Kaku Gothic ProN",sans-serif;padding:32px;' +
+    'max-width:640px;margin:0 auto;color:#111;font-size:14px;line-height:2}' +
+    'h2{font-size:17px;margin-bottom:4px}.period{font-size:12px;color:#666;margin-bottom:24px}' +
+    '</style></head><body>' +
+    '<h2>' + typeLabel + ' 営業所AIレポート</h2>' +
+    '<div class="period">' + _officeAiReportCache.period + '</div>' +
+    '<div>' + body + '</div></body></html>';
+  const win = window.open('', '_blank');
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(function() { win.print(); }, 400);
+  } else {
     window.print();
   }
 }
@@ -607,6 +807,7 @@ const historyState = {
   year: Number(getTodayJST().slice(0, 4)),
   quarter: 'all',
   allData: null,
+  compareMode: false,
 };
 
 function initHistoryTab() {
@@ -621,6 +822,7 @@ function initHistoryTab() {
     if (editBtn) handleEditHistoryEntry(editBtn.dataset.date);
     if (deleteBtn) handleDeleteHistoryEntry(deleteBtn.dataset.date, deleteBtn);
   });
+  document.getElementById('hist-compare-btn').addEventListener('click', onHistCompareModeToggle);
   renderHistPeriodControl();
   initReportControls();
 }
@@ -716,6 +918,7 @@ async function renderHistContent() {
     } else if (view === 'yearly') {
       renderYearlyView(entries, budgets);
     }
+    renderCompareContent(view);
   } catch (e) {
     console.warn('履歴ロード失敗:', e);
     document.getElementById('hist-content').innerHTML = '<div class="hist-empty">データの読み込みに失敗しました</div>';
@@ -1016,6 +1219,222 @@ function renderYearlyView(entries, budgets) {
       </div>
     </div>`;
   }).join('');
+}
+
+// ------------------------------------------------------------------
+// 期間比較機能
+// ------------------------------------------------------------------
+
+let _compareChart = null;
+
+function onHistCompareModeToggle() {
+  historyState.compareMode = !historyState.compareMode;
+  const btn = document.getElementById('hist-compare-btn');
+  if (btn) btn.classList.toggle('hist-compare-btn-active', historyState.compareMode);
+  renderHistContent();
+}
+
+function getPrevPeriodInfo(view) {
+  const { yearMonth, year, quarter, allData } = historyState;
+  if (!allData) return null;
+  const entries = allData.entries;
+
+  if (view === 'daily' || view === 'weekly') {
+    const [y, m] = yearMonth.split('-').map(Number);
+    const prevDate = new Date(y, m - 2, 1);
+    const prevYM = prevDate.getFullYear() + '-' + String(prevDate.getMonth() + 1).padStart(2, '0');
+    return {
+      currentLabel: formatYearMonth(yearMonth),
+      prevLabel: formatYearMonth(prevYM),
+      currentEntries: entries.filter(e => e.date.startsWith(yearMonth)),
+      prevEntries: entries.filter(e => e.date.startsWith(prevYM)),
+    };
+  } else if (view === 'monthly') {
+    const prevYear = year - 1;
+    return {
+      currentLabel: year + '年',
+      prevLabel: prevYear + '年',
+      currentEntries: entries.filter(e => e.date.startsWith(String(year))),
+      prevEntries: entries.filter(e => e.date.startsWith(String(prevYear))),
+    };
+  } else if (view === 'quarterly') {
+    const qMonths = { Q1: ['01','02','03'], Q2: ['04','05','06'], Q3: ['07','08','09'], Q4: ['10','11','12'] };
+    if (quarter === 'all') {
+      const prevYear = year - 1;
+      return {
+        currentLabel: year + '年（全期）',
+        prevLabel: prevYear + '年（全期）',
+        currentEntries: entries.filter(e => e.date.startsWith(String(year))),
+        prevEntries: entries.filter(e => e.date.startsWith(String(prevYear))),
+      };
+    }
+    const qOrder = ['Q1', 'Q2', 'Q3', 'Q4'];
+    const qIdx = qOrder.indexOf(quarter);
+    const prevQ = qIdx === 0 ? 'Q4' : qOrder[qIdx - 1];
+    const prevYear = qIdx === 0 ? year - 1 : year;
+    const curMonths = qMonths[quarter];
+    const prevMonths = qMonths[prevQ];
+    return {
+      currentLabel: year + '年 ' + quarter,
+      prevLabel: prevYear + '年 ' + prevQ,
+      currentEntries: entries.filter(e => e.date.startsWith(String(year)) && curMonths.includes(e.date.slice(5, 7))),
+      prevEntries: entries.filter(e => e.date.startsWith(String(prevYear)) && prevMonths.includes(e.date.slice(5, 7))),
+    };
+  } else if (view === 'yearly') {
+    const yearMap = groupEntriesByYear(entries);
+    const years = Object.keys(yearMap).sort((a, b) => b.localeCompare(a));
+    if (years.length < 2) return null;
+    return {
+      currentLabel: years[0] + '年',
+      prevLabel: years[1] + '年',
+      currentEntries: yearMap[years[0]],
+      prevEntries: yearMap[years[1]],
+    };
+  }
+  return null;
+}
+
+function buildComparisonCard(info) {
+  const { currentLabel, prevLabel, currentEntries, prevEntries } = info;
+  const currTotals = calcMonthlyTotals(currentEntries);
+  const prevTotals = calcMonthlyTotals(prevEntries);
+
+  const kpiRows = KGI_FIELDS.filter(f => f.color === 'cyan').map(field => {
+    const curr = currTotals[field.key] || 0;
+    const prev = prevTotals[field.key] || 0;
+    if (curr === 0 && prev === 0) return '';
+    const diff = curr - prev;
+    const rate = prev !== 0 ? Math.round(diff / prev * 100) : null;
+    const isYen = field.unit === '円';
+    const fmt = v => isYen ? formatCurrency(v) : formatNumber(v) + field.unit;
+    const diffStr = (diff >= 0 ? '+' : '') + (isYen ? formatCurrency(diff) : formatNumber(diff) + field.unit);
+    const rateStr = rate !== null ? (rate >= 0 ? '+' : '') + rate + '%' : '--';
+    const cls = diff > 0 ? 'cmp-pos' : diff < 0 ? 'cmp-neg' : '';
+    return `<tr>
+      <td class="cmp-label">${field.label}</td>
+      <td class="cmp-val">${fmt(curr)}</td>
+      <td class="cmp-val cmp-base">${fmt(prev)}</td>
+      <td class="cmp-val ${cls}">${diffStr}</td>
+      <td class="cmp-val ${cls}">${rateStr}</td>
+    </tr>`;
+  }).filter(Boolean).join('');
+
+  const trustFn = arr => calcTrustIndex(
+    arr.flatMap(e => e.relationshipActions || []),
+    arr.reduce((s, e) => s + (e.positiveFeedback || 0), 0),
+    arr.reduce((s, e) => s + (e.negativeFeedback || 0), 0)
+  );
+  const currTrust = trustFn(currentEntries);
+  const prevTrust = trustFn(prevEntries);
+  const trustDiff = currTrust - prevTrust;
+  const trustRate = prevTrust !== 0 ? Math.round(trustDiff / prevTrust * 100) : null;
+  const trustCls = trustDiff > 0 ? 'cmp-pos' : trustDiff < 0 ? 'cmp-neg' : '';
+  const trustRow = `<tr>
+    <td class="cmp-label">信頼関係指数</td>
+    <td class="cmp-val">${currTrust}pt</td>
+    <td class="cmp-val cmp-base">${prevTrust}pt</td>
+    <td class="cmp-val ${trustCls}">${(trustDiff >= 0 ? '+' : '') + trustDiff}pt</td>
+    <td class="cmp-val ${trustCls}">${trustRate !== null ? (trustRate >= 0 ? '+' : '') + trustRate + '%' : '--'}</td>
+  </tr>`;
+
+  const hasRows = kpiRows || (currTrust > 0 || prevTrust > 0);
+  const tableHtml = hasRows
+    ? `<div class="cmp-table-wrap">
+        <table class="cmp-table">
+          <thead><tr>
+            <th>指標</th>
+            <th>${currentLabel}</th>
+            <th class="cmp-base">${prevLabel}</th>
+            <th>差分</th>
+            <th>増減率</th>
+          </tr></thead>
+          <tbody>${kpiRows}${trustRow}</tbody>
+        </table>
+      </div>`
+    : '<div class="hist-empty" style="padding:16px 0">比較データがありません</div>';
+
+  return `<div class="card cmp-card">
+    <div class="cmp-header">
+      <span class="card-title" style="margin-bottom:0">期間比較</span>
+      <div class="cmp-legends">
+        <span class="cmp-legend-curr">${currentLabel}</span>
+        <span class="cmp-legend-base">${prevLabel}</span>
+      </div>
+    </div>
+    ${tableHtml}
+    <div class="cmp-chart-wrap"><canvas id="cmp-chart"></canvas></div>
+  </div>`;
+}
+
+function renderCompareChart(info) {
+  const canvas = document.getElementById('cmp-chart');
+  if (!canvas) return;
+  if (_compareChart) { _compareChart.destroy(); _compareChart = null; }
+
+  const { currentLabel, prevLabel, currentEntries, prevEntries } = info;
+  const currTotals = calcMonthlyTotals(currentEntries);
+  const prevTotals = calcMonthlyTotals(prevEntries);
+  const countFields = KGI_FIELDS.filter(f => f.color === 'cyan' && f.unit !== '円');
+  const labels = countFields.map(f =>
+    f.label.replace('保守継続', '保守').replace('エアコン洗浄', 'AC洗浄').replace('フルメンテリース', 'フルメンテ').replace('営業トスアップ', 'トスアップ')
+  );
+  const currData = countFields.map(f => currTotals[f.key] || 0);
+  const prevData = countFields.map(f => prevTotals[f.key] || 0);
+
+  const ctx = canvas.getContext('2d');
+  _compareChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: currentLabel,
+          data: currData,
+          backgroundColor: 'rgba(34, 211, 238, 0.7)',
+          borderColor: 'rgba(34, 211, 238, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        {
+          label: prevLabel,
+          data: prevData,
+          backgroundColor: 'rgba(148, 163, 184, 0.35)',
+          borderColor: 'rgba(148, 163, 184, 0.6)',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+        tooltip: { bodyColor: '#f1f5f9', titleColor: '#94a3b8' },
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { beginAtZero: true, ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+      },
+    },
+  });
+}
+
+function renderCompareContent(view) {
+  const container = document.getElementById('hist-compare-content');
+  if (!container) return;
+  if (!historyState.compareMode) {
+    container.innerHTML = '';
+    if (_compareChart) { _compareChart.destroy(); _compareChart = null; }
+    return;
+  }
+  const info = getPrevPeriodInfo(view);
+  if (!info) {
+    container.innerHTML = '<div class="hist-empty" style="font-size:12px">比較対象のデータが見つかりませんでした</div>';
+    return;
+  }
+  container.innerHTML = buildComparisonCard(info);
+  renderCompareChart(info);
 }
 
 // ------------------------------------------------------------------
@@ -1526,6 +1945,22 @@ function initKgiTab() {
   monthInput.addEventListener('change', () => loadBudget(monthInput.value));
   document.getElementById('kgi-save-btn').addEventListener('click', handleSaveBudget);
 
+  // 注力事項
+  document.getElementById('save-focus-items-btn').addEventListener('click', async function() {
+    const statusEl = document.getElementById('focus-items-status');
+    statusEl.textContent = '保存中...';
+    try {
+      await saveUserSettings({ key: 'focusItems', value: document.getElementById('focus-items-input').value });
+      statusEl.textContent = '✓ 保存しました';
+    } catch (e) {
+      statusEl.textContent = 'エラー: ' + e.message;
+    }
+    setTimeout(function() { statusEl.textContent = ''; }, 2000);
+  });
+  getUserSettings().then(function(s) {
+    if (s && s.focusItems) document.getElementById('focus-items-input').value = s.focusItems;
+  }).catch(function() {});
+
   loadBudget(monthInput.value);
 }
 
@@ -1629,7 +2064,6 @@ var _officeDailyParsed = null;
 var _officeDailyScope  = 'office';
 
 var OFFICE_DAILY_LABELS = {
-  activityDays:         '活動日数',
   activityCount:        '総活動件数',
   promotionCount:       '新規促進件数',
   promotionAcase:       '促進A案件',
@@ -1661,8 +2095,938 @@ var OFFICE_DAILY_LABELS = {
   shortfall:            '過不足'
 };
 
-var OFFICE_ONLY_FIELDS = ['renewalRate'];
-var MEMBER_ONLY_FIELDS = ['shortfall'];
+var OFFICE_ONLY_FIELDS  = ['renewalRate'];
+var MEMBER_ONLY_FIELDS  = ['shortfall'];
+var OFFICE_RATE_FIELDS  = ['vsPlan', 'renewalRate', 'renewalNext2Rate'];
+
+function _fmtOfficeVal(key, val) {
+  var n = Number(val) || 0;
+  if (OFFICE_RATE_FIELDS.indexOf(key) >= 0) {
+    return Math.floor(n < 5 ? n * 100 : n) + '%';
+  }
+  return formatNumber(n);
+}
+
+function _gaugeRateHtml(plan, actual, showBar) {
+  var rate = (plan && plan > 0) ? Math.min(Math.round(actual / plan * 100), 999) : 0;
+  var colorClass = getProgressColorClass(rate);
+  var color      = getAccentColor(colorClass);
+  var pct        = Math.min(rate, 100);
+  var html = '<span class="import-rate" style="color:' + color + '">' + rate + '%</span>';
+  if (showBar !== false) {
+    html += '<div class="progress-bar" style="margin-top:3px">' +
+            '<div class="progress-fill ' + colorClass + '" style="width:' + pct + '%"></div></div>';
+  }
+  return { rate: rate, html: html };
+}
+
+// ------------------------------------------------------------------
+// 管理タブ
+// ------------------------------------------------------------------
+
+var _officeChart = null;
+
+async function refreshManagement() {
+  var container = document.getElementById('management-container');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">読み込み中...</div>';
+
+  try {
+    var today = getTodayJST();
+    var ym    = today.slice(0, 7);
+    var rows  = await getOfficeDaily({ dateFrom: ym + '-01', dateTo: ym + '-31', scope: 'office' });
+
+    var officeRows = (rows || []).filter(function(r) { return r.scope === 'office'; });
+    if (!officeRows.length) {
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0">日次取込からExcelを取り込むとここに表示されます</div>';
+      return;
+    }
+
+    officeRows.sort(function(a, b) {
+      return String(b.date).slice(0, 10).localeCompare(String(a.date).slice(0, 10));
+    });
+    renderManagementDashboard(officeRows[0]);
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--accent-red);font-size:13px">読み込みエラー: ' + e.message + '</div>';
+  }
+}
+
+function renderManagementDashboard(entry) {
+  var container = document.getElementById('management-container');
+  if (!container) return;
+
+  function n(key) { return Number(entry[key]) || 0; }
+  function rate(plan, actual) {
+    return (plan && plan > 0) ? Math.min(Math.round(actual / plan * 100), 999) : 0;
+  }
+  function gaugeBlock(label, plan, actual) {
+    var r  = rate(plan, actual);
+    var cc = getProgressColorClass(r);
+    var cl = getAccentColor(cc);
+    return '<div class="office-gauge-block">' +
+           '<div class="office-gauge-row">' +
+           '<span class="office-gauge-label">' + label + '</span>' +
+           '<span class="office-gauge-vals">' + formatNumber(actual) + ' / ' + formatNumber(plan) + '</span>' +
+           '<span class="import-rate" style="color:' + cl + '">' + r + '%</span>' +
+           '</div>' +
+           '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + Math.min(r,100) + '%"></div></div>' +
+           '</div>';
+  }
+  function fieldRow(label, val) {
+    return '<div class="office-field-row">' +
+           '<span class="office-field-label">' + label + '</span>' +
+           '<span class="office-field-val">' + val + '</span>' +
+           '</div>';
+  }
+
+  var lastDate = String(entry.date).slice(0, 10);
+
+  var vsPlanVal   = n('vsPlan');
+  var vsPlanPct   = Math.floor(vsPlanVal   < 5 ? vsPlanVal   * 100 : vsPlanVal);
+  var rrVal       = n('renewalRate');
+  var rrPct       = Math.floor(rrVal       < 5 ? rrVal       * 100 : rrVal);
+  var rn2RateVal  = n('renewalNext2Rate');
+  var rn2RatePct  = Math.floor(rn2RateVal  < 5 ? rn2RateVal  * 100 : rn2RateVal);
+
+  var html = '<div class="mgmt-header">' +
+             '<span class="card-title" style="font-size:14px">営業所 日次管理</span>' +
+             '<span class="mgmt-last-date">最終取込: ' + lastDate + '</span>' +
+             '</div>';
+
+  // 促進
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">促進</div>' +
+          fieldRow('総活動件数', formatNumber(n('activityCount'))) +
+          fieldRow('新規促進件数', formatNumber(n('promotionCount'))) +
+          fieldRow('促進A案件', formatNumber(n('promotionAcase'))) +
+          '</div>';
+
+  // 点検
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">点検</div>' +
+          gaugeBlock('点検', n('inspectionPlan'), n('inspectionActual')) +
+          '</div>';
+
+  // 売上
+  var fRate = rate(n('salesPlan'), n('salesForecast'));
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">売上</div>' +
+          gaugeBlock('売上 実績', n('salesPlan'), n('salesActual')) +
+          gaugeBlock('末見通し', n('salesPlan'), n('salesForecast')) +
+          fieldRow('A案件', formatNumber(n('salesAcase'))) +
+          fieldRow('対計画率', '<span style="color:' + getAccentColor(getProgressColorClass(vsPlanPct)) + '">' + vsPlanPct + '%</span>') +
+          '</div>';
+
+  // 保守
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">保守</div>' +
+          gaugeBlock('総保守台数', n('totalMaintPlan'), n('totalMaintActual')) +
+          gaugeBlock('新規保守台数', n('newMaintPlan'), n('newMaintActual')) +
+          fieldRow('保守売上 実績', formatNumber(n('maintActual'))) +
+          fieldRow('保守 新規', formatNumber(n('maintNew'))) +
+          fieldRow('保守 継続', formatNumber(n('maintCont'))) +
+          '</div>';
+
+  // 継続
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">継続</div>' +
+          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop')) +
+          fieldRow('当月継続 前受', formatNumber(n('renewalThisPrev'))) +
+          fieldRow('当月継続 計画', formatNumber(n('renewalThisPlan'))) +
+          fieldRow('当月継続 実績', formatNumber(n('renewalThisActual'))) +
+          fieldRow('継続率', '<span style="color:' + getAccentColor(getProgressColorClass(rrPct)) + '">' + rrPct + '%</span>') +
+          '</div>';
+
+  // 翌月以降
+  html += '<div class="office-section office-section-next">' +
+          '<div class="office-section-title">翌月以降</div>' +
+          fieldRow('翌月分 受注残', formatNumber(n('nextMonthBacklog'))) +
+          fieldRow('翌月案件', formatNumber(n('nextMonthCase'))) +
+          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual')) +
+          fieldRow('次々月継続受注率', '<span style="color:' + getAccentColor(getProgressColorClass(rn2RatePct)) + '">' + rn2RatePct + '%</span>') +
+          '</div>';
+
+  // KPIチャート
+  html += '<div class="card" style="margin-top:10px">' +
+          '<div class="card-title">KPI達成率</div>' +
+          '<div class="office-kpi-wrap"><canvas id="office-kpi-chart"></canvas></div>' +
+          '</div>';
+
+  container.innerHTML = html;
+  _renderKpiAlerts(entry, container);
+  renderOfficeKpiChart(entry);
+}
+
+function _renderKpiAlerts(entry, container) {
+  var WATCH = [
+    { planKey: 'inspectionPlan',     actualKey: 'inspectionActual',    label: '点検' },
+    { planKey: 'salesPlan',          actualKey: 'salesActual',         label: '売上' },
+    { planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop',label: '次月継続' },
+    { planKey: 'totalMaintPlan',     actualKey: 'totalMaintActual',    label: '総保守台数' }
+  ];
+  var alerts = WATCH.filter(function(w) {
+    var plan   = Number(entry[w.planKey])   || 0;
+    var actual = Number(entry[w.actualKey]) || 0;
+    return plan > 0 && (actual / plan * 100) < 40;
+  }).map(function(w) { return w.label; });
+
+  if (!alerts.length) return;
+  var banner = document.createElement('div');
+  banner.className = 'kpi-alert-banner';
+  banner.textContent = '⚠️ 達成率40%未満: ' + alerts.join(' / ');
+  container.insertBefore(banner, container.firstChild);
+}
+
+function renderOfficeKpiChart(entry) {
+  var canvas = document.getElementById('office-kpi-chart');
+  if (!canvas) return;
+  if (_officeChart) { _officeChart.destroy(); _officeChart = null; }
+
+  function n(key) { return Number(entry[key]) || 0; }
+  function pct(plan, actual) {
+    return (plan && plan > 0) ? Math.min(Math.round(actual / plan * 100), 999) : 0;
+  }
+
+  var items = [
+    { label: '点検',      rate: pct(n('inspectionPlan'),      n('inspectionActual')) },
+    { label: '売上',      rate: pct(n('salesPlan'),           n('salesActual')) },
+    { label: '末見通し',  rate: pct(n('salesPlan'),           n('salesForecast')) },
+    { label: '総保守台数', rate: pct(n('totalMaintPlan'),     n('totalMaintActual')) },
+    { label: '次月継続',  rate: pct(n('renewalNextPlanTop'),  n('renewalNextActualTop')) }
+  ].filter(function(item) { return item.rate > 0; });
+
+  if (!items.length) return;
+
+  var colors = items.map(function(item) { return getAccentColor(getProgressColorClass(item.rate)); });
+
+  _officeChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: items.map(function(i) { return i.label; }),
+      datasets: [{
+        data: items.map(function(i) { return i.rate; }),
+        backgroundColor: colors.map(function(c) { return c + '33'; }),
+        borderColor: colors,
+        borderWidth: 1,
+        borderRadius: 3
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          min: 0, max: 120,
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: '#94a3b8', font: { size: 11 },
+            callback: function(v) { return v + '%'; } }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#cbd5e1', font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ------------------------------------------------------------------
+// 営業所 取込タブ（売上計画）
+// ------------------------------------------------------------------
+
+function initOfficeImportTab() {
+  var btn = document.getElementById('btn-office-plan-import');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var fb = document.getElementById('office-plan-import-feedback');
+    if (fb) {
+      fb.textContent = '売上計画取込は次フェーズで実装予定です';
+      fb.style.color = 'var(--text-muted)';
+      fb.style.fontSize = '12px';
+      fb.style.marginTop = '8px';
+    }
+  });
+}
+
+// ------------------------------------------------------------------
+// 営業所 履歴タブ（B-2）
+// ------------------------------------------------------------------
+
+var _OFFICE_KPI_DEFS = [
+  { id: 'inspection', label: '点検',    planKey: 'inspectionPlan',    actualKey: 'inspectionActual',    unit: '件' },
+  { id: 'sales',      label: '売上',    planKey: 'salesPlan',         actualKey: 'salesActual',         unit: '円',
+    forecastKey: 'salesForecast', showForecast: true },
+  { id: 'renewal',    label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
+  { id: 'maint',      label: '保全',    planKey: 'totalMaintPlan',    actualKey: 'totalMaintActual',    unit: '件' },
+];
+
+const officeHistState = {
+  view:      'daily',
+  yearMonth: getCurrentYearMonthJST(),
+  year:      Number(getTodayJST().slice(0, 4)),
+  quarter:   'all',
+  allData:   null,
+};
+
+function initOfficeHistoryTab() {
+  document.getElementById('office-hist-view-select').addEventListener('change', _onOfficeHistViewChange);
+  document.querySelector('[data-tab="tab-office-history"]').addEventListener('click', function() {
+    _renderOfficeHistPeriodControl();
+    renderOfficeHistContent();
+  });
+  document.getElementById('office-report-csv-btn').addEventListener('click',   _handleOfficeHistCsv);
+  document.getElementById('office-report-print-btn').addEventListener('click', _handleOfficeHistPrint);
+  document.getElementById('office-report-copy-btn').addEventListener('click',  _handleOfficeHistCopy);
+  _renderOfficeHistPeriodControl();
+}
+
+async function refreshOfficeHistory() {
+  _renderOfficeHistPeriodControl();
+  await renderOfficeHistContent();
+}
+
+function _onOfficeHistViewChange() {
+  officeHistState.view = document.getElementById('office-hist-view-select').value;
+  _renderOfficeHistPeriodControl();
+  renderOfficeHistContent();
+}
+
+function _onOfficeHistPeriodChange() {
+  const view = officeHistState.view;
+  if (view === 'daily' || view === 'weekly') {
+    officeHistState.yearMonth = document.getElementById('office-hist-month-input').value || getCurrentYearMonthJST();
+  } else if (view === 'quarterly') {
+    const yearEl = document.getElementById('office-hist-year-input');
+    const qEl   = document.getElementById('office-hist-quarter-select');
+    if (yearEl) officeHistState.year    = Number(yearEl.value) || Number(getTodayJST().slice(0, 4));
+    if (qEl)   officeHistState.quarter = qEl.value;
+  } else {
+    officeHistState.year = Number(document.getElementById('office-hist-year-input').value) || Number(getTodayJST().slice(0, 4));
+  }
+  renderOfficeHistContent();
+}
+
+function _renderOfficeHistPeriodControl() {
+  const container = document.getElementById('office-hist-period-control');
+  if (!container) return;
+  const view = officeHistState.view;
+  if (view === 'daily' || view === 'weekly') {
+    container.innerHTML = `<input type="month" id="office-hist-month-input" value="${officeHistState.yearMonth}" />`;
+    document.getElementById('office-hist-month-input').addEventListener('change', _onOfficeHistPeriodChange);
+  } else if (view === 'quarterly') {
+    container.innerHTML = `
+      <input type="number" id="office-hist-year-input" value="${officeHistState.year}" min="2020" max="2040" style="flex:1" />
+      <select id="office-hist-quarter-select" style="flex:1">
+        <option value="all"${officeHistState.quarter === 'all' ? ' selected' : ''}>全四半期</option>
+        <option value="Q1"${officeHistState.quarter === 'Q1' ? ' selected' : ''}>Q1（1〜3月）</option>
+        <option value="Q2"${officeHistState.quarter === 'Q2' ? ' selected' : ''}>Q2（4〜6月）</option>
+        <option value="Q3"${officeHistState.quarter === 'Q3' ? ' selected' : ''}>Q3（7〜9月）</option>
+        <option value="Q4"${officeHistState.quarter === 'Q4' ? ' selected' : ''}>Q4（10〜12月）</option>
+      </select>
+    `;
+    document.getElementById('office-hist-year-input').addEventListener('change', _onOfficeHistPeriodChange);
+    document.getElementById('office-hist-quarter-select').addEventListener('change', _onOfficeHistPeriodChange);
+  } else if (view === 'yearly') {
+    container.innerHTML = '';
+  } else {
+    container.innerHTML = `<input type="number" id="office-hist-year-input" value="${officeHistState.year}" min="2020" max="2040" />`;
+    document.getElementById('office-hist-year-input').addEventListener('change', _onOfficeHistPeriodChange);
+  }
+}
+
+async function ensureOfficeHistData() {
+  if (!officeHistState.allData) {
+    const rows = await getAllOfficeData();
+    officeHistState.allData = (rows || []);
+  }
+}
+
+async function renderOfficeHistContent() {
+  const container = document.getElementById('office-history-container');
+  if (!container) return;
+  container.innerHTML = '<div class="hist-empty">読み込み中...</div>';
+  try {
+    await ensureOfficeHistData();
+    const rows = officeHistState.allData;
+    const view = officeHistState.view;
+    if (view === 'daily') {
+      const filtered = rows.filter(function(r) { return String(r.date).startsWith(officeHistState.yearMonth); });
+      _renderOfficeDailyView(filtered, container);
+    } else if (view === 'weekly') {
+      const filtered = rows.filter(function(r) { return String(r.date).startsWith(officeHistState.yearMonth); });
+      _renderOfficeWeeklyView(filtered, container);
+    } else if (view === 'monthly') {
+      const filtered = rows.filter(function(r) { return String(r.date).startsWith(String(officeHistState.year)); });
+      _renderOfficeMonthlyView(filtered, container);
+    } else if (view === 'quarterly') {
+      const filtered = rows.filter(function(r) { return String(r.date).startsWith(String(officeHistState.year)); });
+      _renderOfficeQuarterlyView(filtered, container);
+    } else {
+      _renderOfficeYearlyView(rows, container);
+    }
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--accent-red);font-size:13px">読み込みエラー: ' + e.message + '</div>';
+  }
+}
+
+function _groupOfficeByWeek(entries) {
+  const weeks = {};
+  entries.forEach(function(e) {
+    const p   = String(e.date).split('-').map(Number);
+    const d   = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    const dow = d.getUTCDay() || 7;
+    const mon = new Date(d.getTime() - (dow - 1) * 86400000);
+    const key = mon.toISOString().slice(0, 10);
+    if (!weeks[key]) weeks[key] = [];
+    weeks[key].push(e);
+  });
+  return Object.entries(weeks).sort(function(a, b) { return a[0].localeCompare(b[0]); }).map(function(kv) {
+    var latest = kv[1].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, kv[1][0]);
+    return { weekStart: kv[0], entries: kv[1], latest: latest };
+  });
+}
+
+function _groupOfficeByMonth(entries) {
+  const months = {};
+  entries.forEach(function(e) {
+    const ym = String(e.date).slice(0, 7);
+    if (!months[ym]) months[ym] = [];
+    months[ym].push(e);
+  });
+  return Object.entries(months).sort(function(a, b) { return a[0].localeCompare(b[0]); }).map(function(kv) {
+    var latest = kv[1].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, kv[1][0]);
+    return { ym: kv[0], entries: kv[1], latest: latest };
+  });
+}
+
+function _groupOfficeByQuarter(entries) {
+  const quarters = { Q1: [], Q2: [], Q3: [], Q4: [] };
+  entries.forEach(function(e) {
+    const month = Number(String(e.date).slice(5, 7));
+    if (month <= 3) quarters.Q1.push(e);
+    else if (month <= 6) quarters.Q2.push(e);
+    else if (month <= 9) quarters.Q3.push(e);
+    else quarters.Q4.push(e);
+  });
+  return quarters;
+}
+
+function _renderOfficeQuarterlyView(entries, container) {
+  var year     = officeHistState.year;
+  var selectedQ = officeHistState.quarter;
+  var quarters = _groupOfficeByQuarter(entries);
+  var allQDefs = [
+    { key: 'Q1', label: 'Q1（1月〜3月）'   },
+    { key: 'Q2', label: 'Q2（4月〜6月）'   },
+    { key: 'Q3', label: 'Q3（7月〜9月）'   },
+    { key: 'Q4', label: 'Q4（10月〜12月）' },
+  ];
+  var qDefs = selectedQ === 'all' ? allQDefs : allQDefs.filter(function(q) { return q.key === selectedQ; });
+  var cards = [];
+  qDefs.forEach(function(qDef) {
+    var qEntries = quarters[qDef.key];
+    if (!qEntries.length) return;
+    var latest = qEntries.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, qEntries[0]);
+
+    // 月別内訳（折りたたみ）
+    var monthMap = _groupOfficeByMonth(qEntries).reverse();
+    var monthBreakdown = '';
+    if (monthMap.length > 1) {
+      var rows = monthMap.map(function(m) {
+        var parts = _OFFICE_KPI_DEFS.map(function(d) {
+          var r = _calcOfficeKpiRate(m.latest, d);
+          if (r === null) return '';
+          var cl = getAccentColor(getProgressColorClass(r));
+          return '<span style="color:' + cl + '">' + d.label + ' ' + r + '%</span>';
+        }).filter(Boolean).join(' / ');
+        return '<div style="font-size:11px;padding:2px 0;color:var(--text-secondary)">' + formatYearMonth(m.ym) + ': ' + (parts || '—') + '</div>';
+      }).join('');
+      monthBreakdown = '<details style="margin-top:8px"><summary style="font-size:11px;color:var(--text-muted);cursor:pointer">月別内訳を見る</summary>' +
+        '<div style="padding:4px 0">' + rows + '</div></details>';
+    }
+    cards.push(_buildOfficeHistoryCard(latest, year + '年 ' + qDef.label + '（期末実績）', { extra: monthBreakdown }));
+  });
+  if (!cards.length) {
+    container.innerHTML = '<div class="hist-empty">' + year + '年' + (selectedQ !== 'all' ? ' ' + selectedQ : '') + 'のデータはありません</div>';
+    return;
+  }
+  container.innerHTML = cards.join('');
+}
+
+function _renderOfficeDailyView(entries, container) {
+  if (!entries.length) { container.innerHTML = '<div class="hist-empty">この月のデータはありません</div>'; return; }
+  const sorted = entries.slice().sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
+  container.innerHTML = sorted.map(function(e) { return _buildOfficeHistoryCard(e); }).join('');
+}
+
+function _renderOfficeWeeklyView(entries, container) {
+  var weeks = _groupOfficeByWeek(entries).reverse(); // 新→旧
+  if (!weeks.length) { container.innerHTML = '<div class="hist-empty">この月のデータはありません</div>'; return; }
+
+  var ym        = officeHistState.yearMonth;
+  var currentYM = getCurrentYearMonthJST();
+  var allData   = officeHistState.allData || [];
+
+  // 第1週の prevEntry 用：前月末データを検索
+  var prevMonthYM = (function() {
+    var p = ym.split('-').map(Number);
+    var m = p[1] - 1, y = p[0];
+    if (m === 0) { m = 12; y--; }
+    return y + '-' + String(m).padStart(2, '0');
+  })();
+  var pmEntries = allData.filter(function(r) { return String(r.date).startsWith(prevMonthYM); });
+  var pmLatest  = pmEntries.length
+    ? pmEntries.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, pmEntries[0])
+    : null;
+
+  container.innerHTML = weeks.map(function(w, i) {
+    // weeks は新→旧なので、weeks[i+1] が「前週」
+    var prevEntry = i < weeks.length - 1 ? weeks[i + 1].latest : pmLatest;
+    var weekLabel = w.weekStart + ' 〜 ' + String(w.latest.date).slice(0, 10);
+
+    var paceInfo = null;
+    if (ym === currentYM) {
+      var ep    = calcElapsedPct(ym);
+      var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(w.latest, d); }).filter(function(r) { return r !== null; });
+      if (rates.length) {
+        var avg = Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length);
+        paceInfo = { elapsedPct: ep, badge: calcPaceBadge(avg, ep) };
+      }
+    }
+    return _buildOfficeHistoryCard(w.latest, weekLabel, { prevEntry: prevEntry, paceInfo: paceInfo });
+  }).join('');
+}
+
+function _renderOfficeMonthlyView(entries, container) {
+  var allMonths = _groupOfficeByMonth(entries).reverse(); // 新→旧
+  if (!allMonths.length) { container.innerHTML = '<div class="hist-empty">この年のデータはありません</div>'; return; }
+
+  var currentYM = getCurrentYearMonthJST();
+  var allData   = officeHistState.allData || [];
+
+  container.innerHTML = allMonths.map(function(m, i) {
+    // allMonths は新→旧なので、[i+1] が「前月」
+    var prevEntry = null;
+    if (i < allMonths.length - 1) {
+      prevEntry = allMonths[i + 1].latest;
+    } else {
+      // 最古月の前月を全データから探す
+      var prevYM = (function() {
+        var p = m.ym.split('-').map(Number);
+        var pm = p[1] - 1, py = p[0];
+        if (pm === 0) { pm = 12; py--; }
+        return py + '-' + String(pm).padStart(2, '0');
+      })();
+      var prevEs = allData.filter(function(r) { return String(r.date).startsWith(prevYM); });
+      if (prevEs.length) prevEntry = prevEs.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, prevEs[0]);
+    }
+
+    var paceInfo = null;
+    if (m.ym === currentYM) {
+      var ep    = calcElapsedPct(m.ym);
+      var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(m.latest, d); }).filter(function(r) { return r !== null; });
+      if (rates.length) {
+        var avg = Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length);
+        paceInfo = { elapsedPct: ep, badge: calcPaceBadge(avg, ep) };
+      }
+    }
+
+    var monthLabel = formatYearMonth(m.ym) + (m.ym < currentYM ? '（月末実績）' : '');
+    return _buildOfficeHistoryCard(m.latest, monthLabel, { prevEntry: prevEntry, paceInfo: paceInfo });
+  }).join('');
+}
+
+function _renderOfficeYearlyView(entries, container) {
+  var years = {};
+  entries.forEach(function(e) {
+    var y = String(e.date).slice(0, 4);
+    if (!years[y]) years[y] = [];
+    years[y].push(e);
+  });
+  var list = Object.entries(years).sort(function(a, b) { return b[0].localeCompare(a[0]); }).map(function(kv) {
+    var latest = kv[1].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, kv[1][0]);
+    return { year: kv[0], entries: kv[1], latest: latest };
+  });
+  if (!list.length) { container.innerHTML = '<div class="hist-empty">データがありません</div>'; return; }
+  container.innerHTML = list.map(function(y) {
+    var monthMap = _groupOfficeByMonth(y.entries).reverse();
+    var monthBreakdown = '';
+    if (monthMap.length > 1) {
+      var rows = monthMap.map(function(m) {
+        var parts = _OFFICE_KPI_DEFS.map(function(d) {
+          var r = _calcOfficeKpiRate(m.latest, d);
+          if (r === null) return '';
+          var cl = getAccentColor(getProgressColorClass(r));
+          return '<span style="color:' + cl + '">' + d.label + ' ' + r + '%</span>';
+        }).filter(Boolean).join(' / ');
+        return '<div style="font-size:11px;padding:2px 0;color:var(--text-secondary)">' + formatYearMonth(m.ym) + ': ' + (parts || '—') + '</div>';
+      }).join('');
+      monthBreakdown = '<details style="margin-top:8px"><summary style="font-size:11px;color:var(--text-muted);cursor:pointer">月別内訳を見る</summary>' +
+        '<div style="padding:4px 0">' + rows + '</div></details>';
+    }
+    return _buildOfficeHistoryCard(y.latest, y.year + '年（年末実績）', { extra: monthBreakdown });
+  }).join('');
+}
+
+async function _handleOfficeHistCsv(evt) {
+  const btn = evt.target;
+  btn.disabled = true; btn.textContent = '生成中...';
+  try {
+    await ensureOfficeHistData();
+    const rows = officeHistState.allData.slice().sort(function(a, b) { return String(a.date).localeCompare(String(b.date)); });
+    const header = ['日付', '点検計画', '点検実績', '売上計画', '売上実績', '末見通し', '次月継続計画', '次月継続実績', '総保守計画', '総保守実績'];
+    const csvRows = [header].concat(rows.map(function(e) {
+      return [e.date, e.inspectionPlan, e.inspectionActual, e.salesPlan, e.salesActual,
+              e.salesForecast, e.renewalNextPlanTop, e.renewalNextActualTop, e.totalMaintPlan, e.totalMaintActual];
+    }));
+    downloadCsv('営業所_全データ.csv', csvRows);
+  } finally { btn.disabled = false; btn.textContent = 'CSV'; }
+}
+
+function _handleOfficeHistPrint() {
+  var container = document.getElementById('office-history-container');
+  var content = container ? container.innerHTML : '';
+  var html =
+    '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>営業所 履歴</title>' +
+    '<style>body{font-family:"Hiragino Kaku Gothic ProN",sans-serif;padding:20px;font-size:13px;color:#111}' +
+    '.card{border:1px solid #ccc;padding:12px;margin-bottom:12px;border-radius:6px}' +
+    '.mgmt-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}' +
+    '.ohist-summary-bar{display:flex;align-items:center;gap:8px;padding:4px 0 8px;border-bottom:1px solid #e5e5e5;margin-bottom:8px;flex-wrap:wrap}' +
+    '.ohist-overall-rate{font-weight:700;font-size:15px}' +
+    '.ohist-status-badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:11px;font-weight:700;border:1px solid #ccc}' +
+    '.ohist-pace-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#555;width:100%}' +
+    '.ohist-pace-bar-wrap{display:none}' +
+    '.ohist-kpi-section{padding:6px 0;border-bottom:1px solid #f0f0f0}' +
+    '.ohist-kpi-section:last-child{border-bottom:none}' +
+    '.ohist-kpi-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}' +
+    '.ohist-kpi-title{font-size:11px;font-weight:700;color:#b45309}' +
+    '.ohist-kpi-vals{display:flex;align-items:center;gap:4px}' +
+    '.ohist-actual{font-weight:700;font-size:13px}' +
+    '.ohist-plan{font-size:11px;color:#999}' +
+    '.ohist-rate{font-weight:700;font-size:12px;min-width:40px;text-align:right}' +
+    '.ohist-forecast-row{display:flex;justify-content:space-between;font-size:11px;color:#555;margin-top:2px}' +
+    '.ohist-delta-row{font-size:11px;color:#555;padding-top:3px;margin-top:3px;border-top:1px solid #f0f0f0}' +
+    '.ohist-delta-pos{color:#16a34a}.ohist-delta-neg{color:#dc2626}' +
+    '.ohist-delta-label{color:#999;margin-right:2px}' +
+    '.progress-bar{height:4px;background:#eee;border-radius:2px;margin-top:2px}' +
+    '.progress-fill{height:100%;border-radius:2px;background:#22d3ee}' +
+    '.progress-fill.green{background:#4ade80}.progress-fill.amber{background:#fbbf24}.progress-fill.red{background:#f87171}' +
+    '</style></head><body>' + content + '</body></html>';
+  var win = window.open('', '_blank');
+  if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(function() { win.print(); }, 400); }
+  else window.print();
+}
+
+async function _handleOfficeHistCopy(evt) {
+  const btn = evt.target;
+  btn.disabled = true; btn.textContent = '生成中...';
+  try {
+    await ensureOfficeHistData();
+    const text = _buildOfficeReportText(officeHistState.allData, officeHistState.view);
+    await navigator.clipboard.writeText(text);
+    btn.textContent = '✓ コピー済';
+    setTimeout(function() { btn.textContent = '上長報告'; btn.disabled = false; }, 2000);
+  } catch (e) {
+    btn.textContent = '上長報告'; btn.disabled = false;
+    alert('コピーに失敗しました: ' + e.message);
+  }
+}
+
+function _buildOfficeReportText(rows, view) {
+  const today = getTodayJST();
+  const fmt = function(v) { return (Number(v) || 0).toLocaleString(); };
+  const entry2lines = function(e) {
+    return [
+      '  点検: ' + fmt(e.inspectionActual) + '/' + fmt(e.inspectionPlan) + '件',
+      '  売上: ¥' + fmt(e.salesActual) + '/¥' + fmt(e.salesPlan),
+      '  末見通し: ¥' + fmt(e.salesForecast),
+      '  次月継続: ' + fmt(e.renewalNextActualTop) + '/' + fmt(e.renewalNextPlanTop) + '件',
+    ].join('\n');
+  };
+  if (view === 'daily') {
+    const filtered = rows.filter(function(r) { return String(r.date).startsWith(officeHistState.yearMonth); });
+    const sorted   = filtered.slice().sort(function(a, b) { return String(a.date).localeCompare(String(b.date)); });
+    if (!sorted.length) return '【営業所日次報告】' + formatYearMonth(officeHistState.yearMonth) + '\n報告日: ' + today + '\nデータがありません';
+    return '【営業所日次報告】' + formatYearMonth(officeHistState.yearMonth) + '\n報告日: ' + today + '\n\n' +
+      sorted.map(function(e) { return '◆' + e.date + '\n' + entry2lines(e); }).join('\n\n');
+  }
+  if (view === 'weekly') {
+    const filtered = rows.filter(function(r) { return String(r.date).startsWith(officeHistState.yearMonth); });
+    const weeks    = _groupOfficeByWeek(filtered);
+    if (!weeks.length) return '【営業所週次報告】' + formatYearMonth(officeHistState.yearMonth) + '\n報告日: ' + today + '\nデータがありません';
+    return '【営業所週次報告】' + formatYearMonth(officeHistState.yearMonth) + '\n報告日: ' + today + '\n\n' +
+      weeks.map(function(w) { return '◆' + w.weekStart + '〜\n' + entry2lines(w.latest); }).join('\n\n');
+  }
+  if (view === 'monthly') {
+    const filtered = rows.filter(function(r) { return String(r.date).startsWith(String(officeHistState.year)); });
+    const months   = _groupOfficeByMonth(filtered);
+    if (!months.length) return '【営業所月次報告】' + officeHistState.year + '年\n報告日: ' + today + '\nデータがありません';
+    return '【営業所月次報告】' + officeHistState.year + '年\n報告日: ' + today + '\n\n' +
+      months.map(function(m) { return '◆' + m.ym + '\n' + entry2lines(m.latest); }).join('\n\n');
+  }
+  if (view === 'quarterly') {
+    const year = officeHistState.year;
+    const selectedQ = officeHistState.quarter;
+    const filtered  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
+    const quarters  = _groupOfficeByQuarter(filtered);
+    const allQDefs  = [
+      { key: 'Q1', label: 'Q1（1〜3月）' },
+      { key: 'Q2', label: 'Q2（4〜6月）' },
+      { key: 'Q3', label: 'Q3（7〜9月）' },
+      { key: 'Q4', label: 'Q4（10〜12月）' },
+    ];
+    const qDefs = selectedQ === 'all' ? allQDefs : allQDefs.filter(function(q) { return q.key === selectedQ; });
+    const lines = [];
+    qDefs.forEach(function(qDef) {
+      const qEntries = quarters[qDef.key];
+      if (!qEntries.length) return;
+      var latest = qEntries.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, qEntries[0]);
+      lines.push('◆' + year + '年 ' + qDef.label + '\n' + entry2lines(latest));
+    });
+    if (!lines.length) return '【営業所四半期報告】' + year + '年\n報告日: ' + today + '\nデータがありません';
+    return '【営業所四半期報告】' + year + '年\n報告日: ' + today + '\n\n' + lines.join('\n\n');
+  }
+  // yearly
+  const years = {};
+  rows.forEach(function(e) { const y = String(e.date).slice(0, 4); if (!years[y]) years[y] = []; years[y].push(e); });
+  const list  = Object.entries(years).sort(function(a, b) { return a[0].localeCompare(b[0]); });
+  if (!list.length) return '【営業所年次報告】\n報告日: ' + today + '\nデータがありません';
+  return '【営業所年次報告】\n報告日: ' + today + '\n\n' +
+    list.map(function(kv) {
+      var latest = kv[1].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, kv[1][0]);
+      return '◆' + kv[0] + '年\n' + entry2lines(latest);
+    }).join('\n\n');
+}
+
+function _calcOfficeKpiRate(entry, kpiDef) {
+  var plan   = Number(entry[kpiDef.planKey])   || 0;
+  var actual = Number(entry[kpiDef.actualKey]) || 0;
+  if (plan === 0) return null;
+  return Math.min(Math.round(actual / plan * 100), 999);
+}
+
+function _buildOfficeKpiBlock(kpiDef, entry, prevEntry) {
+  var plan     = Number(entry[kpiDef.planKey])   || 0;
+  var actual   = Number(entry[kpiDef.actualKey]) || 0;
+  var rate     = _calcOfficeKpiRate(entry, kpiDef);
+  var cc       = rate !== null ? getProgressColorClass(rate) : 'gray';
+  var cl       = rate !== null ? getAccentColor(cc)          : 'var(--text-muted)';
+  var rateStr  = rate !== null ? rate + '%' : '—';
+  var barWidth = rate !== null ? Math.min(rate, 100) : 0;
+  var isYen    = kpiDef.unit === '円';
+  var fmtVal   = function(v) { return isYen ? formatCurrency(v) : formatNumber(v) + kpiDef.unit; };
+
+  var html = '<div class="ohist-kpi-section">' +
+    '<div class="ohist-kpi-header">' +
+    '<span class="ohist-kpi-title">' + kpiDef.label + '</span>' +
+    '<div class="ohist-kpi-vals">' +
+    '<span class="ohist-actual">' + fmtVal(actual) + '</span>' +
+    '<span class="ohist-plan"> / ' + fmtVal(plan) + '</span>' +
+    '<span class="ohist-rate" style="color:' + cl + '">' + rateStr + '</span>' +
+    '</div></div>' +
+    '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + barWidth + '%"></div></div>';
+
+  if (kpiDef.showForecast && kpiDef.forecastKey) {
+    var forecast = Number(entry[kpiDef.forecastKey]) || 0;
+    var fRate    = plan > 0 ? Math.min(Math.round(forecast / plan * 100), 999) : null;
+    var fcl      = fRate !== null ? getAccentColor(getProgressColorClass(fRate)) : 'var(--text-muted)';
+    var diff     = forecast - plan;
+    var diffCls  = diff >= 0 ? 'ohist-delta-pos' : 'ohist-delta-neg';
+    var diffStr  = (diff >= 0 ? '＋' : '−') + formatCurrency(Math.abs(diff));
+    html += '<div class="ohist-forecast-row">' +
+      '<span>末見通し ' + formatCurrency(forecast) +
+      (fRate !== null ? ' <span style="color:' + fcl + '">(' + fRate + '%)</span>' : '') + '</span>' +
+      '<span class="' + diffCls + '">対計画 ' + diffStr + '</span>' +
+      '</div>';
+  }
+
+  if (prevEntry) {
+    var prevActual = Number(prevEntry[kpiDef.actualKey]) || 0;
+    var delta = actual - prevActual;
+    if (delta !== 0) {
+      var deltaCls = delta > 0 ? 'ohist-delta-pos' : 'ohist-delta-neg';
+      var deltaStr = (delta > 0 ? 'Δ＋' : 'Δ−') + fmtVal(Math.abs(delta));
+      html += '<div class="ohist-delta-row">' +
+        '<span class="ohist-delta-item"><span class="ohist-delta-label">前期比</span>' +
+        '<span class="' + deltaCls + '">' + deltaStr + '</span></span>' +
+        '</div>';
+    }
+  }
+
+  return html + '</div>';
+}
+
+function _buildOfficeSummaryHeader(entry, label, paceInfo) {
+  var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(entry, d); }).filter(function(r) { return r !== null; });
+  var overallRate = rates.length ? Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length) : null;
+
+  var statusBadge = '';
+  if (overallRate !== null) {
+    var scc = getProgressColorClass(overallRate);
+    var scl = getAccentColor(scc);
+    var sLabel = overallRate >= 100 ? '達成' : overallRate >= 70 ? '順調' : overallRate >= 40 ? '注意' : '要注意';
+    statusBadge = '<span class="ohist-status-badge" style="background:' + scl + '22;color:' + scl + ';border-color:' + scl + '60">' + sLabel + '</span>';
+  }
+
+  var html = '<div class="mgmt-header">' +
+    '<span style="font-size:13px;font-weight:700;color:var(--text-primary)">' + label + '</span>' +
+    statusBadge + '</div>';
+
+  if (overallRate !== null) {
+    var ocl = getAccentColor(getProgressColorClass(overallRate));
+    html += '<div class="ohist-summary-bar">' +
+      '<span style="font-size:11px;color:var(--text-secondary)">総合達成率</span>' +
+      '<span class="ohist-overall-rate" style="color:' + ocl + '">' + overallRate + '%</span>';
+
+    if (paceInfo) {
+      var pcl = getAccentColor(paceInfo.badge.colorClass);
+      var ep  = Math.min(paceInfo.elapsedPct, 100);
+      html += '<div class="ohist-pace-row">' +
+        '<span style="white-space:nowrap">月経過 ' + paceInfo.elapsedPct + '%</span>' +
+        '<div class="ohist-pace-bar-wrap">' +
+        '<div class="ohist-pace-bar-fill" style="width:' + ep + '%"></div>' +
+        '<div class="ohist-pace-marker" style="left:' + ep + '%"></div>' +
+        '</div>' +
+        '<span class="ohist-pace-badge" style="color:' + pcl + '">' + paceInfo.badge.label + '</span>' +
+        '</div>';
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+function _buildOfficeHistoryCard(entry, label, opts) {
+  if (!entry) return '';
+  opts = opts || {};
+  var dateLabel = (typeof label === 'string' ? label : null) || String(entry.date).slice(0, 10);
+  var html = '<div class="card" style="margin-bottom:10px">' +
+    _buildOfficeSummaryHeader(entry, dateLabel, opts.paceInfo || null);
+  _OFFICE_KPI_DEFS.forEach(function(kpiDef) {
+    html += _buildOfficeKpiBlock(kpiDef, entry, opts.prevEntry || null);
+  });
+  html += (opts.extra || '') + '</div>';
+  return html;
+}
+
+// ------------------------------------------------------------------
+// 営業所 KGI設定タブ
+// ------------------------------------------------------------------
+
+function initOfficeKgiTab() {
+  var el = document.getElementById('office-kgi-month');
+  if (!el) return;
+  el.value = getCurrentYearMonthJST ? getCurrentYearMonthJST() : getTodayJST().slice(0, 7);
+  el.addEventListener('change', loadOfficeKgi);
+
+  // 注力事項
+  var saveBtn = document.getElementById('save-office-focus-items-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async function() {
+      var statusEl = document.getElementById('office-focus-items-status');
+      statusEl.textContent = '保存中...';
+      try {
+        await saveOfficeSettings({ key: 'focusItems', value: document.getElementById('office-focus-items-input').value });
+        statusEl.textContent = '✓ 保存しました';
+      } catch (e) {
+        statusEl.textContent = 'エラー: ' + e.message;
+      }
+      setTimeout(function() { statusEl.textContent = ''; }, 2000);
+    });
+  }
+  getOfficeSettings().then(function(s) {
+    var ta = document.getElementById('office-focus-items-input');
+    if (ta && s && s.focusItems) ta.value = s.focusItems;
+  }).catch(function() {});
+}
+
+async function loadOfficeKgi() {
+  var container = document.getElementById('office-kgi-fields');
+  if (!container) return;
+  var el = document.getElementById('office-kgi-month');
+  var ym = el ? el.value : getTodayJST().slice(0, 7);
+  container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">読み込み中...</div>';
+  try {
+    var plan = await getOfficeSalesPlan(ym);
+    renderOfficeSalesPlanFields(plan, ym, container);
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--accent-red);font-size:13px">読み込みエラー: ' + e.message + '</div>';
+  }
+}
+
+function renderOfficeSalesPlanFields(plan, ym, container) {
+  var entry = (plan && plan.length) ? plan[0] : {};
+  var LABELS = {
+    maintenancePlanUnits:  '保守台数 計画',
+    maintenancePlanAmount: '保守額 計画',
+    inspectionPlanUnits:   '点検台数 計画',
+    inspectionPlanAmount:  '点検額 計画',
+    renewalPlanUnits:      '継続台数 計画',
+    renewalPlanAmount:     '継続額 計画',
+    newPlanUnits:          '新規台数 計画',
+    newPlanAmount:         '新規額 計画',
+    totalSalesPlan:        '売上計画 合計'
+  };
+  var html = '<div class="office-section">';
+  Object.keys(LABELS).forEach(function(key) {
+    var val = (entry[key] !== undefined && entry[key] !== '') ? entry[key] : 0;
+    html += '<div class="office-field-row">' +
+            '<span class="office-field-label">' + LABELS[key] + '</span>' +
+            '<input class="office-field-input" type="number" step="any" data-key="' + key + '" value="' + val + '">' +
+            '</div>';
+  });
+  html += '</div>';
+  html += '<button class="btn btn-primary" id="office-kgi-save-btn" style="margin-top:12px">保存する</button>';
+  container.innerHTML = html;
+  document.getElementById('office-kgi-save-btn').addEventListener('click', function() {
+    saveOfficeKgi(ym);
+  });
+}
+
+async function saveOfficeKgi(ym) {
+  var btn = document.getElementById('office-kgi-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+  try {
+    var fields = {};
+    document.querySelectorAll('#office-kgi-fields .office-field-input').forEach(function(f) {
+      fields[f.dataset.key] = parseFloat(f.value) || 0;
+    });
+    var entry = Object.assign({ yearMonth: ym, scope: 'office', memberId: '', memberName: '' }, fields);
+    await saveOfficeSalesPlan([entry]);
+    if (btn) { btn.textContent = '✓ 保存しました'; }
+    setTimeout(function() { if (btn) { btn.disabled = false; btn.textContent = '保存する'; } }, 2000);
+  } catch (e) {
+    alert('保存エラー: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+  }
+}
+
+// ------------------------------------------------------------------
+// 月末自動判定 トリガー設定ボタン
+// ------------------------------------------------------------------
+
+function initSetupTriggersBtn() {
+  var btn = document.getElementById('btn-office-setup-triggers');
+  if (!btn) return;
+  btn.addEventListener('click', async function() {
+    btn.disabled = true;
+    btn.textContent = '設定中...';
+    try {
+      await _callGas('gasSetupAiTriggers');
+      btn.textContent = '✓ トリガー設定済み';
+      btn.style.color = 'var(--accent-emerald)';
+    } catch (e) {
+      alert('設定エラー: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = '🕐 月末自動判定 トリガー設定';
+    }
+  });
+}
+
+// ------------------------------------------------------------------
+// 営業所 日次取込
+// ------------------------------------------------------------------
 
 function initOfficeDailyImport() {
   var btn  = document.getElementById('btn-office-daily-import');
@@ -1731,17 +3095,152 @@ function renderOfficeDailyFields() {
            .find(function(m) { return m.memberId === memberId; }) || {};
   }
 
+  function v(key) { return (data[key] !== undefined) ? data[key] : 0; }
+
+  function fieldInput(key) {
+    return '<input class="office-field-input import-field-input" type="number" step="any"' +
+           ' data-key="' + key + '" value="' + v(key) + '">';
+  }
+
+  function gaugeRow(label, planKey, actualKey) {
+    var plan   = Number(v(planKey))   || 0;
+    var actual = Number(v(actualKey)) || 0;
+    var g      = _gaugeRateHtml(plan, actual);
+    return '<div class="office-gauge-block">' +
+           '<div class="office-gauge-row">' +
+           '<span class="office-gauge-label">' + label + '</span>' +
+           '<div class="office-gauge-inputs">' +
+           '計<input class="office-field-input import-field-input" type="number" step="any" data-key="' + planKey + '" value="' + plan + '">' +
+           '実<input class="office-field-input import-field-input" type="number" step="any" data-key="' + actualKey + '" value="' + actual + '">' +
+           g.html +
+           '</div></div>' +
+           '<div class="progress-bar"><div class="progress-fill ' + getProgressColorClass(g.rate) + '" style="width:' + Math.min(g.rate,100) + '%"></div></div>' +
+           '</div>';
+  }
+
+  function simpleRow(key) {
+    return '<div class="office-field-row">' +
+           '<span class="office-field-label">' + (OFFICE_DAILY_LABELS[key] || key) + '</span>' +
+           fieldInput(key) +
+           '</div>';
+  }
+
   var html = '';
-  Object.keys(OFFICE_DAILY_LABELS).forEach(function(key) {
-    if (isOffice  && MEMBER_ONLY_FIELDS.indexOf(key) >= 0) return;
-    if (!isOffice && OFFICE_ONLY_FIELDS.indexOf(key) >= 0) return;
-    var val = (data[key] !== undefined) ? data[key] : 0;
-    html += '<div class="import-field-row">' +
-            '<label class="import-field-label">' + OFFICE_DAILY_LABELS[key] + '</label>' +
-            '<input class="import-field-input" type="number" step="any"' +
-            ' data-key="' + key + '" value="' + val + '">' +
+
+  // ── 促進ブロック ─────────────────────────────
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">促進</div>' +
+          simpleRow('activityCount') +
+          simpleRow('promotionCount') +
+          simpleRow('promotionAcase') +
+          '</div>';
+
+  // ── 点検ブロック ─────────────────────────────
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">点検</div>' +
+          gaugeRow('点検', 'inspectionPlan', 'inspectionActual') +
+          '</div>';
+
+  // ── 売上ブロック ─────────────────────────────
+  {
+    var sPlan   = Number(v('salesPlan'))     || 0;
+    var sActual = Number(v('salesActual'))   || 0;
+    var fPlan   = Number(v('salesPlan'))     || 0;
+    var fActual = Number(v('salesForecast')) || 0;
+    var sG = _gaugeRateHtml(sPlan, sActual);
+    var fG = _gaugeRateHtml(fPlan, fActual);
+    var vsPlanVal = Number(v('vsPlan')) || 0;
+    var vsPlanPct = Math.floor(vsPlanVal < 5 ? vsPlanVal * 100 : vsPlanVal);
+    html += '<div class="office-section">' +
+            '<div class="office-section-title">売上</div>' +
+            '<div class="office-gauge-block">' +
+            '<div class="office-gauge-row"><span class="office-gauge-label">売上 実績</span>' +
+            '<div class="office-gauge-inputs">' +
+            '計<input class="office-field-input import-field-input" type="number" step="any" data-key="salesPlan" value="' + sPlan + '">' +
+            '実<input class="office-field-input import-field-input" type="number" step="any" data-key="salesActual" value="' + sActual + '">' +
+            sG.html + '</div></div>' +
+            '<div class="progress-bar"><div class="progress-fill ' + getProgressColorClass(sG.rate) + '" style="width:' + Math.min(sG.rate,100) + '%"></div></div>' +
+            '</div>' +
+            '<div class="office-gauge-block">' +
+            '<div class="office-gauge-row"><span class="office-gauge-label">末見通し</span>' +
+            '<div class="office-gauge-inputs">' +
+            '<input class="office-field-input import-field-input" type="number" step="any" data-key="salesForecast" value="' + fActual + '">' +
+            fG.html + '</div></div>' +
+            '<div class="progress-bar"><div class="progress-fill ' + getProgressColorClass(fG.rate) + '" style="width:' + Math.min(fG.rate,100) + '%"></div></div>' +
+            '</div>' +
+            simpleRow('salesAcase') +
+            '<div class="office-field-row"><span class="office-field-label">対計画率</span>' +
+            '<span class="import-rate" style="color:' + getAccentColor(getProgressColorClass(vsPlanPct)) + '">' + vsPlanPct + '%</span>' +
+            '<input type="hidden" class="import-field-input" data-key="vsPlan" value="' + vsPlanVal + '">' +
+            '</div>' +
             '</div>';
-  });
+  }
+
+  // ── 保守ブロック ─────────────────────────────
+  html += '<div class="office-section">' +
+          '<div class="office-section-title">保守</div>' +
+          gaugeRow('総保守台数', 'totalMaintPlan', 'totalMaintActual') +
+          gaugeRow('新規保守台数', 'newMaintPlan', 'newMaintActual') +
+          simpleRow('maintActual') +
+          simpleRow('maintNew') +
+          simpleRow('maintCont') +
+          '</div>';
+
+  // ── 継続ブロック ─────────────────────────────
+  {
+    var rnPlan   = Number(v('renewalNextPlanTop'))   || 0;
+    var rnActual = Number(v('renewalNextActualTop')) || 0;
+    var rnG = _gaugeRateHtml(rnPlan, rnActual);
+    var renewalRateVal = Number(v('renewalRate')) || 0;
+    var renewalRatePct = Math.floor(renewalRateVal < 5 ? renewalRateVal * 100 : renewalRateVal);
+    html += '<div class="office-section">' +
+            '<div class="office-section-title">継続</div>' +
+            '<div class="office-gauge-block">' +
+            '<div class="office-gauge-row"><span class="office-gauge-label">次月継続</span>' +
+            '<div class="office-gauge-inputs">' +
+            '計<input class="office-field-input import-field-input" type="number" step="any" data-key="renewalNextPlanTop" value="' + rnPlan + '">' +
+            '実<input class="office-field-input import-field-input" type="number" step="any" data-key="renewalNextActualTop" value="' + rnActual + '">' +
+            rnG.html + '</div></div>' +
+            '<div class="progress-bar"><div class="progress-fill ' + getProgressColorClass(rnG.rate) + '" style="width:' + Math.min(rnG.rate,100) + '%"></div></div>' +
+            '</div>' +
+            simpleRow('renewalThisPrev') +
+            simpleRow('renewalThisPlan') +
+            simpleRow('renewalThisActual');
+    if (isOffice) {
+      html += '<div class="office-field-row"><span class="office-field-label">継続率</span>' +
+              '<span class="import-rate" style="color:' + getAccentColor(getProgressColorClass(renewalRatePct)) + '">' + renewalRatePct + '%</span>' +
+              '<input type="hidden" class="import-field-input" data-key="renewalRate" value="' + renewalRateVal + '">' +
+              '</div>';
+    }
+    html += '</div>';
+  }
+
+  // ── 翌月以降ブロック ─────────────────────────
+  {
+    var rn2Plan   = Number(v('renewalNext2Plan'))   || 0;
+    var rn2Actual = Number(v('renewalNext2Actual')) || 0;
+    var rn2G = _gaugeRateHtml(rn2Plan, rn2Actual);
+    var rn2RateVal = Number(v('renewalNext2Rate')) || 0;
+    var rn2RatePct = Math.floor(rn2RateVal < 5 ? rn2RateVal * 100 : rn2RateVal);
+    html += '<div class="office-section office-section-next">' +
+            '<div class="office-section-title">翌月以降</div>' +
+            simpleRow('nextMonthBacklog') +
+            simpleRow('nextMonthCase') +
+            '<div class="office-gauge-block">' +
+            '<div class="office-gauge-row"><span class="office-gauge-label">次々月継続</span>' +
+            '<div class="office-gauge-inputs">' +
+            '計<input class="office-field-input import-field-input" type="number" step="any" data-key="renewalNext2Plan" value="' + rn2Plan + '">' +
+            '実<input class="office-field-input import-field-input" type="number" step="any" data-key="renewalNext2Actual" value="' + rn2Actual + '">' +
+            rn2G.html + '</div></div>' +
+            '<div class="progress-bar"><div class="progress-fill ' + getProgressColorClass(rn2G.rate) + '" style="width:' + Math.min(rn2G.rate,100) + '%"></div></div>' +
+            '</div>' +
+            '<div class="office-field-row"><span class="office-field-label">次々月継続受注率</span>' +
+            '<span class="import-rate" style="color:' + getAccentColor(getProgressColorClass(rn2RatePct)) + '">' + rn2RatePct + '%</span>' +
+            '<input type="hidden" class="import-field-input" data-key="renewalNext2Rate" value="' + rn2RateVal + '">' +
+            '</div>' +
+            '</div>';
+  }
+
   container.innerHTML = html;
 }
 
@@ -1794,12 +3293,14 @@ async function saveOfficeDailyFromModal() {
     closeOfficeDailyModal();
 
     // 保存フィードバック
-    var bar = document.getElementById('btn-office-daily-import').parentNode;
-    var fb  = document.createElement('span');
-    fb.className   = 'import-feedback';
-    fb.textContent = '✓ 取込完了';
-    bar.appendChild(fb);
-    setTimeout(function() { if (fb.parentNode) fb.parentNode.removeChild(fb); }, 2500);
+    var fbContainer = document.getElementById('office-daily-import-feedback');
+    if (fbContainer) {
+      fbContainer.textContent = '✓ 取込完了';
+      fbContainer.style.color = 'var(--accent-emerald)';
+      fbContainer.style.fontSize = '13px';
+      fbContainer.style.marginTop = '8px';
+      setTimeout(function() { if (fbContainer) fbContainer.textContent = ''; }, 2500);
+    }
   } catch (err) {
     alert('保存エラー: ' + err.message);
   } finally {
@@ -1813,15 +3314,33 @@ async function saveOfficeDailyFromModal() {
 // ------------------------------------------------------------------
 
 function initApp() {
-  initTabs();
+  initNavigation();
   updateHeaderDate();
   initInputTab();
   initDashboardTab();
   initHistoryTab();
   initKgiTab();
   initAiReportCard();
+  initOfficeAiReportCard();
   initOfficeDailyImport();
+  initOfficeImportTab();
+  initOfficeHistoryTab();
+  initOfficeKgiTab();
+  initSetupTriggersBtn();
+  initScrollIntoViewOnFocus();
   console.log('Nice Serviceman 日報 - 初期化完了');
+}
+
+// キーボード表示時にフォーカス中の入力欄が隠れないよう scrollIntoView する（iOS Safari 対策）
+function initScrollIntoViewOnFocus() {
+  document.getElementById('content').addEventListener('focusin', function(e) {
+    var el = e.target;
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+      setTimeout(function() {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 300);
+    }
+  });
 }
 
 // DOMの準備ができたら起動

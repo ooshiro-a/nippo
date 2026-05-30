@@ -95,6 +95,15 @@ function doGet(e) {
     } else if (action === 'getAllData') {
       result = getAllDataImpl();
 
+    } else if (action === 'getAllOfficeData') {
+      result = getOfficeDailyImpl({ scope: 'office' });
+
+    } else if (action === 'getUserSettings') {
+      result = getUserSettingsImpl();
+
+    } else if (action === 'getOfficeSettings') {
+      result = getOfficeSettingsImpl();
+
     } else if (action === 'getLatestReport') {
       result = getLatestReportImpl(e.parameter.type || '');
 
@@ -134,6 +143,18 @@ function doPost(e) {
 
     } else if (action === 'generateReport') {
       result = generateReportImpl(data);
+
+    } else if (action === 'generateOfficeReport') {
+      result = generateOfficeReportImpl(data);
+
+    } else if (action === 'saveUserSettings') {
+      result = saveUserSettingsImpl(data);
+
+    } else if (action === 'saveOfficeSettings') {
+      result = saveOfficeSettingsImpl(data);
+
+    } else if (action === 'saveFeedback') {
+      result = saveFeedbackImpl(data);
 
     } else {
       result = { error: '不明なアクション: ' + action };
@@ -627,6 +648,46 @@ function generateReportImpl(data) {
   var tLabel = type === 'weekly' ? '週次' : '月次';
   var pKey   = type === 'weekly' ? '週' : '月';
 
+  // ── 注力事項 ──
+  var settings   = getUserSettingsImpl();
+  var focusItems = (settings.focusItems || '').trim();
+  var focusSection = focusItems
+    ? '\n【注力事項（ユーザー設定）】\n' + focusItems + '\n'
+    : '';
+
+  // ── 遅れ指標（月次のみ、数値根拠付き）──
+  var lagSection = '';
+  if (type === 'monthly') {
+    var bdStats  = _getBusinessDayStats(yearMonth);
+    var idealRate = bdStats.total > 0 ? bdStats.elapsed / bdStats.total : 0;
+    var remainDays = bdStats.total - bdStats.elapsed;
+    var lagLines = KPI_KEYS.filter(function(key) {
+      var cur  = sum(curData, key);
+      var plan = budget ? (Number(budget[key]) || 0) : 0;
+      return plan > 0 && (cur / plan) < idealRate * 0.8;
+    }).map(function(key) {
+      var cur  = sum(curData, key);
+      var plan = Number(budget[key]);
+      var remaining = plan - cur;
+      var perDay = remainDays > 0 ? Math.ceil(remaining / remainDays) : remaining;
+      return '  - ' + KPI_LABELS[key] + ': 計画比' + Math.round(cur / plan * 100)
+           + '%、残' + remainDays + '日で1日あたり' + fmt(key, perDay) + '必要';
+    }).join('\n');
+    if (lagLines) lagSection = '\n【遅れ指標（数値根拠）】\n' + lagLines + '\n';
+  }
+
+  // ── 過去フィードバック ──
+  var feedbacks  = getRecentFeedbackImpl('personal', 3);
+  var fbSection  = '';
+  if (feedbacks.length) {
+    fbSection = '\n【過去のフィードバック（直近' + feedbacks.length + '件）】\n' +
+      feedbacks.map(function(f) {
+        return '  ' + (f.score > 0 ? '👍' : '👎') + ' ' + f.reportType
+             + '(' + f.reportPeriod + '): '
+             + [f.goodComment, f.badComment].filter(Boolean).join(' / ');
+      }).join('\n') + '\n';
+  }
+
   var prompt =
     'あなたは優秀な営業マネージャーです。以下の' + tLabel + '営業データを分析し、' +
     '必ず下記の形式のみで出力してください。形式以外の文言は不要です。\n\n' +
@@ -634,12 +695,17 @@ function generateReportImpl(data) {
     '【KPI実績 vs ' + tLabel + '目標】\n' + kpiLines + '\n\n' +
     '【今' + pKey + 'の気づき・次の一手】\n' +
     (insights    || '  （記録なし）') + '\n' +
-    (nextActions || '') + '\n\n' +
-    '# 出力形式（厳守）\n' +
+    (nextActions || '') + '\n' +
+    focusSection + lagSection + fbSection +
+    '\n# 出力形式（厳守）\n' +
     '① 良点\n・〇〇\n・〇〇\n\n' +
     '② 改善点\n・〇〇\n・〇〇\n\n' +
     '③ まとめ\n150〜200文字で簡潔に記載\n\n' +
-    '④ 次回アクション提案\n・〇〇\n・〇〇';
+    (focusItems ? '④ 注力事項の進捗コメント\n注力事項それぞれについて1〜2文で現状を評価\n\n' : '') +
+    '⑤ ネクストアクション\n' +
+    (lagSection ? '・遅れ指標について：「残◯日で1日あたり◯件/◯円」形式で具体的に記載\n' : '') +
+    (focusItems ? '・注力事項を加速させる行動を1〜2点提案\n' : '') +
+    '・その他改善に直結する行動提案';
 
   var content = _callGemini(prompt);
 
@@ -667,6 +733,238 @@ function getLatestReportImpl(type) {
   return { success: true, content: null };
 }
 
+function generateOfficeReportImpl(data) {
+  var type    = data.type; // 'weekly' | 'monthly'
+  var today   = dateToYMD(new Date());
+  var ym      = today.slice(0, 7);
+
+  var curRows  = getOfficeDailyImpl({ dateFrom: ym + '-01', dateTo: ym + '-31', scope: 'office' });
+  var parts    = ym.split('-').map(Number);
+  var pY = parts[0], pM = parts[1] - 1;
+  if (pM === 0) { pY--; pM = 12; }
+  var prevYm   = pY + '-' + (pM < 10 ? '0' + pM : String(pM));
+  var prevRows = getOfficeDailyImpl({ dateFrom: prevYm + '-01', dateTo: prevYm + '-31', scope: 'office' });
+
+  function getLatest(rows) {
+    if (!rows.length) return {};
+    return rows.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, rows[0]);
+  }
+
+  var curEntry, prevEntry, periodLabel;
+
+  if (type === 'weekly') {
+    var jstNow     = new Date(new Date().getTime() + 9 * 3600000);
+    var dow        = jstNow.getUTCDay() || 7;
+    var weekStartMs = jstNow.getTime() - (dow - 1) * 86400000;
+    var weekStart  = new Date(weekStartMs).toISOString().slice(0, 10);
+    var prevWeekStart = new Date(weekStartMs - 7 * 86400000).toISOString().slice(0, 10);
+    var prevWeekEnd   = new Date(weekStartMs - 86400000).toISOString().slice(0, 10);
+
+    var curWeek  = curRows.filter(function(r) { return r.date >= weekStart && r.date <= today; });
+    var pwYm     = prevWeekStart.slice(0, 7);
+    var pwBase   = (pwYm === ym) ? curRows : prevRows;
+    var prevWeek = pwBase.filter(function(r) { return r.date >= prevWeekStart && r.date <= prevWeekEnd; });
+    curEntry  = getLatest(curWeek);
+    prevEntry = getLatest(prevWeek);
+    periodLabel = weekStart + ' 〜 ' + today;
+  } else {
+    curEntry  = getLatest(curRows);
+    prevEntry = getLatest(prevRows);
+    periodLabel = ym;
+  }
+
+  var n = function(e, key) { return Number(e[key]) || 0; };
+  var fmt = function(key, v) {
+    return (key === 'salesActual' || key === 'salesForecast') ? '¥' + v.toLocaleString() : v + '件';
+  };
+
+  var KPI_DEFS = [
+    { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検件数' },
+    { key: 'salesActual',          planKey: 'salesPlan',           label: '売上実績' },
+    { key: 'salesForecast',        planKey: 'salesPlan',           label: '末見通し' },
+    { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop',  label: '次月継続' },
+    { key: 'totalMaintActual',     planKey: 'totalMaintPlan',      label: '総保守台数' },
+  ];
+
+  var tLabel = type === 'weekly' ? '週次' : '月次';
+  var pKey   = type === 'weekly' ? '週' : '月';
+
+  var kpiLines = KPI_DEFS.map(function(def) {
+    var cur  = n(curEntry,  def.key);
+    var prev = n(prevEntry, def.key);
+    var plan = n(curEntry,  def.planKey);
+    var rateStr = plan > 0 ? '（' + Math.round(cur / plan * 100) + '%）' : '';
+    var diff    = cur - prev;
+    var compStr = (type === 'weekly' ? ' 先週末比' : ' 先月比') + (diff >= 0 ? '+' : '') + diff;
+    return '  - ' + def.label + ': 実績' + fmt(def.key, cur) + ' / 目標' + fmt(def.key, plan) + rateStr + compStr;
+  }).join('\n');
+
+  // ── 注力事項 ──
+  var officeSettings   = getOfficeSettingsImpl();
+  var officeFocusItems = (officeSettings.focusItems || '').trim();
+  var officeFocusSection = officeFocusItems
+    ? '\n【注力事項（管理者設定）】\n' + officeFocusItems + '\n'
+    : '';
+
+  // ── 遅れ指標（月次のみ）──
+  var officeLagSection = '';
+  if (type === 'monthly') {
+    var bdStats2     = _getBusinessDayStats(ym);
+    var idealRate2   = bdStats2.total > 0 ? bdStats2.elapsed / bdStats2.total : 0;
+    var remainDays2  = bdStats2.total - bdStats2.elapsed;
+    var officeLagDefs = [
+      { key: 'inspectionActual', planKey: 'inspectionPlan',        label: '点検件数',   isMoney: false },
+      { key: 'salesActual',      planKey: 'salesPlan',             label: '売上実績',   isMoney: true  },
+      { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop', label: '次月継続',  isMoney: false },
+      { key: 'totalMaintActual', planKey: 'totalMaintPlan',        label: '総保守台数', isMoney: false },
+    ];
+    var officeLagLines = officeLagDefs.filter(function(def) {
+      var cur  = n(curEntry, def.key);
+      var plan = n(curEntry, def.planKey);
+      return plan > 0 && (cur / plan) < idealRate2 * 0.8;
+    }).map(function(def) {
+      var cur  = n(curEntry, def.key);
+      var plan = n(curEntry, def.planKey);
+      var remaining = plan - cur;
+      var perDay = remainDays2 > 0 ? Math.ceil(remaining / remainDays2) : remaining;
+      var perDayStr = def.isMoney ? '¥' + perDay.toLocaleString() : perDay + '件';
+      return '  - ' + def.label + ': 計画比' + Math.round(cur / plan * 100)
+           + '%、残' + remainDays2 + '日で1日あたり' + perDayStr + '必要';
+    }).join('\n');
+    if (officeLagLines) officeLagSection = '\n【遅れ指標（数値根拠）】\n' + officeLagLines + '\n';
+  }
+
+  // ── 過去フィードバック ──
+  var officeFeedbacks = getRecentFeedbackImpl('office', 3);
+  var officeFbSection = '';
+  if (officeFeedbacks.length) {
+    officeFbSection = '\n【過去のフィードバック（直近' + officeFeedbacks.length + '件）】\n' +
+      officeFeedbacks.map(function(f) {
+        return '  ' + (f.score > 0 ? '👍' : '👎') + ' ' + f.reportType
+             + '(' + f.reportPeriod + '): '
+             + [f.goodComment, f.badComment].filter(Boolean).join(' / ');
+      }).join('\n') + '\n';
+  }
+
+  var prompt =
+    'あなたは優秀な営業マネージャーです。以下の' + tLabel + '営業所データを分析し、' +
+    '必ず下記の形式のみで出力してください。形式以外の文言は不要です。\n\n' +
+    '【対象期間】' + periodLabel + '\n\n' +
+    '【KPI実績 vs ' + tLabel + '目標】\n' + kpiLines + '\n' +
+    officeFocusSection + officeLagSection + officeFbSection +
+    '\n【出力形式】\n' +
+    '① 全体評価（2文以内）\n' +
+    '② 強み（箇条書き2〜3点）\n' +
+    '③ 課題（箇条書き2〜3点）\n' +
+    (officeFocusItems ? '④ 注力事項の進捗コメント\n注力事項それぞれについて1〜2文で評価\n' : '') +
+    '⑤ ネクストアクション\n' +
+    (officeLagSection ? '・遅れ指標について：「残◯日で1日あたり◯件/◯円」形式で具体的に記載\n' : '') +
+    (officeFocusItems ? '・注力事項を加速させる行動を1〜2点提案\n' : '') +
+    '・その他改善に直結する行動提案';
+
+  var content = _callGemini(prompt);
+
+  saveOfficeReportImpl({
+    type: type, period: periodLabel, scope: 'office',
+    generatedAt: new Date().toISOString(), modelUsed: 'gemini',
+    content: content, metrics: ''
+  });
+
+  return { success: true, content: content, period: periodLabel };
+}
+
+// ============================================================
+// ユーザー設定・フィードバック
+// ============================================================
+
+function _ensureSheet(name, cols) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, cols.length).setValues([cols]);
+    sheet.getRange(1, 1, 1, cols.length).setFontWeight('bold');
+  }
+  return sheet;
+}
+
+function _getSettingsImpl(sheetName) {
+  var sheet = _ensureSheet(sheetName, USER_SETTINGS_COLS);
+  var last  = sheet.getLastRow();
+  if (last < 2) return {};
+  var rows = sheet.getRange(2, 1, last - 1, 3).getValues();
+  var obj  = {};
+  rows.forEach(function(r) { if (r[0]) obj[r[0]] = r[1]; });
+  return obj;
+}
+
+function _saveSettingsImpl(sheetName, data) {
+  var sheet = _ensureSheet(sheetName, USER_SETTINGS_COLS);
+  var last  = sheet.getLastRow();
+  var now   = new Date().toISOString();
+  if (last >= 2) {
+    var rows = sheet.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i][0] === data.key) {
+        sheet.getRange(i + 2, 2, 1, 2).setValues([[data.value, now]]);
+        return { success: true };
+      }
+    }
+  }
+  sheet.appendRow([data.key, data.value, now]);
+  return { success: true };
+}
+
+function getUserSettingsImpl()            { return _getSettingsImpl(SHEET_USER_SETTINGS); }
+function saveUserSettingsImpl(data)       { return _saveSettingsImpl(SHEET_USER_SETTINGS, data); }
+function getOfficeSettingsImpl()          { return _getSettingsImpl(SHEET_OFFICE_SETTINGS); }
+function saveOfficeSettingsImpl(data)     { return _saveSettingsImpl(SHEET_OFFICE_SETTINGS, data); }
+
+function saveFeedbackImpl(data) {
+  var sheet = _ensureSheet(SHEET_AI_FEEDBACK, AI_FEEDBACK_COLS);
+  var id = Utilities.getUuid();
+  sheet.appendRow([
+    id, data.scope || '', data.reportType || '', data.reportPeriod || '',
+    Number(data.score) || 0,
+    data.goodComment || '', data.badComment || '',
+    new Date().toISOString()
+  ]);
+  return { success: true, feedbackId: id };
+}
+
+function getRecentFeedbackImpl(scope, limit) {
+  limit = limit || 3;
+  var sheet = _ensureSheet(SHEET_AI_FEEDBACK, AI_FEEDBACK_COLS);
+  var last  = sheet.getLastRow();
+  if (last < 2) return [];
+  var rows = sheet.getRange(2, 1, last - 1, AI_FEEDBACK_COLS.length).getValues();
+  var filtered = rows.filter(function(r) { return r[1] === scope; });
+  return filtered.slice(-limit).map(function(r) {
+    return {
+      feedbackId: r[0], scope: r[1], reportType: r[2], reportPeriod: r[3],
+      score: Number(r[4]) || 0, goodComment: r[5], badComment: r[6], createdAt: r[7]
+    };
+  });
+}
+
+// 経過営業日数（土日除く）を返す
+function _getBusinessDayStats(ym) {
+  var todayStr = dateToYMD(new Date());
+  var year     = parseInt(ym.slice(0, 4));
+  var month    = parseInt(ym.slice(5, 7));
+  var daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  var elapsed = 0, total = 0;
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dow = new Date(Date.UTC(year, month - 1, d)).getUTCDay();
+    if (dow !== 0 && dow !== 6) {
+      total++;
+      var ds = ym + '-' + (d < 10 ? '0' : '') + d;
+      if (ds <= todayStr) elapsed++;
+    }
+  }
+  return { elapsed: elapsed, total: total };
+}
+
 // 毎週金曜 18 時に自動実行（setupAiTriggers() で登録）
 function weeklyReportTrigger() {
   try { generateReportImpl({ type: 'weekly' }); }
@@ -678,22 +976,26 @@ function weeklyReportTrigger() {
 // ============================================================
 
 function isHolidayOrWeekend(date) {
-  var dow = date.getDay(); // 0=日, 6=土
+  var dow = date.getUTCDay(); // UTC基準（UTC midnight で統一）
   if (dow === 0 || dow === 6) return true;
   var calId = 'ja.japanese.official#holiday@group.v.calendar.google.com';
   var cal = CalendarApp.getCalendarById(calId);
   if (!cal) return false;
-  var start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  var end   = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  var start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  var end   = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1));
   return cal.getEvents(start, end).length > 0;
 }
 
 function isLastBusinessDayOfMonth() {
-  var jst   = new Date(new Date().getTime() + 9 * 3600000);
-  var today = jst.toISOString().slice(0, 10);
-  var lastDay = new Date(jst.getFullYear(), jst.getMonth() + 1, 0);
+  // dateToYMD(new Date()) → JST日付文字列（タイムゾーン非依存）
+  var today  = dateToYMD(new Date());
+  var parts  = today.split('-');
+  var year   = parseInt(parts[0]);
+  var month  = parseInt(parts[1]);
+  // Date.UTC で月末日を取得（ローカルタイムゾーン不使用）
+  var lastDay = new Date(Date.UTC(year, month, 0));
   while (isHolidayOrWeekend(lastDay)) {
-    lastDay.setDate(lastDay.getDate() - 1);
+    lastDay.setUTCDate(lastDay.getUTCDate() - 1);
   }
   return today === lastDay.toISOString().slice(0, 10);
 }
@@ -742,6 +1044,14 @@ function gasGetLatestReport(type) {
   return JSON.stringify(getLatestReportImpl(type || ''));
 }
 
+function gasGenerateOfficeReport(type) {
+  return JSON.stringify(generateOfficeReportImpl({ type: type }));
+}
+
+function gasGetAllOfficeData() {
+  return JSON.stringify(getOfficeDailyImpl({ scope: 'office' }));
+}
+
 // ============================================================
 // 営業所管理機能（Step A1〜）
 // ============================================================
@@ -788,6 +1098,18 @@ var OFFICE_REPORTS_COLS = [
   'generatedAt', 'modelUsed', 'content', 'metrics'
 ];
 
+// 設定・フィードバックシート定数
+var SHEET_USER_SETTINGS   = 'userSettings';
+var SHEET_OFFICE_SETTINGS = 'officeSettings';
+var SHEET_AI_FEEDBACK     = 'aiFeedback';
+
+var USER_SETTINGS_COLS   = ['key', 'value', 'updatedAt'];
+var OFFICE_SETTINGS_COLS = ['key', 'value', 'updatedAt'];
+var AI_FEEDBACK_COLS     = [
+  'feedbackId', 'scope', 'reportType', 'reportPeriod',
+  'score', 'goodComment', 'badComment', 'createdAt'
+];
+
 /**
  * 3つの営業所シートをなければ作成しヘッダーを設定する
  */
@@ -797,7 +1119,10 @@ function _ensureOfficeSheets() {
   var sheetsToCreate = [
     { name: SHEET_OFFICE_DAILY,      cols: OFFICE_DAILY_COLS },
     { name: SHEET_OFFICE_SALES_PLAN, cols: OFFICE_SALES_PLAN_COLS },
-    { name: SHEET_OFFICE_REPORTS,    cols: OFFICE_REPORTS_COLS }
+    { name: SHEET_OFFICE_REPORTS,    cols: OFFICE_REPORTS_COLS },
+    { name: SHEET_USER_SETTINGS,     cols: USER_SETTINGS_COLS },
+    { name: SHEET_OFFICE_SETTINGS,   cols: OFFICE_SETTINGS_COLS },
+    { name: SHEET_AI_FEEDBACK,       cols: AI_FEEDBACK_COLS }
   ];
 
   var created = [];
@@ -824,14 +1149,19 @@ function _ensureOfficeSheets() {
  */
 function getOfficeDailyImpl(params) {
   params = params || {};
-  var sheet = getSheet(SHEET_OFFICE_DAILY);
-  var rows  = sheetToObjects(sheet, OFFICE_DAILY_COLS);
+  // シートが存在しない場合は空配列を返す（初回利用時）
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_OFFICE_DAILY);
+  if (!sheet) return [];
 
+  var rows = sheetToObjects(sheet, OFFICE_DAILY_COLS);
+
+  // Date型セルを "YYYY-MM-DD" に正規化してから比較
   if (params.dateFrom) {
-    rows = rows.filter(function(r) { return String(r.date) >= params.dateFrom; });
+    rows = rows.filter(function(r) { return dateToYMD(r.date) >= params.dateFrom; });
   }
   if (params.dateTo) {
-    rows = rows.filter(function(r) { return String(r.date) <= params.dateTo; });
+    rows = rows.filter(function(r) { return dateToYMD(r.date) <= params.dateTo; });
   }
   if (params.scope) {
     rows = rows.filter(function(r) { return r.scope === params.scope; });
@@ -840,7 +1170,8 @@ function getOfficeDailyImpl(params) {
   return rows.map(function(r) {
     var obj = {};
     OFFICE_DAILY_COLS.forEach(function(col) {
-      obj[col] = r[col] !== undefined ? r[col] : '';
+      // date フィールドは必ず "YYYY-MM-DD" 文字列で返す
+      obj[col] = (col === 'date') ? (dateToYMD(r[col]) || '') : (r[col] !== undefined ? r[col] : '');
     });
     return obj;
   });
@@ -852,6 +1183,7 @@ function getOfficeDailyImpl(params) {
  */
 function saveOfficeDailyImpl(entries) {
   if (!Array.isArray(entries)) entries = [entries];
+  _ensureOfficeSheets();  // シートが存在しない場合は自動作成
   var sheet   = getSheet(SHEET_OFFICE_DAILY);
   var lastRow = sheet.getLastRow();
   var saved   = 0;
@@ -874,7 +1206,7 @@ function saveOfficeDailyImpl(entries) {
       var memberIdx   = OFFICE_DAILY_COLS.indexOf('memberId') + 1;
       var keyRange    = sheet.getRange(2, 1, lastRow - 1, OFFICE_DAILY_COLS.length).getValues();
       for (var i = 0; i < keyRange.length; i++) {
-        if (String(keyRange[i][dateIdx - 1])   === date &&
+        if (dateToYMD(keyRange[i][dateIdx - 1]) === dateToYMD(date) &&
             String(keyRange[i][scopeIdx - 1])  === scope &&
             String(keyRange[i][memberIdx - 1]) === memberId) {
           matchRow = i + 2;
@@ -977,7 +1309,7 @@ function saveOfficeSalesPlanImpl(entries) {
       var memberIdx = OFFICE_SALES_PLAN_COLS.indexOf('memberId')  + 1;
       var keyRange  = sheet.getRange(2, 1, lastRow - 1, OFFICE_SALES_PLAN_COLS.length).getValues();
       for (var i = 0; i < keyRange.length; i++) {
-        if (String(keyRange[i][ymIdx - 1]).slice(0, 7) === ym &&
+        if (dateToYMD(keyRange[i][ymIdx - 1]).slice(0, 7) === ym &&
             String(keyRange[i][scopeIdx - 1])          === scope &&
             String(keyRange[i][memberIdx - 1])         === memberId) {
           matchRow = i + 2;
@@ -1079,6 +1411,30 @@ function gasGetOfficeReports(paramsJson) {
 function gasSaveOfficeReport(reportJson) {
   var report = typeof reportJson === 'string' ? JSON.parse(reportJson) : reportJson;
   return JSON.stringify(saveOfficeReportImpl(report));
+}
+
+function gasSetupAiTriggers() {
+  setupAiTriggers();
+  return JSON.stringify({ success: true });
+}
+
+function gasGetUserSettings() {
+  return JSON.stringify(getUserSettingsImpl());
+}
+function gasSaveUserSettings(dataJson) {
+  var d = typeof dataJson === 'string' ? JSON.parse(dataJson) : dataJson;
+  return JSON.stringify(saveUserSettingsImpl(d));
+}
+function gasGetOfficeSettings() {
+  return JSON.stringify(getOfficeSettingsImpl());
+}
+function gasSaveOfficeSettings(dataJson) {
+  var d = typeof dataJson === 'string' ? JSON.parse(dataJson) : dataJson;
+  return JSON.stringify(saveOfficeSettingsImpl(d));
+}
+function gasSaveFeedback(dataJson) {
+  var d = typeof dataJson === 'string' ? JSON.parse(dataJson) : dataJson;
+  return JSON.stringify(saveFeedbackImpl(d));
 }
 
 // ============================================================

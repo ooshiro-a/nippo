@@ -116,3 +116,27 @@ async function getOfficeReports(params) {
 async function saveOfficeReport(report) {
   return _callGas('gasSaveOfficeReport', JSON.stringify(report));
 }
+
+async function generateOfficeReport(type) {
+  return _callGas('gasGenerateOfficeReport', type);
+}
+
+async function getAllOfficeData() {
+  return _callGas('gasGetAllOfficeData');
+}
+
+async function getUserSettings() {
+  return _callGas('gasGetUserSettings');
+}
+async function saveUserSettings(data) {
+  return _callGas('gasSaveUserSettings', JSON.stringify(data));
+}
+async function getOfficeSettings() {
+  return _callGas('gasGetOfficeSettings');
+}
+async function saveOfficeSettings(data) {
+  return _callGas('gasSaveOfficeSettings', JSON.stringify(data));
+}
+async function saveFeedback(data) {
+  return _callGas('gasSaveFeedback', JSON.stringify(data));
+}

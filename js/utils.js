@@ -124,6 +124,36 @@ function formatCurrency(amount) {
 }
 
 /**
+ * 指定月の月経過率を返す（0〜100）
+ * @param {string} yearMonth - "YYYY-MM"
+ * @param {string} [asOfDate] - 基準日 "YYYY-MM-DD"、省略時は今日
+ */
+function calcElapsedPct(yearMonth, asOfDate) {
+  var today = asOfDate || getTodayJST();
+  var todayYM = today.slice(0, 7);
+  if (todayYM < yearMonth) return 0;
+  if (todayYM > yearMonth) return 100;
+  var parts = yearMonth.split('-').map(Number);
+  var daysInMonth = new Date(parts[0], parts[1], 0).getDate();
+  var todayDay = Number(today.slice(8, 10));
+  return Math.round(todayDay / daysInMonth * 100);
+}
+
+/**
+ * 達成率と月経過率からペース判定を返す
+ * @param {number} achieveRate
+ * @param {number} elapsedPct
+ * @returns {{ label: string, colorClass: string }}
+ */
+function calcPaceBadge(achieveRate, elapsedPct) {
+  var diff = achieveRate - elapsedPct;
+  if (diff >= 10)  return { label: '先行',    colorClass: 'green' };
+  if (diff >= -10) return { label: '順調',    colorClass: 'cyan'  };
+  if (diff >= -25) return { label: 'やや遅れ', colorClass: 'amber' };
+  return { label: '要注意', colorClass: 'red' };
+}
+
+/**
  * 今週の月曜日を YYYY-MM-DD で返す
  * @returns {string} e.g. "2026-05-11"
  */
