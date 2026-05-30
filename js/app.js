@@ -2363,11 +2363,12 @@ var _OFFICE_KPI_DEFS = [
 ];
 
 const officeHistState = {
-  view:      'daily',
-  yearMonth: getCurrentYearMonthJST(),
-  year:      Number(getTodayJST().slice(0, 4)),
-  quarter:   'all',
-  allData:   null,
+  view:        'daily',
+  yearMonth:   getCurrentYearMonthJST(),
+  year:        Number(getTodayJST().slice(0, 4)),
+  quarter:     'all',
+  allData:     null,
+  compareMode: false,
 };
 
 function initOfficeHistoryTab() {
@@ -2379,6 +2380,7 @@ function initOfficeHistoryTab() {
   document.getElementById('office-report-csv-btn').addEventListener('click',   _handleOfficeHistCsv);
   document.getElementById('office-report-print-btn').addEventListener('click', _handleOfficeHistPrint);
   document.getElementById('office-report-copy-btn').addEventListener('click',  _handleOfficeHistCopy);
+  document.getElementById('office-hist-compare-btn').addEventListener('click', _onOfficeHistCompareModeToggle);
   _renderOfficeHistPeriodControl();
 }
 
@@ -2466,6 +2468,7 @@ async function renderOfficeHistContent() {
     } else {
       _renderOfficeYearlyView(rows, container);
     }
+    _renderOfficeCompareContent(view);
   } catch (e) {
     container.innerHTML = '<div style="color:var(--accent-red);font-size:13px">読み込みエラー: ' + e.message + '</div>';
   }
@@ -2669,6 +2672,192 @@ function _renderOfficeYearlyView(entries, container) {
     return _buildOfficeHistoryCard(y.latest, y.year + '年（年末実績）', { extra: monthBreakdown });
   }).join('');
 }
+
+// ── 営業所 比較機能 ──────────────────────────────────────────
+let _officeCompareChart = null;
+
+function _onOfficeHistCompareModeToggle() {
+  officeHistState.compareMode = !officeHistState.compareMode;
+  const btn = document.getElementById('office-hist-compare-btn');
+  if (btn) btn.classList.toggle('hist-compare-btn-active', officeHistState.compareMode);
+  renderOfficeHistContent();
+}
+
+function _getOfficePrevPeriodInfo(view) {
+  const { yearMonth, year, quarter, allData } = officeHistState;
+  if (!allData) return null;
+  const rows = allData;
+
+  function sumRows(list) {
+    if (!list.length) return null;
+    const s = { inspectionPlan:0, inspectionActual:0, salesPlan:0, salesActual:0,
+                salesForecast:0, renewalNextPlanTop:0, renewalNextActualTop:0,
+                totalMaintPlan:0, totalMaintActual:0 };
+    list.forEach(function(r) {
+      Object.keys(s).forEach(function(k) { s[k] += (Number(r[k]) || 0); });
+    });
+    return s;
+  }
+
+  let currLabel, prevLabel, currRows, prevRows;
+
+  if (view === 'weekly') {
+    const [y, m] = yearMonth.split('-').map(Number);
+    const prevDate = new Date(Date.UTC(y, m - 1, 1));
+    prevDate.setUTCMonth(prevDate.getUTCMonth() - 1);
+    const prevYM = prevDate.toISOString().slice(0, 7);
+    currLabel = yearMonth;
+    prevLabel = prevYM;
+    currRows  = rows.filter(function(r) { return String(r.date).startsWith(yearMonth); });
+    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(prevYM); });
+  } else if (view === 'monthly') {
+    const prevYear = year - 1;
+    currLabel = year + '年';
+    prevLabel = prevYear + '年';
+    currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
+    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(prevYear)); });
+  } else if (view === 'quarterly') {
+    const prevYear = year - 1;
+    const qMap = { Q1:[1,2,3], Q2:[4,5,6], Q3:[7,8,9], Q4:[10,11,12], all:null };
+    const months = qMap[quarter];
+    currLabel = year + ' ' + (quarter === 'all' ? '通年' : quarter);
+    prevLabel = prevYear + ' ' + (quarter === 'all' ? '通年' : quarter);
+    function filterQ(ys, mths) {
+      return rows.filter(function(r) {
+        const d = String(r.date);
+        if (!d.startsWith(String(ys))) return false;
+        if (!mths) return true;
+        return mths.indexOf(Number(d.slice(5, 7))) >= 0;
+      });
+    }
+    currRows = filterQ(year, months);
+    prevRows = filterQ(prevYear, months);
+  } else if (view === 'yearly') {
+    const currYear = year;
+    const prevYear = year - 1;
+    currLabel = currYear + '年';
+    prevLabel = prevYear + '年';
+    currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(currYear)); });
+    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(prevYear)); });
+  } else {
+    const [y, m] = yearMonth.split('-').map(Number);
+    const prevDate = new Date(Date.UTC(y, m - 1, 1));
+    prevDate.setUTCMonth(prevDate.getUTCMonth() - 1);
+    const prevYM = prevDate.toISOString().slice(0, 7);
+    currLabel = yearMonth;
+    prevLabel = prevYM;
+    currRows  = rows.filter(function(r) { return String(r.date).startsWith(yearMonth); });
+    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(prevYM); });
+  }
+
+  const curr = sumRows(currRows);
+  const prev = sumRows(prevRows);
+  if (!curr && !prev) return null;
+  return { currentLabel: currLabel, prevLabel: prevLabel, curr: curr || {}, prev: prev || {} };
+}
+
+const OFFICE_CMP_METRICS = [
+  { key: 'inspectionPlan',       label: '点検計画',     unit: '件' },
+  { key: 'inspectionActual',     label: '点検実績',     unit: '件' },
+  { key: 'salesPlan',            label: '売上計画',     unit: '万円' },
+  { key: 'salesActual',          label: '売上実績',     unit: '万円' },
+  { key: 'salesForecast',        label: '末見通し',     unit: '万円' },
+  { key: 'renewalNextPlanTop',   label: '次月継続計画', unit: '件' },
+  { key: 'renewalNextActualTop', label: '次月継続実績', unit: '件' },
+  { key: 'totalMaintPlan',       label: '総保守計画',   unit: '件' },
+  { key: 'totalMaintActual',     label: '総保守実績',   unit: '件' },
+];
+
+function _buildOfficeComparisonCard(info) {
+  const rows = OFFICE_CMP_METRICS.map(function(m) {
+    const c = Number(info.curr[m.key] || 0);
+    const p = Number(info.prev[m.key] || 0);
+    const diff = c - p;
+    const pct  = p !== 0 ? ((diff / Math.abs(p)) * 100).toFixed(1) + '%' : '—';
+    const cls  = diff > 0 ? 'cmp-pos' : diff < 0 ? 'cmp-neg' : '';
+    const sign = diff > 0 ? '+' : '';
+    const fmt  = m.unit === '万円'
+      ? function(v) { return (v / 10000).toFixed(1) + '万'; }
+      : function(v) { return v + m.unit; };
+    return `<tr>
+      <td class="cmp-label">${m.label}</td>
+      <td class="cmp-val">${fmt(c)}</td>
+      <td class="cmp-base">${fmt(p)}</td>
+      <td class="cmp-val ${cls}">${sign}${fmt(diff)}</td>
+      <td class="cmp-val ${cls}">${sign}${pct}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="cmp-card">
+    <div class="cmp-header">期間比較</div>
+    <div class="cmp-legends">
+      <span class="cmp-legend-curr">■ ${info.currentLabel}（当期）</span>
+      <span class="cmp-legend-base">■ ${info.prevLabel}（比較）</span>
+    </div>
+    <div class="cmp-table-wrap">
+      <table class="cmp-table">
+        <thead><tr>
+          <th>指標</th><th>当期</th><th>比較期</th><th>差分</th><th>増減率</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="cmp-chart-wrap"><canvas id="office-cmp-chart"></canvas></div>
+  </div>`;
+}
+
+function _renderOfficeCompareChart(info) {
+  const canvas = document.getElementById('office-cmp-chart');
+  if (!canvas) return;
+  if (_officeCompareChart) { _officeCompareChart.destroy(); _officeCompareChart = null; }
+  const labels = ['点検計画', '点検実績', '次月継続計画', '次月継続実績', '総保守計画', '総保守実績'];
+  const keys   = ['inspectionPlan', 'inspectionActual', 'renewalNextPlanTop', 'renewalNextActualTop', 'totalMaintPlan', 'totalMaintActual'];
+  _officeCompareChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: info.currentLabel,
+          data: keys.map(function(k) { return Number(info.curr[k] || 0); }),
+          backgroundColor: 'rgba(0, 212, 255, 0.7)',
+        },
+        {
+          label: info.prevLabel,
+          data: keys.map(function(k) { return Number(info.prev[k] || 0); }),
+          backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#c8d6e5', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#8899aa', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#8899aa', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' } },
+      },
+    },
+  });
+}
+
+function _renderOfficeCompareContent(view) {
+  const container = document.getElementById('office-hist-compare-content');
+  if (!container) return;
+  if (!officeHistState.compareMode) {
+    container.innerHTML = '';
+    if (_officeCompareChart) { _officeCompareChart.destroy(); _officeCompareChart = null; }
+    return;
+  }
+  const info = _getOfficePrevPeriodInfo(view);
+  if (!info) {
+    container.innerHTML = '<div class="hist-empty" style="font-size:12px">比較対象のデータが見つかりませんでした</div>';
+    return;
+  }
+  container.innerHTML = _buildOfficeComparisonCard(info);
+  _renderOfficeCompareChart(info);
+}
+
+// ─────────────────────────────────────────────────────────────
 
 async function _handleOfficeHistCsv(evt) {
   const btn = evt.target;

@@ -162,3 +162,43 @@ async function saveOfficeSettings(data) {
 async function saveFeedback(data) {
   return _post({ action: 'saveFeedback', data });
 }
+
+// ============================================================
+// 営業所管理機能（Step A1〜）
+// ============================================================
+
+async function setupOfficeSheets() {
+  return _post({ action: 'setupOfficeSheets', data: {} });
+}
+
+async function getOfficeDaily(params) {
+  const p = Object.assign({ action: 'getOfficeDaily' }, params || {});
+  return _get(p);
+}
+
+async function saveOfficeDaily(entries) {
+  return _post({ action: 'saveOfficeDaily', data: entries });
+}
+
+async function deleteOfficeDaily(params) {
+  return _post({ action: 'deleteOfficeDaily', data: params });
+}
+
+async function getOfficeSalesPlan(yearMonth) {
+  const params = { action: 'getOfficeSalesPlan' };
+  if (yearMonth) params.yearMonth = yearMonth;
+  return _get(params);
+}
+
+async function saveOfficeSalesPlan(entries) {
+  return _post({ action: 'saveOfficeSalesPlan', data: entries });
+}
+
+async function getOfficeReports(params) {
+  const p = Object.assign({ action: 'getOfficeReports' }, params || {});
+  return _get(p);
+}
+
+async function saveOfficeReport(report) {
+  return _post({ action: 'saveOfficeReport', data: report });
+}
