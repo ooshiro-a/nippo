@@ -4230,7 +4230,21 @@ function initApp() {
   initAppHeightFix();
   initScrollIntoViewOnFocus();
   initSortable();
+  initHeaderReload();
   console.log('Nice Serviceman 日報 - 初期化完了');
+}
+
+function initHeaderReload() {
+  var btn = document.getElementById('header-title');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var u = location.href;
+    if (u.indexOf('googleusercontent') > -1 || u.indexOf('script.google') > -1) {
+      location.href = APPS_SCRIPT_URL;
+    } else {
+      location.href = u.split('?')[0] + '?t=' + Date.now();
+    }
+  });
 }
 
 // GAS iframe / 古い iOS 対応: window.innerHeight で app 高さを補正
