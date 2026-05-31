@@ -1424,6 +1424,18 @@ input.kgi-field-input {
   font-size: 13px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.modal-date-input {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 .modal-tabs {
   display: flex;
@@ -6975,7 +6987,11 @@ async function onOfficeDailyFileSelect(e) {
 }
 
 function openOfficeDailyConfirm(parsed) {
-  document.getElementById('office-import-date').textContent = parsed.date;
+  var dateInput = document.getElementById('office-import-date');
+  dateInput.value = parsed.date;
+  dateInput.onchange = function() {
+    if (_officeDailyParsed) _officeDailyParsed.date = this.value;
+  };
   _officeDailyScope = 'office';
   document.querySelectorAll('#office-import-modal .modal-tab').forEach(function(t, i) {
     t.classList.toggle('active', i === 0);
@@ -7464,7 +7480,7 @@ document.addEventListener('DOMContentLoaded', initApp);
     <div class="modal-content">
       <div class="modal-header">
         <span class="modal-title">日次取込 確認</span>
-        <span id="office-import-date" class="modal-date"></span>
+        <label class="modal-date">取込日：<input type="date" id="office-import-date" class="modal-date-input"></label>
       </div>
       <div class="modal-tabs">
         <button class="modal-tab active" data-scope="office">営業所合計</button>

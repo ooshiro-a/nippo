@@ -4131,7 +4131,11 @@ async function onOfficeDailyFileSelect(e) {
 }
 
 function openOfficeDailyConfirm(parsed) {
-  document.getElementById('office-import-date').textContent = parsed.date;
+  var dateInput = document.getElementById('office-import-date');
+  dateInput.value = parsed.date;
+  dateInput.onchange = function() {
+    if (_officeDailyParsed) _officeDailyParsed.date = this.value;
+  };
   _officeDailyScope = 'office';
   document.querySelectorAll('#office-import-modal .modal-tab').forEach(function(t, i) {
     t.classList.toggle('active', i === 0);

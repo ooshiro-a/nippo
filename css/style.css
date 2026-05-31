@@ -1409,6 +1409,18 @@ input.kgi-field-input {
   font-size: 13px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.modal-date-input {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 .modal-tabs {
   display: flex;
