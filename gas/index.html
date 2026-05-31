@@ -7080,15 +7080,32 @@ function initHeaderReload() {
   var btn = document.getElementById('header-title');
   if (!btn) return;
   btn.addEventListener('click', function() {
-    var u = location.href;
-    if (u.indexOf('googleusercontent') > -1 || u.indexOf('script.google') > -1) {
-      if (typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-        location.href = APPS_SCRIPT_URL;
-      } else {
-        location.reload();
-      }
+    historyState.allData = null;
+    var origText = btn.textContent;
+    btn.textContent = '更新中...';
+    btn.style.opacity = '0.5';
+    var tabId = (_activeSection === 'office') ? _lastOfficeTab : _lastPersonalTab;
+    var done = function() {
+      btn.textContent = origText;
+      btn.style.opacity = '';
+    };
+    var p;
+    if (tabId === 'tab-dashboard') {
+      p = refreshDashboard();
+    } else if (tabId === 'tab-history') {
+      p = renderHistContent();
+    } else if (tabId === 'tab-office-dashboard') {
+      p = refreshManagement();
+    } else if (tabId === 'tab-office-history') {
+      p = refreshOfficeHistory();
     } else {
-      location.href = u.split('?')[0] + '?t=' + Date.now();
+      var today = document.getElementById('entry-date') ? document.getElementById('entry-date').value : getTodayJST();
+      p = loadEntry(today || getTodayJST());
+    }
+    if (p && typeof p.then === 'function') {
+      p.then(done).catch(done);
+    } else {
+      done();
     }
   });
 }
