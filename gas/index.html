@@ -7079,7 +7079,13 @@ function initHeaderReload() {
   btn.addEventListener('click', function() {
     var u = location.href;
     if (u.indexOf('googleusercontent') > -1 || u.indexOf('script.google') > -1) {
-      location.href = APPS_SCRIPT_URL;
+      // GAS版: echo URLの ?lib= パラメータから /exec URLを逆算
+      var libMatch = u.match(/[?&]lib=([^&]+)/);
+      if (libMatch) {
+        location.href = 'https://script.google.com/macros/s/' + libMatch[1] + '/exec';
+      } else {
+        location.reload();
+      }
     } else {
       location.href = u.split('?')[0] + '?t=' + Date.now();
     }
