@@ -1750,6 +1750,54 @@ input.kgi-field-input {
   }
 }
 
+/* ------------------------------------------------------------
+   ブロック並び替え（ドラッグ＆ドロップ）
+   ------------------------------------------------------------ */
+.sort-item {
+  position: relative;
+}
+.sort-handle {
+  display: block;
+  text-align: center;
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 14px;
+  letter-spacing: 6px;
+  padding: 3px 0 5px;
+  user-select: none;
+  touch-action: none;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+.sort-handle:hover {
+  opacity: 0.9;
+  color: var(--accent-cyan);
+}
+.sort-item.sort-dragging {
+  opacity: 0.35;
+}
+.sort-item.sort-over-top {
+  border-top: 2px solid var(--accent-cyan);
+}
+.sort-item.sort-over-bottom {
+  border-bottom: 2px solid var(--accent-cyan);
+}
+.sort-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.75;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-cyan);
+  max-width: 500px;
+  width: 90vw;
+  overflow: hidden;
+}
+}
+
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 </head>
@@ -1789,24 +1837,31 @@ input.kgi-field-input {
         <!-- 📝 入力タブ -->
         <section id="tab-input" class="tab-pane active">
 
+          <div class="sort-item" data-sort-id="sort-input-date">
           <!-- 日付 -->
           <div class="card">
             <div class="card-title">日付</div>
             <input type="date" id="entry-date" />
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-input-kpi">
           <!-- KPI実績（JSで動的生成） -->
           <div class="card">
             <div class="card-title">KPI実績</div>
             <div id="entry-kpi-container"></div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-input-action">
           <!-- 信頼関係アクション -->
           <div class="card">
             <div class="card-title">信頼関係アクション</div>
             <div class="tag-group" id="relationship-tags"></div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-input-feedback">
           <!-- フィードバック -->
           <div class="card">
             <div class="card-title">フィードバック</div>
@@ -1827,7 +1882,9 @@ input.kgi-field-input {
               </div>
             </div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-input-memo">
           <!-- 訪問・メモ -->
           <div class="card">
             <div class="card-title">訪問・メモ</div>
@@ -1844,7 +1901,9 @@ input.kgi-field-input {
               <span>重要マーク</span>
             </label>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-input-reflection">
           <!-- 振り返り -->
           <div class="card">
             <div class="card-title">振り返り</div>
@@ -1857,6 +1916,7 @@ input.kgi-field-input {
               <textarea id="entry-next-action" placeholder="明日やること"></textarea>
             </div>
           </div>
+          </div>
 
           <button class="btn btn-primary" id="entry-save-btn">保存する</button>
         </section>
@@ -1864,6 +1924,7 @@ input.kgi-field-input {
         <!-- 📊 進捗タブ（個人） -->
         <section id="tab-dashboard" class="tab-pane">
 
+          <div class="sort-item" data-sort-id="sort-dash-weekly">
           <!-- 週次進捗ゲージ -->
           <div class="card dash-card-cyan" id="dash-weekly-card">
             <div class="dash-weekly-header">
@@ -1872,7 +1933,9 @@ input.kgi-field-input {
             </div>
             <div id="weekly-gauge-container"><div style="color:var(--text-muted);font-size:13px">読み込み中...</div></div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-dash-ai-report">
           <!-- AIレポート -->
           <div class="card" id="dash-ai-report-card">
             <div class="dash-ai-header">
@@ -1899,7 +1962,9 @@ input.kgi-field-input {
               <div id="ai-feedback-status" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
             </div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-dash-trust">
           <!-- 信頼関係指数 -->
           <div class="card dash-card-rose">
             <div class="card-title">信頼関係指数</div>
@@ -1913,7 +1978,9 @@ input.kgi-field-input {
               <span>ネガFB <span id="trust-neg-count">0</span>件 ×3pt</span>
             </div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-dash-plan">
           <!-- 個人計画達成率 -->
           <div class="card dash-card-emerald">
             <div class="card-title">促進受注額達成率</div>
@@ -1928,7 +1995,9 @@ input.kgi-field-input {
             </div>
             <div class="plan-shortage">不足額 <span id="personal-plan-shortage">¥0</span></div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-dash-unsettled">
           <!-- 個人末見額達成率 -->
           <div class="card dash-card-emerald">
             <div class="card-title">個人末見額達成率（個人計画額比）</div>
@@ -1943,7 +2012,9 @@ input.kgi-field-input {
             </div>
             <div class="plan-shortage">不足額 <span id="personal-unsettled-shortage">¥0</span></div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-dash-kpi-chart">
           <!-- KPI達成率チャート -->
           <div class="card">
             <div class="card-title">KPI達成率</div>
@@ -1951,7 +2022,9 @@ input.kgi-field-input {
               <canvas id="kpi-chart"></canvas>
             </div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-dash-office-unsettled">
           <!-- 営業所末見額達成率 -->
           <div class="card dash-card-amber">
             <div class="card-title">営業所末見額達成率（営業所計画額比）</div>
@@ -1966,11 +2039,13 @@ input.kgi-field-input {
             </div>
             <div class="plan-shortage">不足額 <span id="office-unsettled-shortage">¥0</span></div>
           </div>
+          </div>
 
         </section>
 
         <!-- 📅 履歴タブ（個人） -->
         <section id="tab-history" class="tab-pane">
+          <div class="sort-item" data-sort-id="sort-hist-controls">
           <div class="hist-controls">
             <div class="hist-controls-top">
               <select id="hist-view-select">
@@ -1984,7 +2059,9 @@ input.kgi-field-input {
             </div>
             <div id="hist-period-control"></div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-hist-report">
           <!-- レポート出力 -->
           <div id="report-controls" class="report-controls">
             <div class="report-btn-row">
@@ -1999,19 +2076,25 @@ input.kgi-field-input {
             </div>
             <div id="report-settings" class="report-settings" style="display:none"></div>
           </div>
+          </div>
 
-          <div id="hist-compare-content"></div>
-          <div id="hist-content"></div>
+          <div class="sort-item" data-sort-id="sort-hist-compare"><div id="hist-compare-content"></div></div>
+          <div class="sort-item" data-sort-id="sort-hist-content"><div id="hist-content"></div></div>
         </section>
 
         <!-- ⚙️ KGI設定タブ（個人） -->
         <section id="tab-kgi" class="tab-pane">
+          <div class="sort-item" data-sort-id="sort-kgi-month">
           <div class="card">
             <div class="card-title">対象月</div>
             <input type="month" id="kgi-month" />
           </div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-kgi-fields">
           <div id="kgi-fields-container"></div>
           <button class="btn btn-primary" id="kgi-save-btn">保存する</button>
+          </div>
+          <div class="sort-item" data-sort-id="sort-kgi-focus">
           <div class="card" id="focus-items-card" style="margin-top:16px">
             <div class="card-title">📌 注力事項（AIレポートに反映）</div>
             <textarea id="focus-items-input" rows="4"
@@ -2019,6 +2102,7 @@ input.kgi-field-input {
               style="width:100%;box-sizing:border-box;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px;resize:vertical;margin-top:8px"></textarea>
             <button class="btn btn-secondary" id="save-focus-items-btn" style="margin-top:8px">保存</button>
             <div id="focus-items-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+          </div>
           </div>
         </section>
 
@@ -2032,6 +2116,7 @@ input.kgi-field-input {
         <!-- 📄 取込タブ -->
         <section id="tab-office-import" class="tab-pane active">
 
+          <div class="sort-item" data-sort-id="sort-office-daily">
           <!-- 日計表取込エリア -->
           <div class="card">
             <div class="card-title">📄 日計表取込</div>
@@ -2040,7 +2125,9 @@ input.kgi-field-input {
             <input type="file" id="office-daily-file" accept=".xlsx,.xls" style="display:none">
             <div id="office-daily-import-feedback"></div>
           </div>
+          </div>
 
+          <div class="sort-item" data-sort-id="sort-office-plan">
           <!-- 売上計画取込エリア（セパレータ） -->
           <div class="card" style="margin-top:12px">
             <div class="card-title">📋 売上計画取込</div>
@@ -2049,14 +2136,18 @@ input.kgi-field-input {
             <input type="file" id="office-plan-file" accept=".xlsx,.xls" style="display:none">
             <div id="office-plan-import-feedback"></div>
           </div>
+          </div>
 
         </section>
 
         <!-- 📊 進捗タブ（営業所） -->
         <section id="tab-office-dashboard" class="tab-pane">
+          <div class="sort-item" data-sort-id="sort-office-mgmt">
           <div id="management-container">
             <div style="color:var(--text-muted);font-size:13px">読み込み中...</div>
           </div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-office-ai-report">
           <div class="card" id="office-dash-ai-report-card">
             <div class="dash-ai-header">
               <span class="card-title">🤖 AIレポート</span>
@@ -2082,10 +2173,12 @@ input.kgi-field-input {
               <div id="office-ai-feedback-status" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
             </div>
           </div>
+          </div>
         </section>
 
         <!-- 📅 履歴タブ（営業所） -->
         <section id="tab-office-history" class="tab-pane">
+          <div class="sort-item" data-sort-id="sort-office-hist-controls">
           <div class="hist-controls">
             <div class="hist-controls-top">
               <select id="office-hist-view-select">
@@ -2099,6 +2192,8 @@ input.kgi-field-input {
             </div>
             <div id="office-hist-period-control"></div>
           </div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-office-hist-report">
           <div id="office-report-controls" class="report-controls">
             <div class="report-btn-row">
               <button class="btn btn-secondary report-btn" id="office-report-csv-btn">CSV</button>
@@ -2106,19 +2201,25 @@ input.kgi-field-input {
               <button class="btn btn-secondary report-btn" id="office-report-copy-btn">上長報告</button>
             </div>
           </div>
-          <div id="office-hist-compare-content"></div>
-          <div id="office-history-container"></div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-office-hist-compare"><div id="office-hist-compare-content"></div></div>
+          <div class="sort-item" data-sort-id="sort-office-hist-content"><div id="office-history-container"></div></div>
         </section>
 
         <!-- ⚙️ KGI設定タブ（営業所） -->
         <section id="tab-office-kgi" class="tab-pane">
+          <div class="sort-item" data-sort-id="sort-office-kgi-month">
           <div class="card">
             <div class="card-title">対象月</div>
             <input type="month" id="office-kgi-month" />
           </div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-office-kgi-fields">
           <div id="office-kgi-fields">
             <div style="color:var(--text-muted);font-size:13px">読み込み中...</div>
           </div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-office-kgi-focus">
           <div class="card" id="office-focus-items-card" style="margin-top:16px">
             <div class="card-title">📌 注力事項（AIレポートに反映）</div>
             <textarea id="office-focus-items-input" rows="4"
@@ -2127,10 +2228,13 @@ input.kgi-field-input {
             <button class="btn btn-secondary" id="save-office-focus-items-btn" style="margin-top:8px">保存</button>
             <div id="office-focus-items-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
           </div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-office-kgi-auto">
           <div class="card" style="margin-top:16px">
             <div class="card-title" style="font-size:12px;color:var(--text-muted)">自動化設定</div>
             <p class="import-desc">月末営業日にAIレポートを自動生成します（初回1回だけ設定が必要）</p>
             <button class="btn btn-secondary" id="btn-office-setup-triggers">🕐 月末自動判定 トリガー設定</button>
+          </div>
           </div>
         </section>
 
@@ -6650,6 +6754,7 @@ function initApp() {
   initSetupTriggersBtn();
   initAppHeightFix();
   initScrollIntoViewOnFocus();
+  initSortable();
   console.log('Nice Serviceman 日報 - 初期化完了');
 }
 
@@ -6674,6 +6779,164 @@ function initScrollIntoViewOnFocus() {
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 300);
     }
+  });
+}
+
+// ============================================================
+// ブロック並び替え（ドラッグ＆ドロップ）
+// ============================================================
+var _sortState = {
+  dragging: null,    // ドラッグ中の .sort-item 要素
+  ghost: null,       // ゴースト要素
+  overEl: null,      // ハイライト中のターゲット
+  overPos: null,     // 'top' | 'bottom'
+  startX: 0,
+  startY: 0,
+  offsetX: 0,
+  offsetY: 0,
+};
+
+var _SORT_TABS = [
+  'tab-input', 'tab-dashboard', 'tab-history', 'tab-kgi',
+  'tab-office-import', 'tab-office-dashboard', 'tab-office-history', 'tab-office-kgi',
+];
+
+function initSortable() {
+  _SORT_TABS.forEach(function(tabId) {
+    var tab = document.getElementById(tabId);
+    if (!tab) return;
+    restoreSortOrder(tabId);
+    addSortHandles(tab);
+  });
+  document.addEventListener('pointermove', _onSortPointerMove);
+  document.addEventListener('pointerup', _onSortPointerUp);
+  document.addEventListener('pointercancel', _onSortPointerUp);
+}
+
+function addSortHandles(tabEl) {
+  tabEl.querySelectorAll(':scope > .sort-item').forEach(function(item) {
+    if (item.querySelector('.sort-handle')) return;
+    var handle = document.createElement('div');
+    handle.className = 'sort-handle';
+    handle.textContent = '· · ·';
+    handle.setAttribute('title', 'ドラッグして並び替え');
+    item.insertBefore(handle, item.firstChild);
+    handle.addEventListener('pointerdown', _onSortPointerDown);
+  });
+}
+
+function _onSortPointerDown(e) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  var handle = e.currentTarget;
+  var item = handle.parentElement;
+  var tab = item.parentElement;
+
+  var rect = item.getBoundingClientRect();
+  _sortState.dragging = item;
+  _sortState.offsetX = e.clientX - rect.left;
+  _sortState.offsetY = e.clientY - rect.top;
+  _sortState.startX = e.clientX;
+  _sortState.startY = e.clientY;
+  _sortState.tabEl = tab;
+
+  var ghost = item.cloneNode(true);
+  ghost.className = 'sort-ghost';
+  ghost.style.width = rect.width + 'px';
+  ghost.style.top = (e.clientY - _sortState.offsetY) + 'px';
+  ghost.style.left = (e.clientX - _sortState.offsetX) + 'px';
+  document.body.appendChild(ghost);
+  _sortState.ghost = ghost;
+
+  item.classList.add('sort-dragging');
+  handle.setPointerCapture(e.pointerId);
+}
+
+function _onSortPointerMove(e) {
+  if (!_sortState.dragging) return;
+  var ghost = _sortState.ghost;
+  ghost.style.top = (e.clientY - _sortState.offsetY) + 'px';
+  ghost.style.left = (e.clientX - _sortState.offsetX) + 'px';
+
+  // ゴーストを一時非表示にして要素取得
+  ghost.style.display = 'none';
+  var elBelow = document.elementFromPoint(e.clientX, e.clientY);
+  ghost.style.display = '';
+
+  _clearSortHighlight();
+
+  if (!elBelow) return;
+  var target = elBelow.closest('.sort-item');
+  if (!target || target === _sortState.dragging) return;
+  if (target.parentElement !== _sortState.tabEl) return;
+
+  var rect = target.getBoundingClientRect();
+  var mid = rect.top + rect.height / 2;
+  var pos = e.clientY < mid ? 'top' : 'bottom';
+
+  target.classList.add(pos === 'top' ? 'sort-over-top' : 'sort-over-bottom');
+  _sortState.overEl = target;
+  _sortState.overPos = pos;
+}
+
+function _onSortPointerUp(e) {
+  if (!_sortState.dragging) return;
+
+  var dragging = _sortState.dragging;
+  var overEl = _sortState.overEl;
+  var overPos = _sortState.overPos;
+  var tabEl = _sortState.tabEl;
+
+  if (overEl && overEl !== dragging) {
+    if (overPos === 'top') {
+      tabEl.insertBefore(dragging, overEl);
+    } else {
+      tabEl.insertBefore(dragging, overEl.nextSibling);
+    }
+    _saveSortOrder(tabEl.id);
+  }
+
+  dragging.classList.remove('sort-dragging');
+  _clearSortHighlight();
+  if (_sortState.ghost) {
+    _sortState.ghost.remove();
+  }
+  _sortState.dragging = null;
+  _sortState.ghost = null;
+  _sortState.overEl = null;
+  _sortState.overPos = null;
+  _sortState.tabEl = null;
+}
+
+function _clearSortHighlight() {
+  if (_sortState.overEl) {
+    _sortState.overEl.classList.remove('sort-over-top', 'sort-over-bottom');
+  }
+}
+
+function _saveSortOrder(tabId) {
+  var tab = document.getElementById(tabId);
+  if (!tab) return;
+  var order = [];
+  tab.querySelectorAll(':scope > .sort-item').forEach(function(item) {
+    order.push(item.dataset.sortId);
+  });
+  try {
+    localStorage.setItem('sortOrder_' + tabId, JSON.stringify(order));
+  } catch (ex) {}
+}
+
+function restoreSortOrder(tabId) {
+  var tab = document.getElementById(tabId);
+  if (!tab) return;
+  var saved;
+  try {
+    saved = JSON.parse(localStorage.getItem('sortOrder_' + tabId));
+  } catch (ex) { return; }
+  if (!Array.isArray(saved) || saved.length === 0) return;
+  saved.forEach(function(id) {
+    var el = tab.querySelector(':scope > [data-sort-id="' + id + '"]');
+    if (el) tab.appendChild(el);
   });
 }
 

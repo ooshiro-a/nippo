@@ -4014,6 +4014,7 @@ function initApp() {
   initSetupTriggersBtn();
   initAppHeightFix();
   initScrollIntoViewOnFocus();
+  initSortable();
   console.log('Nice Serviceman 日報 - 初期化完了');
 }
 
@@ -4038,6 +4039,164 @@ function initScrollIntoViewOnFocus() {
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 300);
     }
+  });
+}
+
+// ============================================================
+// ブロック並び替え（ドラッグ＆ドロップ）
+// ============================================================
+var _sortState = {
+  dragging: null,    // ドラッグ中の .sort-item 要素
+  ghost: null,       // ゴースト要素
+  overEl: null,      // ハイライト中のターゲット
+  overPos: null,     // 'top' | 'bottom'
+  startX: 0,
+  startY: 0,
+  offsetX: 0,
+  offsetY: 0,
+};
+
+var _SORT_TABS = [
+  'tab-input', 'tab-dashboard', 'tab-history', 'tab-kgi',
+  'tab-office-import', 'tab-office-dashboard', 'tab-office-history', 'tab-office-kgi',
+];
+
+function initSortable() {
+  _SORT_TABS.forEach(function(tabId) {
+    var tab = document.getElementById(tabId);
+    if (!tab) return;
+    restoreSortOrder(tabId);
+    addSortHandles(tab);
+  });
+  document.addEventListener('pointermove', _onSortPointerMove);
+  document.addEventListener('pointerup', _onSortPointerUp);
+  document.addEventListener('pointercancel', _onSortPointerUp);
+}
+
+function addSortHandles(tabEl) {
+  tabEl.querySelectorAll(':scope > .sort-item').forEach(function(item) {
+    if (item.querySelector('.sort-handle')) return;
+    var handle = document.createElement('div');
+    handle.className = 'sort-handle';
+    handle.textContent = '· · ·';
+    handle.setAttribute('title', 'ドラッグして並び替え');
+    item.insertBefore(handle, item.firstChild);
+    handle.addEventListener('pointerdown', _onSortPointerDown);
+  });
+}
+
+function _onSortPointerDown(e) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  var handle = e.currentTarget;
+  var item = handle.parentElement;
+  var tab = item.parentElement;
+
+  var rect = item.getBoundingClientRect();
+  _sortState.dragging = item;
+  _sortState.offsetX = e.clientX - rect.left;
+  _sortState.offsetY = e.clientY - rect.top;
+  _sortState.startX = e.clientX;
+  _sortState.startY = e.clientY;
+  _sortState.tabEl = tab;
+
+  var ghost = item.cloneNode(true);
+  ghost.className = 'sort-ghost';
+  ghost.style.width = rect.width + 'px';
+  ghost.style.top = (e.clientY - _sortState.offsetY) + 'px';
+  ghost.style.left = (e.clientX - _sortState.offsetX) + 'px';
+  document.body.appendChild(ghost);
+  _sortState.ghost = ghost;
+
+  item.classList.add('sort-dragging');
+  handle.setPointerCapture(e.pointerId);
+}
+
+function _onSortPointerMove(e) {
+  if (!_sortState.dragging) return;
+  var ghost = _sortState.ghost;
+  ghost.style.top = (e.clientY - _sortState.offsetY) + 'px';
+  ghost.style.left = (e.clientX - _sortState.offsetX) + 'px';
+
+  // ゴーストを一時非表示にして要素取得
+  ghost.style.display = 'none';
+  var elBelow = document.elementFromPoint(e.clientX, e.clientY);
+  ghost.style.display = '';
+
+  _clearSortHighlight();
+
+  if (!elBelow) return;
+  var target = elBelow.closest('.sort-item');
+  if (!target || target === _sortState.dragging) return;
+  if (target.parentElement !== _sortState.tabEl) return;
+
+  var rect = target.getBoundingClientRect();
+  var mid = rect.top + rect.height / 2;
+  var pos = e.clientY < mid ? 'top' : 'bottom';
+
+  target.classList.add(pos === 'top' ? 'sort-over-top' : 'sort-over-bottom');
+  _sortState.overEl = target;
+  _sortState.overPos = pos;
+}
+
+function _onSortPointerUp(e) {
+  if (!_sortState.dragging) return;
+
+  var dragging = _sortState.dragging;
+  var overEl = _sortState.overEl;
+  var overPos = _sortState.overPos;
+  var tabEl = _sortState.tabEl;
+
+  if (overEl && overEl !== dragging) {
+    if (overPos === 'top') {
+      tabEl.insertBefore(dragging, overEl);
+    } else {
+      tabEl.insertBefore(dragging, overEl.nextSibling);
+    }
+    _saveSortOrder(tabEl.id);
+  }
+
+  dragging.classList.remove('sort-dragging');
+  _clearSortHighlight();
+  if (_sortState.ghost) {
+    _sortState.ghost.remove();
+  }
+  _sortState.dragging = null;
+  _sortState.ghost = null;
+  _sortState.overEl = null;
+  _sortState.overPos = null;
+  _sortState.tabEl = null;
+}
+
+function _clearSortHighlight() {
+  if (_sortState.overEl) {
+    _sortState.overEl.classList.remove('sort-over-top', 'sort-over-bottom');
+  }
+}
+
+function _saveSortOrder(tabId) {
+  var tab = document.getElementById(tabId);
+  if (!tab) return;
+  var order = [];
+  tab.querySelectorAll(':scope > .sort-item').forEach(function(item) {
+    order.push(item.dataset.sortId);
+  });
+  try {
+    localStorage.setItem('sortOrder_' + tabId, JSON.stringify(order));
+  } catch (ex) {}
+}
+
+function restoreSortOrder(tabId) {
+  var tab = document.getElementById(tabId);
+  if (!tab) return;
+  var saved;
+  try {
+    saved = JSON.parse(localStorage.getItem('sortOrder_' + tabId));
+  } catch (ex) { return; }
+  if (!Array.isArray(saved) || saved.length === 0) return;
+  saved.forEach(function(id) {
+    var el = tab.querySelector(':scope > [data-sort-id="' + id + '"]');
+    if (el) tab.appendChild(el);
   });
 }
 
