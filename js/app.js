@@ -203,7 +203,7 @@ function initCounterBtns() {
 }
 
 async function loadEntry(date) {
-  if (!date) return;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
   try {
     const yearMonth = date.slice(0, 7);
     const entries = await getEntries(yearMonth);
@@ -287,7 +287,7 @@ function updateNotesImportant() {
 async function handleSaveEntry() {
   const btn = document.getElementById('entry-save-btn');
   const date = document.getElementById('entry-date').value;
-  if (!date) return;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
 
   btn.disabled = true;
   btn.textContent = '保存中...';
