@@ -84,3 +84,87 @@ function parseDayReport(workbook, dateStr) {
     importedAt: new Date().toISOString()
   };
 }
+
+/**
+ * parseSalesPlan(workbook)
+ * SheetJS ワークブックから売上計画シートを読み取り、
+ * officeSalesPlan 保存用の正規化オブジェクトを返す。
+ *
+ * @param  {Object} workbook  XLSX.read() の戻り値
+ * @returns {{ yearMonth, office, members, source, importedAt }}
+ */
+function parseSalesPlan(workbook) {
+  var sheetName = SALESPLAN_MAP.sheetName;
+  var ws = workbook.Sheets[sheetName];
+  if (!ws) ws = workbook.Sheets[sheetName.trim()];
+  if (!ws) {
+    throw new Error(
+      'シート「' + sheetName + '」が見つかりません。' +
+      '利用可能なシート: ' + workbook.SheetNames.join(', ')
+    );
+  }
+
+  function _n(col, row) {
+    var cell = ws[col + row];
+    if (!cell) return 0;
+    if (typeof cell.v === 'number') return cell.v;
+    var p = parseFloat(String(cell.v).replace(/[,%]/g, ''));
+    return isNaN(p) ? 0 : p;
+  }
+
+  function _nAddr(addr) {
+    var cell = ws[addr];
+    if (!cell) return 0;
+    if (typeof cell.v === 'number') return cell.v;
+    var p = parseFloat(String(cell.v).replace(/[,%]/g, ''));
+    return isNaN(p) ? 0 : p;
+  }
+
+  var year  = Math.round(_nAddr(SALESPLAN_MAP.singletons.yearMonth_year));
+  var month = Math.round(_nAddr(SALESPLAN_MAP.singletons.yearMonth_month));
+  var yearMonth = (year > 2000 && month >= 1 && month <= 12)
+    ? String(year) + '-' + String(month).padStart(2, '0')
+    : getCurrentYearMonthJST();
+
+  var cP = SALESPLAN_MAP.cols.personal;
+  var cD = SALESPLAN_MAP.cols.paid;
+  var cO = SALESPLAN_MAP.cols.other;
+
+  function extractRow(pRow, dRow, oRow) {
+    var obj = {};
+    Object.keys(cP).forEach(function(k) { obj[k] = _n(cP[k], pRow); });
+    Object.keys(cD).forEach(function(k) { obj[k] = _n(cD[k], dRow); });
+    Object.keys(cO).forEach(function(k) { obj[k] = _n(cO[k], oRow); });
+    obj.maintenancePlanUnits  = obj.renewalPlanUnits  + obj.newPlanUnits;
+    obj.maintenancePlanAmount = obj.renewalPlanAmount + obj.newPlanAmount;
+    obj.callPlan     = obj.callOwnAmount   + obj.callOtherAmount;
+    obj.repairPlan   = obj.repairSerAmount;
+    obj.serPromoPlan = obj.serPromoAmount;
+    obj.prepaidNew   = obj.prepaidNewAmount;
+    obj.prepaidCont  = obj.prepaidContAmount;
+    delete obj.callOwnAmount; delete obj.callOtherAmount;
+    delete obj.repairSerAmount; delete obj.serPromoAmount;
+    delete obj.prepaidNewAmount; delete obj.prepaidContAmount;
+    return obj;
+  }
+
+  var r = SALESPLAN_MAP.rows;
+
+  var officeData = extractRow(r.office.personal, r.office.paid, r.office.other);
+  officeData.annualSalesPlan = _nAddr(SALESPLAN_MAP.singletons.annualSalesPlan);
+
+  var members = r.members.map(function(m) {
+    var obj = extractRow(m.personal, m.paid, m.other);
+    obj.memberId   = m.id;
+    obj.memberName = '';
+    return obj;
+  });
+
+  return {
+    yearMonth:  yearMonth,
+    office:     officeData,
+    members:    members,
+    source:     'salesPlan',
+    importedAt: new Date().toISOString()
+  };
+}

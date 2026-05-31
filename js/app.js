@@ -2684,18 +2684,201 @@ function renderOfficeKpiChart(entry) {
 // 営業所 取込タブ（売上計画）
 // ------------------------------------------------------------------
 
+var _officeSalesPlanParsed = null;
+var _officePlanScope = 'office';
+
+var OFFICE_SALES_PLAN_LABELS = {
+  renewalTargetUnits:    '継続対象台数',
+  renewalPlanUnits:      '継続計画台数',
+  renewalPlanAmount:     '継続計画金額',
+  newPlanUnits:          '新規計画台数',
+  newPlanAmount:         '新規計画金額',
+  maintenancePlanUnits:  '保守計画台数',
+  maintenancePlanAmount: '保守計画金額',
+  inspectionPlanUnits:   '点検計画台数',
+  prepaidNew:            '前受（新規）',
+  prepaidCont:           '前受（継続）',
+  callPlan:              'コール計画',
+  repairPlan:            '修理計画',
+  serPromoPlan:          '促進修理計画',
+  totalSalesPlan:        '総売上計画',
+  annualSalesPlan:       '営業年計',
+};
+
 function initOfficeImportTab() {
-  var btn = document.getElementById('btn-office-plan-import');
-  if (!btn) return;
-  btn.addEventListener('click', function() {
+  var btn  = document.getElementById('btn-office-plan-import');
+  var file = document.getElementById('office-plan-file');
+  if (!btn || !file) return;
+
+  btn.addEventListener('click', function() { file.click(); });
+  file.addEventListener('change', onOfficePlanFileSelect);
+
+  document.getElementById('office-plan-cancel')
+    .addEventListener('click', closeOfficePlanModal);
+  document.getElementById('office-plan-save')
+    .addEventListener('click', saveOfficePlanFromModal);
+
+  document.querySelectorAll('#office-plan-modal .modal-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('#office-plan-modal .modal-tab')
+        .forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      _officePlanScope = tab.dataset.scope;
+      document.getElementById('office-plan-member-select-wrap').style.display =
+        (_officePlanScope === 'member') ? 'block' : 'none';
+      renderOfficePlanFields();
+    });
+  });
+
+  var memberSel = document.getElementById('office-plan-member-select');
+  if (memberSel) memberSel.addEventListener('change', renderOfficePlanFields);
+}
+
+async function onOfficePlanFileSelect(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  try {
+    await _ensureXlsx();
+    var buf = await file.arrayBuffer();
+    var wb  = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    _officeSalesPlanParsed = parseSalesPlan(wb);
+    openOfficePlanConfirm(_officeSalesPlanParsed);
+  } catch (err) {
+    alert('取込エラー: ' + err.message);
+  }
+}
+
+function openOfficePlanConfirm(parsed) {
+  document.getElementById('office-plan-yearmonth').textContent = parsed.yearMonth;
+  _officePlanScope = 'office';
+  document.querySelectorAll('#office-plan-modal .modal-tab').forEach(function(t, i) {
+    t.classList.toggle('active', i === 0);
+  });
+  document.getElementById('office-plan-member-select-wrap').style.display = 'none';
+  renderOfficePlanFields();
+  document.getElementById('office-plan-modal').style.display = 'flex';
+}
+
+function renderOfficePlanFields() {
+  var container = document.getElementById('office-plan-fields');
+  var isOffice  = (_officePlanScope === 'office');
+  var data;
+
+  if (isOffice) {
+    data = _officeSalesPlanParsed ? _officeSalesPlanParsed.office : {};
+  } else {
+    var memberId = document.getElementById('office-plan-member-select').value;
+    data = (_officeSalesPlanParsed ? _officeSalesPlanParsed.members : [])
+           .find(function(m) { return m.memberId === memberId; }) || {};
+  }
+
+  function v(key) { return (data[key] !== undefined) ? data[key] : 0; }
+
+  function simpleRow(key) {
+    return '<div class="office-field-row">' +
+           '<span class="office-field-label">' + (OFFICE_SALES_PLAN_LABELS[key] || key) + '</span>' +
+           '<input class="office-field-input plan-field-input" type="number" step="any"' +
+           ' data-key="' + key + '" value="' + v(key) + '">' +
+           '</div>';
+  }
+
+  var html = '';
+
+  html += '<div class="office-section"><div class="office-section-title">保守</div>' +
+          simpleRow('maintenancePlanUnits') +
+          simpleRow('maintenancePlanAmount') +
+          simpleRow('renewalTargetUnits') +
+          simpleRow('renewalPlanUnits') +
+          simpleRow('renewalPlanAmount') +
+          simpleRow('newPlanUnits') +
+          simpleRow('newPlanAmount') +
+          '</div>';
+
+  html += '<div class="office-section"><div class="office-section-title">点検</div>' +
+          simpleRow('inspectionPlanUnits') +
+          '</div>';
+
+  html += '<div class="office-section"><div class="office-section-title">前受</div>' +
+          simpleRow('prepaidNew') +
+          simpleRow('prepaidCont') +
+          '</div>';
+
+  html += '<div class="office-section"><div class="office-section-title">有償</div>' +
+          simpleRow('callPlan') +
+          simpleRow('repairPlan') +
+          simpleRow('serPromoPlan') +
+          '</div>';
+
+  html += '<div class="office-section"><div class="office-section-title">集計</div>' +
+          simpleRow('totalSalesPlan') +
+          (isOffice ? simpleRow('annualSalesPlan') : '') +
+          '</div>';
+
+  container.innerHTML = html;
+}
+
+function _collectPlanFields() {
+  var result = {};
+  document.querySelectorAll('#office-plan-fields .plan-field-input').forEach(function(f) {
+    result[f.dataset.key] = parseFloat(f.value) || 0;
+  });
+  return result;
+}
+
+function closeOfficePlanModal() {
+  document.getElementById('office-plan-modal').style.display = 'none';
+  _officeSalesPlanParsed = null;
+}
+
+async function saveOfficePlanFromModal() {
+  var saveBtn = document.getElementById('office-plan-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '保存中...';
+
+  try {
+    var p        = _officeSalesPlanParsed;
+    var now      = p.importedAt;
+    var src      = p.source;
+    var ym       = p.yearMonth;
+    var modified = _collectPlanFields();
+
+    if (_officePlanScope === 'office') {
+      Object.assign(p.office, modified);
+    } else {
+      var mid = document.getElementById('office-plan-member-select').value;
+      var m = p.members.find(function(x) { return x.memberId === mid; });
+      if (m) Object.assign(m, modified);
+    }
+
+    var officeEntry = Object.assign(
+      { yearMonth: ym, scope: 'office', memberId: '', memberName: '', source: src, importedAt: now },
+      p.office
+    );
+    var memberEntries = p.members.map(function(mem) {
+      return Object.assign(
+        { yearMonth: ym, scope: 'member', source: src, importedAt: now },
+        mem
+      );
+    });
+
+    await saveOfficeSalesPlan([officeEntry].concat(memberEntries));
+    closeOfficePlanModal();
+
     var fb = document.getElementById('office-plan-import-feedback');
     if (fb) {
-      fb.textContent = '売上計画取込は次フェーズで実装予定です';
-      fb.style.color = 'var(--text-muted)';
-      fb.style.fontSize = '12px';
+      fb.textContent = '✓ 取込完了 (' + ym + ')';
+      fb.style.color = 'var(--accent-emerald)';
+      fb.style.fontSize = '13px';
       fb.style.marginTop = '8px';
+      setTimeout(function() { if (fb) fb.textContent = ''; }, 3000);
     }
-  });
+  } catch (err) {
+    alert('保存エラー: ' + err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '保存する';
+  }
 }
 
 // ------------------------------------------------------------------

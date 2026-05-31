@@ -504,6 +504,34 @@
     </div>
   </div>
 
+  <!-- 営業所 売上計画取込 確認モーダル -->
+  <div id="office-plan-modal" class="modal-overlay" style="display:none">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title">売上計画確認</span>
+        <span id="office-plan-yearmonth" class="modal-date"></span>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-scope="office">営業所合計</button>
+        <button class="modal-tab" data-scope="member">所員別</button>
+      </div>
+      <div id="office-plan-member-select-wrap" class="member-select-wrap" style="display:none">
+        <select id="office-plan-member-select" class="member-select">
+          <option value="a">a</option>
+          <option value="b">b</option>
+          <option value="c">c</option>
+          <option value="d">d</option>
+          <option value="e">e</option>
+        </select>
+      </div>
+      <div id="office-plan-fields" class="modal-fields"></div>
+      <div class="modal-footer">
+        <button id="office-plan-cancel" class="btn btn-secondary">破棄</button>
+        <button id="office-plan-save"   class="btn btn-primary">保存する</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {

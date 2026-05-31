@@ -48,3 +48,43 @@ var DAYREPORT_MAP = {
     renewalRate: "AE37"
   }
 };
+
+var SALESPLAN_MAP = {
+  sheetName: '売上計画',
+  rows: {
+    office:  { personal: 19, paid: 32, other: 45 },
+    members: [
+      { id: 'a', personal: 11, paid: 24, other: 37 },
+      { id: 'b', personal: 12, paid: 25, other: 38 },
+      { id: 'c', personal: 13, paid: 26, other: 39 },
+      { id: 'd', personal: 14, paid: 27, other: 40 },
+      { id: 'e', personal: 15, paid: 28, other: 41 },
+    ]
+  },
+  cols: {
+    personal: {
+      renewalTargetUnits:  'B',
+      renewalPlanUnits:    'D',
+      renewalPlanAmount:   'E',
+      newPlanUnits:        'F',
+      newPlanAmount:       'G',
+      inspectionPlanUnits: 'H',
+      prepaidNewAmount:    'K',
+      prepaidContAmount:   'M'
+    },
+    paid: {
+      callOwnAmount:   'E',
+      callOtherAmount: 'G',
+      repairSerAmount: 'I',
+      serPromoAmount:  'K'
+    },
+    other: {
+      totalSalesPlan: 'H'
+    }
+  },
+  singletons: {
+    yearMonth_year:  'A5',
+    yearMonth_month: 'D5',
+    annualSalesPlan: 'F47'
+  }
+};
