@@ -932,7 +932,7 @@ input.kgi-field-input {
    印刷用スタイル
    ------------------------------------------------------------ */
 @media print {
-  #app-header, #bottom-nav, .hist-controls, .report-controls, #report-settings { display: none !important; }
+  #app-header, #bottom-nav, .hist-controls, .report-controls, #report-settings, #office-report-settings { display: none !important; }
   body { background: #fff !important; color: #000 !important; }
   #content { overflow: visible !important; height: auto !important; }
   #app { max-width: 100% !important; height: auto !important; }

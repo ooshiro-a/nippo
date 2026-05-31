@@ -2893,6 +2893,15 @@ var _OFFICE_KPI_DEFS = [
   { id: 'maint',      label: '保全',    planKey: 'totalMaintPlan',    actualKey: 'totalMaintActual',    unit: '件' },
 ];
 
+var officeReportSettings = {
+  inspection:   true,
+  sales:        true,
+  renewal:      true,
+  maint:        true,
+  showDelta:    true,
+  showForecast: true,
+};
+
 const officeHistState = {
   view:          'daily',
   yearMonth:     getCurrentYearMonthJST(),
@@ -2911,10 +2920,12 @@ function initOfficeHistoryTab() {
     _renderOfficeHistPeriodControl();
     renderOfficeHistContent();
   });
-  document.getElementById('office-report-csv-btn').addEventListener('click',   _handleOfficeHistCsv);
-  document.getElementById('office-report-print-btn').addEventListener('click', _handleOfficeHistPrint);
-  document.getElementById('office-report-copy-btn').addEventListener('click',  _handleOfficeHistCopy);
-  document.getElementById('office-hist-compare-btn').addEventListener('click', _onOfficeHistCompareModeToggle);
+  document.getElementById('office-report-csv-btn').addEventListener('click',      _handleOfficeHistCsv);
+  document.getElementById('office-report-print-btn').addEventListener('click',    _handleOfficeHistPrint);
+  document.getElementById('office-report-copy-btn').addEventListener('click',     _handleOfficeHistCopy);
+  document.getElementById('office-report-settings-btn').addEventListener('click', _toggleOfficeReportSettings);
+  document.getElementById('office-hist-compare-btn').addEventListener('click',    _onOfficeHistCompareModeToggle);
+  _buildOfficeReportSettingsPanel();
   _renderOfficeHistPeriodControl();
 }
 
@@ -3558,28 +3569,65 @@ async function _handleOfficeHistCsv(evt) {
   try {
     await ensureOfficeHistData();
     const rows = officeHistState.allData.slice().sort(function(a, b) { return String(a.date).localeCompare(String(b.date)); });
-    const header = ['日付', '点検計画', '点検実績', '売上計画', '売上実績', '末見通し', '次月継続計画', '次月継続実績', '総保守計画', '総保守実績'];
+
+    // 出力設定に応じて列を絞り込む
+    const csvColDefs = [
+      { key: 'inspection', headers: ['点検計画', '点検実績'], vals: function(e) { return [e.inspectionPlan, e.inspectionActual]; } },
+      { key: 'sales',      headers: ['売上計画', '売上実績', '末見通し'], vals: function(e) { return [e.salesPlan, e.salesActual, e.salesForecast]; } },
+      { key: 'renewal',    headers: ['次月継続計画', '次月継続実績'], vals: function(e) { return [e.renewalNextPlanTop, e.renewalNextActualTop]; } },
+      { key: 'maint',      headers: ['総保守計画', '総保守実績'], vals: function(e) { return [e.totalMaintPlan, e.totalMaintActual]; } },
+    ].filter(function(col) { return officeReportSettings[col.key] !== false; });
+
+    const header = ['日付'].concat(csvColDefs.flatMap(function(c) { return c.headers; }));
     const csvRows = [header].concat(rows.map(function(e) {
-      return [e.date, e.inspectionPlan, e.inspectionActual, e.salesPlan, e.salesActual,
-              e.salesForecast, e.renewalNextPlanTop, e.renewalNextActualTop, e.totalMaintPlan, e.totalMaintActual];
+      return [e.date].concat(csvColDefs.flatMap(function(c) { return c.vals(e); }));
     }));
     downloadCsv('営業所_全データ.csv', csvRows);
   } finally { btn.disabled = false; btn.textContent = 'CSV'; }
 }
 
-function _handleOfficeHistPrint() {
-  var container = document.getElementById('office-history-container');
-  var content = container ? container.innerHTML : '';
-  var html =
-    '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>営業所 履歴</title>' +
-    '<style>body{font-family:"Hiragino Kaku Gothic ProN",sans-serif;padding:20px;font-size:13px;color:#111}' +
-    '.card{border:1px solid #ccc;padding:12px;margin-bottom:12px;border-radius:6px}' +
+function _getOfficePeriodLabel(view) {
+  var viewLabels = { daily: '日次', weekly: '週次', monthly: '月次', quarterly: '四半期', yearly: '年次' };
+  var base = '営業所 ' + (viewLabels[view] || '') + 'レポート';
+  if (view === 'daily')     return base + '（' + formatDate(officeHistState.date || getTodayJST()) + '）';
+  if (view === 'weekly')    return base + '（' + formatYearMonth(officeHistState.yearMonth) + ' 第' + (officeHistState.weekIndex || 1) + '週）';
+  if (view === 'monthly')   return base + '（' + officeHistState.year + '年）';
+  if (view === 'quarterly') return base + '（' + officeHistState.year + '年 ' + (officeHistState.quarter === 'all' ? '全四半期' : officeHistState.quarter) + '）';
+  if (view === 'yearly')    return base + '（' + officeHistState.year + '年）';
+  return base;
+}
+
+function _buildOfficePrintHtml(opts) {
+  var periodText = opts.periodText || '';
+  var today      = opts.today || getTodayJST();
+  var cmpHtml    = opts.cmpHtml || '';
+  var histHtml   = opts.histHtml || '';
+
+  // 出力設定に基づく KPI 非表示 CSS を動的生成
+  var kpiHideCss = _OFFICE_KPI_DEFS.map(function(d) {
+    return officeReportSettings[d.id] === false
+      ? '.ohist-kpi-section[data-kpi-id="' + d.id + '"]{display:none}'
+      : '';
+  }).join('');
+  if (officeReportSettings.showDelta    === false) kpiHideCss += '.ohist-delta-row{display:none}';
+  if (officeReportSettings.showForecast === false) kpiHideCss += '.ohist-forecast-row{display:none}';
+
+  var viewLabels = { daily: '日次', weekly: '週次', monthly: '月次', quarterly: '四半期', yearly: '年次' };
+  var title = '営業所 ' + (viewLabels[officeHistState.view] || '') + 'レポート';
+
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>' + title + '</title>' +
+    '<style>' +
+    'body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;padding:20px 24px;max-width:800px;margin:0 auto;color:#111;font-size:13px;line-height:1.6}' +
+    '.print-header{margin-bottom:18px;border-bottom:2px solid #333;padding-bottom:10px}' +
+    '.print-title{font-size:18px;font-weight:700;margin-bottom:4px}' +
+    '.print-period{font-size:13px;color:#333;font-weight:600;margin-bottom:2px}' +
+    '.print-date{font-size:11px;color:#888}' +
+    '.card{border:1px solid #ccc;padding:12px 14px;margin-bottom:12px;page-break-inside:avoid;background:#fff;border-radius:0}' +
     '.mgmt-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}' +
     '.ohist-summary-bar{display:flex;align-items:center;gap:8px;padding:4px 0 8px;border-bottom:1px solid #e5e5e5;margin-bottom:8px;flex-wrap:wrap}' +
     '.ohist-overall-rate{font-weight:700;font-size:15px}' +
     '.ohist-status-badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:11px;font-weight:700;border:1px solid #ccc}' +
-    '.ohist-pace-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#555;width:100%}' +
-    '.ohist-pace-bar-wrap{display:none}' +
+    '.ohist-pace-row,.ohist-pace-bar-wrap{display:none}' +
     '.ohist-kpi-section{padding:6px 0;border-bottom:1px solid #f0f0f0}' +
     '.ohist-kpi-section:last-child{border-bottom:none}' +
     '.ohist-kpi-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}' +
@@ -3590,15 +3638,128 @@ function _handleOfficeHistPrint() {
     '.ohist-rate{font-weight:700;font-size:12px;min-width:40px;text-align:right}' +
     '.ohist-forecast-row{display:flex;justify-content:space-between;font-size:11px;color:#555;margin-top:2px}' +
     '.ohist-delta-row{font-size:11px;color:#555;padding-top:3px;margin-top:3px;border-top:1px solid #f0f0f0}' +
-    '.ohist-delta-pos{color:#16a34a}.ohist-delta-neg{color:#dc2626}' +
+    '.ohist-delta-pos{color:#167a16;font-weight:700}.ohist-delta-neg{color:#c00;font-weight:700}' +
     '.ohist-delta-label{color:#999;margin-right:2px}' +
-    '.progress-bar{height:4px;background:#eee;border-radius:2px;margin-top:2px}' +
-    '.progress-fill{height:100%;border-radius:2px;background:#22d3ee}' +
-    '.progress-fill.green{background:#4ade80}.progress-fill.amber{background:#fbbf24}.progress-fill.red{background:#f87171}' +
-    '</style></head><body>' + content + '</body></html>';
-  var win = window.open('', '_blank');
-  if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(function() { win.print(); }, 400); }
-  else window.print();
+    '.progress-bar{display:none}' +
+    /* 比較カード */
+    '.cmp-card{border-left:3px solid #aaa;padding:10px 12px;margin-bottom:12px}' +
+    '.cmp-header{font-size:13px;font-weight:700;color:#333;margin-bottom:8px}' +
+    '.cmp-legends{display:flex;gap:10px;font-size:11px;margin-bottom:8px}' +
+    '.cmp-legend-curr{color:#0088aa;font-weight:700}' +
+    '.cmp-legend-base{color:#666}' +
+    '.cmp-table{width:100%;border-collapse:collapse;font-size:12px}' +
+    '.cmp-table th{color:#555;font-size:11px;font-weight:700;padding:6px;text-align:right;border-bottom:1px solid #999}' +
+    '.cmp-table th:first-child{text-align:left}' +
+    '.cmp-table td{padding:6px;border-top:1px solid #eee;vertical-align:middle}' +
+    '.cmp-label{font-size:12px;color:#333}' +
+    '.cmp-val{font-size:12px;text-align:right;color:#111}' +
+    '.cmp-base{color:#666;text-align:right}' +
+    '.cmp-pos{color:#167a16;font-weight:700;text-align:right}' +
+    '.cmp-neg{color:#c00;font-weight:700;text-align:right}' +
+    '.cmp-chart-wrap{margin-top:8px;text-align:center}' +
+    /* 非表示 */
+    '.hist-card-actions,.report-controls,.hist-controls,.sort-handle{display:none}' +
+    /* details展開（月別内訳） */
+    'details{display:block}details>*{display:block}summary{display:none}' +
+    kpiHideCss +
+    '</style></head><body>' +
+    '<div class="print-header">' +
+    '<div class="print-title">' + title + '</div>' +
+    (periodText ? '<div class="print-period">' + periodText + '</div>' : '') +
+    '<div class="print-date">出力日：' + today + '</div>' +
+    '</div>' +
+    cmpHtml +
+    histHtml +
+    '</body></html>';
+}
+
+async function _handleOfficeHistPrint() {
+  var btn = document.getElementById('office-report-print-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+  try {
+    await ensureOfficeHistData();
+    await renderOfficeHistContent();
+
+    var view = officeHistState.view;
+    var today = getTodayJST();
+    var periodText = '';
+    if (officeHistState.compareMode) {
+      var info = _getOfficePrevPeriodInfo(view);
+      if (info) periodText = '当期：' + info.currentLabel + '　／　比較期：' + info.prevLabel;
+    } else {
+      periodText = _getOfficePeriodLabel(view);
+    }
+
+    // 比較カードHTML（canvas→img変換）
+    var cmpHtml = '';
+    if (officeHistState.compareMode) {
+      var cmpEl = document.getElementById('office-hist-compare-content');
+      if (cmpEl) {
+        var officeCanvas = document.getElementById('office-cmp-chart');
+        var inner = cmpEl.innerHTML;
+        if (officeCanvas) {
+          var imgSrc = officeCanvas.toDataURL('image/png');
+          inner = inner.replace(
+            /<canvas[^>]*id="office-cmp-chart"[^>]*><\/canvas>/,
+            '<img src="' + imgSrc + '" style="width:100%;max-height:220px;object-fit:contain">'
+          );
+        }
+        cmpHtml = inner;
+      }
+    }
+
+    var histEl = document.getElementById('office-history-container');
+    var histHtml = histEl ? histEl.innerHTML : '';
+
+    var html = _buildOfficePrintHtml({ periodText: periodText, today: today, cmpHtml: cmpHtml, histHtml: histHtml });
+    var win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(function() { win.print(); }, 400);
+    } else {
+      window.print();
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '印刷/PDF'; }
+  }
+}
+
+function _buildOfficeReportSettingsPanel() {
+  var panel = document.getElementById('office-report-settings');
+  if (!panel) return;
+  var kpiCheckboxes = _OFFICE_KPI_DEFS.map(function(d) {
+    return '<label class="report-chk-label">' +
+      '<input type="checkbox" data-key="' + d.id + '" ' + (officeReportSettings[d.id] !== false ? 'checked' : '') + ' />' +
+      d.label + '</label>';
+  }).join('');
+  var extraCheckboxes = [
+    { key: 'showDelta',    label: '前期比' },
+    { key: 'showForecast', label: '末見通し' },
+  ].map(function(f) {
+    return '<label class="report-chk-label">' +
+      '<input type="checkbox" data-key="' + f.key + '" ' + (officeReportSettings[f.key] !== false ? 'checked' : '') + ' />' +
+      f.label + '</label>';
+  }).join('');
+  panel.innerHTML =
+    '<div class="report-settings-section-title">KPI項目</div>' +
+    '<div class="report-settings-grid">' + kpiCheckboxes + '</div>' +
+    '<div class="report-settings-section-title">表示オプション</div>' +
+    '<div class="report-settings-grid">' + extraCheckboxes + '</div>';
+  panel.querySelectorAll('input[type="checkbox"]').forEach(function(chk) {
+    chk.addEventListener('change', function() {
+      officeReportSettings[chk.dataset.key] = chk.checked;
+    });
+  });
+}
+
+function _toggleOfficeReportSettings() {
+  var panel = document.getElementById('office-report-settings');
+  var btn   = document.getElementById('office-report-settings-btn');
+  var isVisible = panel.style.display !== 'none';
+  panel.style.display = isVisible ? 'none' : 'block';
+  btn.classList.toggle('report-settings-btn-active', !isVisible);
 }
 
 async function _handleOfficeHistCopy(evt) {
@@ -3700,7 +3861,7 @@ function _buildOfficeKpiBlock(kpiDef, entry, prevEntry) {
   var isYen    = kpiDef.unit === '円';
   var fmtVal   = function(v) { return isYen ? formatCurrency(v) : formatNumber(v) + kpiDef.unit; };
 
-  var html = '<div class="ohist-kpi-section">' +
+  var html = '<div class="ohist-kpi-section" data-kpi-id="' + kpiDef.id + '">' +
     '<div class="ohist-kpi-header">' +
     '<span class="ohist-kpi-title">' + kpiDef.label + '</span>' +
     '<div class="ohist-kpi-vals">' +
