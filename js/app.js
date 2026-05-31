@@ -3,6 +3,25 @@
  * Nice Serviceman 日報
  */
 
+// エラー文字列を安全に表示する（XSS対策: innerHTML に直接文字列を渡さない）
+function _renderError(el, msg) {
+  const div = document.createElement('div');
+  div.style.cssText = 'color:var(--accent-red);font-size:13px';
+  div.textContent = msg;
+  el.innerHTML = '';
+  el.appendChild(div);
+}
+
+// HTML特殊文字をエスケープする（XSS対策: ユーザー入力・AI生成テキストをHTMLに埋め込む前に必ず通す）
+function _escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ------------------------------------------------------------------
 // ナビゲーション（2段: メインセクション + サブタブ）
 // ------------------------------------------------------------------
@@ -501,10 +520,10 @@ async function handleAiReport(type) {
       renderAiReportContent(res.content, res.period, type);
     } else {
       const errMsg = (res && res.error) ? res.error : 'レスポンスが空です';
-      el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">GASエラー: ' + errMsg + '</div>';
+      _renderError(el, 'GASエラー: ' + errMsg);
     }
   } catch (e) {
-    el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">エラー: ' + e.message + '</div>';
+    _renderError(el, 'エラー: ' + e.message);
   } finally {
     document.querySelectorAll('.ai-gen-btn').forEach(b => b.disabled = false);
   }
@@ -520,7 +539,7 @@ async function loadLatestAiReport() {
 function renderAiReportContent(content, period, type) {
   _aiReportCache = { content, period, type };
   const typeLabel = type === 'weekly' ? '週次' : '月次';
-  const formatted = content
+  const formatted = _escapeHtml(content)
     .replace(/([①②③④⑤])/g, '<span class="ai-section-marker">$1</span>')
     .replace(/\n/g, '<br>');
   document.getElementById('ai-report-content').innerHTML =
@@ -544,7 +563,7 @@ function handleAiPdf() {
     return;
   }
   const typeLabel = _aiReportCache.type === 'weekly' ? '週次' : '月次';
-  const body = _aiReportCache.content.replace(/\n/g, '<br>');
+  const body = _escapeHtml(_aiReportCache.content).replace(/\n/g, '<br>');
   const html =
     '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">' +
     '<title>' + typeLabel + 'AIレポート</title>' +
@@ -621,10 +640,10 @@ async function handleOfficeAiReport(type) {
       renderOfficeAiReportContent(res.content, res.period, type);
     } else {
       const errMsg = (res && res.error) ? res.error : 'レスポンスが空です';
-      el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">GASエラー: ' + errMsg + '</div>';
+      _renderError(el, 'GASエラー: ' + errMsg);
     }
   } catch (e) {
-    el.innerHTML = '<div style="color:var(--accent-red);font-size:13px">エラー: ' + e.message + '</div>';
+    _renderError(el, 'エラー: ' + e.message);
   } finally {
     document.querySelectorAll('[data-office-ai-type]').forEach(b => b.disabled = false);
   }
@@ -633,7 +652,7 @@ async function handleOfficeAiReport(type) {
 function renderOfficeAiReportContent(content, period, type) {
   _officeAiReportCache = { content, period, type };
   const typeLabel = type === 'weekly' ? '週次' : '月次';
-  const formatted = content
+  const formatted = _escapeHtml(content)
     .replace(/([①②③④⑤])/g, '<span class="ai-section-marker">$1</span>')
     .replace(/\n/g, '<br>');
   document.getElementById('office-ai-report-content').innerHTML =
@@ -657,7 +676,7 @@ function handleOfficeAiPdf() {
     return;
   }
   const typeLabel = _officeAiReportCache.type === 'weekly' ? '週次' : '月次';
-  const body = _officeAiReportCache.content.replace(/\n/g, '<br>');
+  const body = _escapeHtml(_officeAiReportCache.content).replace(/\n/g, '<br>');
   const html =
     '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">' +
     '<title>' + typeLabel + '営業所AIレポート</title>' +
@@ -806,8 +825,11 @@ const historyState = {
   yearMonth: getCurrentYearMonthJST(),
   year: Number(getTodayJST().slice(0, 4)),
   quarter: 'all',
+  date: getTodayJST(),
+  weekIndex: 1,
   allData: null,
   compareMode: false,
+  comparePeriod: { yearMonth: '', year: 0, quarter: 'all', date: '', weekYearMonth: '', weekIndex: 1 },
 };
 
 function initHistoryTab() {
@@ -856,8 +878,18 @@ function onHistViewChange() {
 
 function onHistPeriodChange() {
   const view = historyState.view;
-  if (view === 'daily' || view === 'weekly') {
-    historyState.yearMonth = document.getElementById('hist-month-input').value || getCurrentYearMonthJST();
+  if (view === 'daily') {
+    if (historyState.compareMode) {
+      const dEl = document.getElementById('hist-date-input');
+      if (dEl && dEl.value) { historyState.date = dEl.value; historyState.yearMonth = dEl.value.slice(0, 7); }
+    } else {
+      historyState.yearMonth = document.getElementById('hist-month-input').value || getCurrentYearMonthJST();
+    }
+  } else if (view === 'weekly') {
+    const mEl = document.getElementById('hist-month-input');
+    const wEl = document.getElementById('hist-week-select');
+    if (mEl) historyState.yearMonth = mEl.value || getCurrentYearMonthJST();
+    if (wEl) historyState.weekIndex = Number(wEl.value) || 1;
   } else if (view === 'monthly') {
     historyState.year = Number(document.getElementById('hist-year-input').value) || Number(getTodayJST().slice(0, 4));
   } else if (view === 'quarterly') {
@@ -865,6 +897,32 @@ function onHistPeriodChange() {
     const qEl = document.getElementById('hist-quarter-select');
     if (yearEl) historyState.year = Number(yearEl.value) || Number(getTodayJST().slice(0, 4));
     if (qEl) historyState.quarter = qEl.value;
+  } else if (view === 'yearly') {
+    const yearEl = document.getElementById('hist-year-input');
+    if (yearEl) historyState.year = Number(yearEl.value) || Number(getTodayJST().slice(0, 4));
+  }
+  renderHistContent();
+}
+
+function _onHistCmpPeriodChange() {
+  const view = historyState.view;
+  const cp = historyState.comparePeriod;
+  if (view === 'daily') {
+    const el = document.getElementById('hist-cmp-date-input');
+    if (el) cp.date = el.value || historyState.date;
+  } else if (view === 'weekly') {
+    const mEl = document.getElementById('hist-cmp-month-input');
+    const wEl = document.getElementById('hist-cmp-week-select');
+    if (mEl) cp.weekYearMonth = mEl.value || historyState.yearMonth;
+    if (wEl) cp.weekIndex = Number(wEl.value) || 1;
+  } else if (view === 'monthly' || view === 'yearly') {
+    const el = document.getElementById('hist-cmp-year-input');
+    if (el) cp.year = Number(el.value) || (historyState.year - 1);
+  } else if (view === 'quarterly') {
+    const yEl = document.getElementById('hist-cmp-year-input');
+    const qEl = document.getElementById('hist-cmp-quarter-select');
+    if (yEl) cp.year    = Number(yEl.value) || (historyState.year - 1);
+    if (qEl) cp.quarter = qEl.value;
   }
   renderHistContent();
 }
@@ -872,28 +930,103 @@ function onHistPeriodChange() {
 function renderHistPeriodControl() {
   const container = document.getElementById('hist-period-control');
   const view = historyState.view;
-  if (view === 'daily' || view === 'weekly') {
-    container.innerHTML = `<input type="month" id="hist-month-input" value="${historyState.yearMonth}" />`;
-    document.getElementById('hist-month-input').addEventListener('change', onHistPeriodChange);
-  } else if (view === 'monthly') {
-    container.innerHTML = `<input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" />`;
-    document.getElementById('hist-year-input').addEventListener('change', onHistPeriodChange);
-  } else if (view === 'quarterly') {
-    container.innerHTML = `
-      <input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" style="flex:1" />
-      <select id="hist-quarter-select" style="flex:1">
-        <option value="all"${historyState.quarter === 'all' ? ' selected' : ''}>全四半期</option>
-        <option value="Q1"${historyState.quarter === 'Q1' ? ' selected' : ''}>Q1（1〜3月）</option>
-        <option value="Q2"${historyState.quarter === 'Q2' ? ' selected' : ''}>Q2（4〜6月）</option>
-        <option value="Q3"${historyState.quarter === 'Q3' ? ' selected' : ''}>Q3（7〜9月）</option>
-        <option value="Q4"${historyState.quarter === 'Q4' ? ' selected' : ''}>Q4（10〜12月）</option>
-      </select>
-    `;
-    document.getElementById('hist-year-input').addEventListener('change', onHistPeriodChange);
-    document.getElementById('hist-quarter-select').addEventListener('change', onHistPeriodChange);
-  } else {
-    container.innerHTML = '';
+  const cp = historyState.comparePeriod;
+  const cm = historyState.compareMode;
+
+  function _weekOpts(sel) {
+    return [1,2,3,4,5].map(n => `<option value="${n}"${sel === n ? ' selected' : ''}>第${n}週</option>`).join('');
   }
+  function _qOpts(sel) {
+    return [['all','全四半期'],['Q1','Q1（1〜3月）'],['Q2','Q2（4〜6月）'],['Q3','Q3（7〜9月）'],['Q4','Q4（10〜12月）']]
+      .map(([v,l]) => `<option value="${v}"${sel === v ? ' selected' : ''}>${l}</option>`).join('');
+  }
+
+  function _mainHTML() {
+    if (cm) {
+      if (view === 'daily') {
+        return `<input type="date" id="hist-date-input" value="${historyState.date}" />`;
+      } else if (view === 'weekly') {
+        return `<input type="month" id="hist-month-input" value="${historyState.yearMonth}" style="flex:1" />` +
+               `<select id="hist-week-select" style="flex:1">${_weekOpts(historyState.weekIndex)}</select>`;
+      } else if (view === 'monthly') {
+        return `<input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" />`;
+      } else if (view === 'quarterly') {
+        return `<input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" style="flex:1" />` +
+               `<select id="hist-quarter-select" style="flex:1">${_qOpts(historyState.quarter)}</select>`;
+      } else if (view === 'yearly') {
+        return `<input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" />`;
+      }
+      return '';
+    }
+    if (view === 'daily' || view === 'weekly') {
+      return `<input type="month" id="hist-month-input" value="${historyState.yearMonth}" />`;
+    } else if (view === 'monthly') {
+      return `<input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" />`;
+    } else if (view === 'quarterly') {
+      return `<input type="number" id="hist-year-input" value="${historyState.year}" min="2020" max="2040" style="flex:1" />` +
+             `<select id="hist-quarter-select" style="flex:1">${_qOpts(historyState.quarter)}</select>`;
+    }
+    return '';
+  }
+
+  function _cmpHTML() {
+    if (view === 'daily') {
+      const d = new Date(historyState.date);
+      d.setDate(d.getDate() - 1);
+      const v = cp.date || d.toISOString().slice(0, 10);
+      return `<input type="date" id="hist-cmp-date-input" value="${v}" />`;
+    } else if (view === 'weekly') {
+      const vm = cp.weekYearMonth || cp.yearMonth || historyState.yearMonth;
+      const vw = cp.weekIndex || 1;
+      return `<input type="month" id="hist-cmp-month-input" value="${vm}" style="flex:1" />` +
+             `<select id="hist-cmp-week-select" style="flex:1">${_weekOpts(vw)}</select>`;
+    } else if (view === 'monthly' || view === 'yearly') {
+      const v = cp.year || (historyState.year - 1);
+      return `<input type="number" id="hist-cmp-year-input" value="${v}" min="2020" max="2040" />`;
+    } else if (view === 'quarterly') {
+      const cy = cp.year || (historyState.year - 1);
+      const cq = cp.quarter || 'Q4';
+      return `<input type="number" id="hist-cmp-year-input" value="${cy}" min="2020" max="2040" style="flex:1" />` +
+             `<select id="hist-cmp-quarter-select" style="flex:1">${_qOpts(cq)}</select>`;
+    }
+    return '';
+  }
+
+  if (cm) {
+    container.innerHTML = `
+      <div class="cmp-period-row">
+        <span class="cmp-period-label">当期</span>
+        <div class="cmp-period-inputs">${_mainHTML()}</div>
+      </div>
+      <div class="cmp-period-row">
+        <span class="cmp-period-label cmp-period-label-base">比較</span>
+        <div class="cmp-period-inputs">${_cmpHTML()}</div>
+      </div>`;
+  } else {
+    container.innerHTML = _mainHTML();
+  }
+
+  const dIn  = document.getElementById('hist-date-input');
+  const mIn  = document.getElementById('hist-month-input');
+  const wSel = document.getElementById('hist-week-select');
+  const yIn  = document.getElementById('hist-year-input');
+  const qSel = document.getElementById('hist-quarter-select');
+  if (dIn)  dIn.addEventListener('change', onHistPeriodChange);
+  if (mIn)  mIn.addEventListener('change', onHistPeriodChange);
+  if (wSel) wSel.addEventListener('change', onHistPeriodChange);
+  if (yIn)  yIn.addEventListener('change', onHistPeriodChange);
+  if (qSel) qSel.addEventListener('change', onHistPeriodChange);
+
+  const cdIn  = document.getElementById('hist-cmp-date-input');
+  const cmIn  = document.getElementById('hist-cmp-month-input');
+  const cwSel = document.getElementById('hist-cmp-week-select');
+  const cyIn  = document.getElementById('hist-cmp-year-input');
+  const cqSel = document.getElementById('hist-cmp-quarter-select');
+  if (cdIn)  cdIn.addEventListener('change', _onHistCmpPeriodChange);
+  if (cmIn)  cmIn.addEventListener('change', _onHistCmpPeriodChange);
+  if (cwSel) cwSel.addEventListener('change', _onHistCmpPeriodChange);
+  if (cyIn)  cyIn.addEventListener('change', _onHistCmpPeriodChange);
+  if (cqSel) cqSel.addEventListener('change', _onHistCmpPeriodChange);
 }
 
 async function renderHistContent() {
@@ -1229,66 +1362,119 @@ let _compareChart = null;
 
 function onHistCompareModeToggle() {
   historyState.compareMode = !historyState.compareMode;
+  if (historyState.compareMode) {
+    const view = historyState.view;
+    const cp = historyState.comparePeriod;
+    if (view === 'daily') {
+      if (!historyState.date) historyState.date = getTodayJST();
+      const d = new Date(historyState.date);
+      d.setDate(d.getDate() - 1);
+      cp.date = d.toISOString().slice(0, 10);
+    } else if (view === 'weekly') {
+      if (!historyState.weekIndex) historyState.weekIndex = 1;
+      const [y, m] = historyState.yearMonth.split('-').map(Number);
+      const pd = new Date(y, m - 2, 1);
+      cp.weekYearMonth = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
+      cp.weekIndex = historyState.weekIndex;
+    } else if (view === 'monthly' || view === 'yearly') {
+      cp.year = historyState.year - 1;
+    } else if (view === 'quarterly') {
+      if (historyState.quarter === 'all') {
+        cp.year = historyState.year - 1;
+        cp.quarter = 'all';
+      } else {
+        const qOrder = ['Q1','Q2','Q3','Q4'];
+        const qi = qOrder.indexOf(historyState.quarter);
+        cp.year    = qi === 0 ? historyState.year - 1 : historyState.year;
+        cp.quarter = qi === 0 ? 'Q4' : qOrder[qi - 1];
+      }
+    }
+  }
   const btn = document.getElementById('hist-compare-btn');
   if (btn) btn.classList.toggle('hist-compare-btn-active', historyState.compareMode);
+  renderHistPeriodControl();
   renderHistContent();
 }
 
 function getPrevPeriodInfo(view) {
-  const { yearMonth, year, quarter, allData } = historyState;
+  const { yearMonth, year, quarter, allData, comparePeriod } = historyState;
   if (!allData) return null;
   const entries = allData.entries;
+  const cp = comparePeriod;
+  const qMonths = { Q1: ['01','02','03'], Q2: ['04','05','06'], Q3: ['07','08','09'], Q4: ['10','11','12'] };
 
-  if (view === 'daily' || view === 'weekly') {
-    const [y, m] = yearMonth.split('-').map(Number);
-    const prevDate = new Date(y, m - 2, 1);
-    const prevYM = prevDate.getFullYear() + '-' + String(prevDate.getMonth() + 1).padStart(2, '0');
+  if (view === 'daily') {
+    const currDate = historyState.date || getTodayJST();
+    const dd = new Date(currDate); dd.setDate(dd.getDate() - 1);
+    const cmpDate = cp.date || dd.toISOString().slice(0, 10);
     return {
-      currentLabel: formatYearMonth(yearMonth),
-      prevLabel: formatYearMonth(prevYM),
-      currentEntries: entries.filter(e => e.date.startsWith(yearMonth)),
-      prevEntries: entries.filter(e => e.date.startsWith(prevYM)),
+      currentLabel: formatDate(currDate),
+      prevLabel: formatDate(cmpDate),
+      currentEntries: entries.filter(e => e.date === currDate),
+      prevEntries: entries.filter(e => e.date === cmpDate),
+    };
+  } else if (view === 'weekly') {
+    const currYM = yearMonth;
+    const currWI = historyState.weekIndex || 1;
+    const cmpYM = cp.weekYearMonth || (function() {
+      const [y, m] = yearMonth.split('-').map(Number);
+      const pd = new Date(y, m - 2, 1);
+      return pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
+    })();
+    const cmpWI = cp.weekIndex || 1;
+    function _filterWeek(ym, wi) {
+      return entries.filter(e => {
+        if (!e.date.startsWith(ym)) return false;
+        return Math.ceil(Number(e.date.slice(8, 10)) / 7) === wi;
+      });
+    }
+    return {
+      currentLabel: formatYearMonth(currYM) + ' 第' + currWI + '週',
+      prevLabel: formatYearMonth(cmpYM) + ' 第' + cmpWI + '週',
+      currentEntries: _filterWeek(currYM, currWI),
+      prevEntries: _filterWeek(cmpYM, cmpWI),
     };
   } else if (view === 'monthly') {
-    const prevYear = year - 1;
+    const cmpYear = cp.year || year - 1;
     return {
       currentLabel: year + '年',
-      prevLabel: prevYear + '年',
+      prevLabel: cmpYear + '年',
       currentEntries: entries.filter(e => e.date.startsWith(String(year))),
-      prevEntries: entries.filter(e => e.date.startsWith(String(prevYear))),
+      prevEntries: entries.filter(e => e.date.startsWith(String(cmpYear))),
     };
   } else if (view === 'quarterly') {
-    const qMonths = { Q1: ['01','02','03'], Q2: ['04','05','06'], Q3: ['07','08','09'], Q4: ['10','11','12'] };
     if (quarter === 'all') {
-      const prevYear = year - 1;
+      const cmpYear = cp.year || year - 1;
       return {
         currentLabel: year + '年（全期）',
-        prevLabel: prevYear + '年（全期）',
+        prevLabel: cmpYear + '年（全期）',
         currentEntries: entries.filter(e => e.date.startsWith(String(year))),
-        prevEntries: entries.filter(e => e.date.startsWith(String(prevYear))),
+        prevEntries: entries.filter(e => e.date.startsWith(String(cmpYear))),
       };
     }
     const qOrder = ['Q1', 'Q2', 'Q3', 'Q4'];
     const qIdx = qOrder.indexOf(quarter);
-    const prevQ = qIdx === 0 ? 'Q4' : qOrder[qIdx - 1];
-    const prevYear = qIdx === 0 ? year - 1 : year;
-    const curMonths = qMonths[quarter];
-    const prevMonths = qMonths[prevQ];
+    const cmpYear = cp.year || (qIdx === 0 ? year - 1 : year);
+    const cmpQ    = cp.quarter || (qIdx === 0 ? 'Q4' : qOrder[qIdx - 1]);
+    const curMonths  = qMonths[quarter] || [];
+    const prevMonths = qMonths[cmpQ]    || [];
     return {
       currentLabel: year + '年 ' + quarter,
-      prevLabel: prevYear + '年 ' + prevQ,
-      currentEntries: entries.filter(e => e.date.startsWith(String(year)) && curMonths.includes(e.date.slice(5, 7))),
-      prevEntries: entries.filter(e => e.date.startsWith(String(prevYear)) && prevMonths.includes(e.date.slice(5, 7))),
+      prevLabel: cmpYear + '年 ' + cmpQ,
+      currentEntries: entries.filter(e => e.date.startsWith(String(year))    && curMonths.includes(e.date.slice(5, 7))),
+      prevEntries:    entries.filter(e => e.date.startsWith(String(cmpYear)) && prevMonths.includes(e.date.slice(5, 7))),
     };
   } else if (view === 'yearly') {
-    const yearMap = groupEntriesByYear(entries);
-    const years = Object.keys(yearMap).sort((a, b) => b.localeCompare(a));
-    if (years.length < 2) return null;
+    const cmpYear = cp.year || (() => {
+      const yMap = groupEntriesByYear(entries);
+      const ys = Object.keys(yMap).sort((a, b) => b.localeCompare(a));
+      return ys.length >= 2 ? Number(ys[1]) : year - 1;
+    })();
     return {
-      currentLabel: years[0] + '年',
-      prevLabel: years[1] + '年',
-      currentEntries: yearMap[years[0]],
-      prevEntries: yearMap[years[1]],
+      currentLabel: year + '年',
+      prevLabel: cmpYear + '年',
+      currentEntries: entries.filter(e => e.date.startsWith(String(year))),
+      prevEntries:    entries.filter(e => e.date.startsWith(String(cmpYear))),
     };
   }
   return null;
@@ -1611,8 +1797,156 @@ function toggleReportSettings() {
 
 // ------ PDF印刷 ------
 
-function handlePrintReport() {
+function _getPeriodLabel(view) {
+  if (view === 'daily')     return formatDate(historyState.date || getTodayJST());
+  if (view === 'weekly')    return formatYearMonth(historyState.yearMonth) + ' 第' + (historyState.weekIndex || 1) + '週';
+  if (view === 'monthly')   return historyState.year + '年';
+  if (view === 'quarterly') return historyState.year + '年 ' + (historyState.quarter === 'all' ? '全四半期' : historyState.quarter);
+  if (view === 'yearly')    return historyState.year + '年';
+  return '';
+}
+
+function _buildPrintHtml({ title, periodText, today, cmpHtml, histHtml }) {
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>' + title + '</title>' +
+    '<style>' +
+    'body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;padding:20px 24px;max-width:800px;margin:0 auto;color:#111;font-size:13px;line-height:1.6}' +
+    '.print-header{margin-bottom:18px;border-bottom:2px solid #333;padding-bottom:10px}' +
+    '.print-title{font-size:18px;font-weight:700;margin-bottom:4px}' +
+    '.print-period{font-size:13px;color:#333;font-weight:600;margin-bottom:2px}' +
+    '.print-date{font-size:11px;color:#888}' +
+    '.card{border:1px solid #ccc;padding:12px 14px;margin-bottom:12px;page-break-inside:avoid;background:#fff;border-radius:0}' +
+    '.card-title{font-size:14px;font-weight:700;margin-bottom:8px;color:#333;text-transform:none;letter-spacing:normal}' +
+    '.kgi-field-label{color:#333;font-size:13px}' +
+    '.kgi-field-value{color:#111;font-size:15px;font-weight:700}' +
+    '.kgi-field-unit{color:#555;font-size:12px}' +
+    '.hist-empty{color:#999}' +
+    '.hist-entry-meta{color:#555;font-size:12px}' +
+    '.hist-text-item{color:#555;font-size:12px}' +
+    '.hist-important-note{background:#fff8f8;border:1px solid #c00;color:#c00;padding:4px 8px;border-radius:4px}' +
+    '.hist-section-title{font-size:13px;font-weight:700;color:#333;margin:10px 0 6px}' +
+    '.kgi-field-row{padding:8px 0;border-bottom:1px solid #eee}' +
+    '.kgi-field-row:last-child{border-bottom:none}' +
+    '.hist-entry-meta-item{font-size:12px;color:#555;margin-right:8px}' +
+    '.hist-card-actions,.hist-edit-btn,.hist-delete-btn{display:none}' +
+    /* 比較カード */
+    '.cmp-card{border-left:3px solid #aaa}' +
+    '.cmp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}' +
+    '.cmp-legends{display:flex;gap:10px;font-size:11px}' +
+    '.cmp-legend-curr{color:#0088aa;font-weight:700}' +
+    '.cmp-legend-base{color:#666}' +
+    '.cmp-table-wrap{overflow:visible;margin-bottom:12px}' +
+    '.cmp-table{width:100%;border-collapse:collapse;font-size:12px}' +
+    '.cmp-table th{color:#555;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:6px;text-align:right;border-bottom:1px solid #999}' +
+    '.cmp-table th:first-child{text-align:left}' +
+    '.cmp-table td{padding:6px;border-top:1px solid #eee;vertical-align:middle}' +
+    '.cmp-label{font-size:12px;color:#333;white-space:nowrap}' +
+    '.cmp-val{font-size:12px;text-align:right;white-space:nowrap;color:#111}' +
+    '.cmp-base{color:#666}' +
+    '.cmp-pos{color:#167a16;font-weight:700}' +
+    '.cmp-neg{color:#c00;font-weight:700}' +
+    '.cmp-chart-wrap{margin-top:8px;text-align:center}' +
+    /* 非表示要素 */
+    '.hist-compare-btn,.report-controls,.hist-controls,.streak-badge,.dash-gauge-wrap{display:none}' +
+    '</style></head><body>' +
+    '<div class="print-header">' +
+    '<div class="print-title">' + title + '</div>' +
+    (periodText ? '<div class="print-period">' + periodText + '</div>' : '') +
+    '<div class="print-date">出力日：' + today + '</div>' +
+    '</div>' +
+    cmpHtml +
+    histHtml +
+    '</body></html>';
+}
+
+function _printWithFallback(periodText) {
+  const tabHistory = document.getElementById('tab-history');
+
+  // 期間ラベルをDOMに一時挿入
+  let headerEl = null;
+  if (periodText && tabHistory) {
+    headerEl = document.createElement('div');
+    headerEl.id = '_print-header-tmp';
+    headerEl.innerHTML =
+      '<div style="font-size:13px;font-weight:600;color:#333;margin-bottom:4px">' + periodText + '</div>' +
+      '<div style="font-size:11px;color:#888">出力日：' + getTodayJST() + '</div>';
+    tabHistory.insertBefore(headerEl, tabHistory.firstChild);
+  }
+
+  // Canvas → img 差し替え（比較グラフ）
+  const canvas = document.getElementById('cmp-chart');
+  let canvasParent, canvasImg;
+  if (canvas) {
+    canvasImg = document.createElement('img');
+    canvasImg.src = canvas.toDataURL('image/png');
+    canvasImg.style.cssText = 'width:100%;max-height:220px;object-fit:contain';
+    canvasParent = canvas.parentElement;
+    canvasParent.replaceChild(canvasImg, canvas);
+  }
+
+  const restore = () => {
+    if (headerEl && headerEl.parentElement) headerEl.parentElement.removeChild(headerEl);
+    if (canvas && canvasParent && canvasImg) canvasParent.replaceChild(canvas, canvasImg);
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
   window.print();
+}
+
+async function handlePrintReport() {
+  const btn = document.getElementById('report-print-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+
+  try {
+    // データ未ロード時はロードを待つ
+    await ensureHistData();
+    const view = historyState.view;
+    // データロード後に表示を更新（集計カードが確実に描画されるよう）
+    await renderHistContent();
+
+    const today = getTodayJST();
+    let periodText = '';
+    if (historyState.compareMode) {
+      const info = getPrevPeriodInfo(view);
+      if (info) periodText = '当期：' + info.currentLabel + '　／　比較期：' + info.prevLabel;
+    } else {
+      periodText = _getPeriodLabel(view);
+    }
+
+    let cmpHtml = '';
+    if (historyState.compareMode) {
+      const cmpEl = document.getElementById('hist-compare-content');
+      if (cmpEl) {
+        const canvas = document.getElementById('cmp-chart');
+        let inner = cmpEl.innerHTML;
+        if (canvas) {
+          const imgSrc = canvas.toDataURL('image/png');
+          inner = inner.replace(
+            /<canvas[^>]*id="cmp-chart"[^>]*><\/canvas>/,
+            '<img src="' + imgSrc + '" style="width:100%;max-height:220px;object-fit:contain">'
+          );
+        }
+        cmpHtml = inner;
+      }
+    }
+
+    const histEl = document.getElementById('hist-content');
+    const histHtml = histEl ? histEl.innerHTML : '';
+
+    const html = _buildPrintHtml({ title: '履歴レポート', periodText, today, cmpHtml, histHtml });
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(function() { win.print(); }, 400);
+    } else {
+      // フォールバック：期間ラベルをDOMに一時挿入してwindow.print()
+      _printWithFallback(periodText);
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '印刷/PDF'; }
+  }
 }
 
 // ------ CSV出力 ------
@@ -2147,7 +2481,7 @@ async function refreshManagement() {
     });
     renderManagementDashboard(officeRows[0]);
   } catch (e) {
-    container.innerHTML = '<div style="color:var(--accent-red);font-size:13px">読み込みエラー: ' + e.message + '</div>';
+    _renderError(container, '読み込みエラー: ' + e.message);
   }
 }
 
@@ -2363,12 +2697,15 @@ var _OFFICE_KPI_DEFS = [
 ];
 
 const officeHistState = {
-  view:        'daily',
-  yearMonth:   getCurrentYearMonthJST(),
-  year:        Number(getTodayJST().slice(0, 4)),
-  quarter:     'all',
-  allData:     null,
-  compareMode: false,
+  view:          'daily',
+  yearMonth:     getCurrentYearMonthJST(),
+  year:          Number(getTodayJST().slice(0, 4)),
+  quarter:       'all',
+  date:          getTodayJST(),
+  weekIndex:     1,
+  allData:       null,
+  compareMode:   false,
+  comparePeriod: { yearMonth: '', year: 0, quarter: 'all', date: '', weekYearMonth: '', weekIndex: 1 },
 };
 
 function initOfficeHistoryTab() {
@@ -2397,8 +2734,18 @@ function _onOfficeHistViewChange() {
 
 function _onOfficeHistPeriodChange() {
   const view = officeHistState.view;
-  if (view === 'daily' || view === 'weekly') {
-    officeHistState.yearMonth = document.getElementById('office-hist-month-input').value || getCurrentYearMonthJST();
+  if (view === 'daily') {
+    if (officeHistState.compareMode) {
+      const dEl = document.getElementById('office-hist-date-input');
+      if (dEl && dEl.value) { officeHistState.date = dEl.value; officeHistState.yearMonth = dEl.value.slice(0, 7); }
+    } else {
+      officeHistState.yearMonth = document.getElementById('office-hist-month-input').value || getCurrentYearMonthJST();
+    }
+  } else if (view === 'weekly') {
+    const mEl = document.getElementById('office-hist-month-input');
+    const wEl = document.getElementById('office-hist-week-select');
+    if (mEl) officeHistState.yearMonth = mEl.value || getCurrentYearMonthJST();
+    if (wEl) officeHistState.weekIndex = Number(wEl.value) || 1;
   } else if (view === 'quarterly') {
     const yearEl = document.getElementById('office-hist-year-input');
     const qEl   = document.getElementById('office-hist-quarter-select');
@@ -2410,32 +2757,132 @@ function _onOfficeHistPeriodChange() {
   renderOfficeHistContent();
 }
 
+function _onOfficeHistCmpPeriodChange() {
+  const view = officeHistState.view;
+  const cp = officeHistState.comparePeriod;
+  if (view === 'daily') {
+    const el = document.getElementById('office-hist-cmp-date-input');
+    if (el) cp.date = el.value || officeHistState.date;
+  } else if (view === 'weekly') {
+    const mEl = document.getElementById('office-hist-cmp-month-input');
+    const wEl = document.getElementById('office-hist-cmp-week-select');
+    if (mEl) cp.weekYearMonth = mEl.value || officeHistState.yearMonth;
+    if (wEl) cp.weekIndex = Number(wEl.value) || 1;
+  } else if (view === 'monthly' || view === 'yearly') {
+    const el = document.getElementById('office-hist-cmp-year-input');
+    if (el) cp.year = Number(el.value) || (officeHistState.year - 1);
+  } else if (view === 'quarterly') {
+    const yEl = document.getElementById('office-hist-cmp-year-input');
+    const qEl = document.getElementById('office-hist-cmp-quarter-select');
+    if (yEl) cp.year    = Number(yEl.value) || (officeHistState.year - 1);
+    if (qEl) cp.quarter = qEl.value;
+  }
+  renderOfficeHistContent();
+}
+
 function _renderOfficeHistPeriodControl() {
   const container = document.getElementById('office-hist-period-control');
   if (!container) return;
   const view = officeHistState.view;
-  if (view === 'daily' || view === 'weekly') {
-    container.innerHTML = `<input type="month" id="office-hist-month-input" value="${officeHistState.yearMonth}" />`;
-    document.getElementById('office-hist-month-input').addEventListener('change', _onOfficeHistPeriodChange);
-  } else if (view === 'quarterly') {
-    container.innerHTML = `
-      <input type="number" id="office-hist-year-input" value="${officeHistState.year}" min="2020" max="2040" style="flex:1" />
-      <select id="office-hist-quarter-select" style="flex:1">
-        <option value="all"${officeHistState.quarter === 'all' ? ' selected' : ''}>全四半期</option>
-        <option value="Q1"${officeHistState.quarter === 'Q1' ? ' selected' : ''}>Q1（1〜3月）</option>
-        <option value="Q2"${officeHistState.quarter === 'Q2' ? ' selected' : ''}>Q2（4〜6月）</option>
-        <option value="Q3"${officeHistState.quarter === 'Q3' ? ' selected' : ''}>Q3（7〜9月）</option>
-        <option value="Q4"${officeHistState.quarter === 'Q4' ? ' selected' : ''}>Q4（10〜12月）</option>
-      </select>
-    `;
-    document.getElementById('office-hist-year-input').addEventListener('change', _onOfficeHistPeriodChange);
-    document.getElementById('office-hist-quarter-select').addEventListener('change', _onOfficeHistPeriodChange);
-  } else if (view === 'yearly') {
-    container.innerHTML = '';
-  } else {
-    container.innerHTML = `<input type="number" id="office-hist-year-input" value="${officeHistState.year}" min="2020" max="2040" />`;
-    document.getElementById('office-hist-year-input').addEventListener('change', _onOfficeHistPeriodChange);
+  const cp = officeHistState.comparePeriod;
+  const cm = officeHistState.compareMode;
+
+  function _weekOpts(sel) {
+    return [1,2,3,4,5].map(function(n) {
+      return '<option value="' + n + '"' + (sel === n ? ' selected' : '') + '>第' + n + '週</option>';
+    }).join('');
   }
+  function _qOpts(sel) {
+    return [['all','全四半期'],['Q1','Q1（1〜3月）'],['Q2','Q2（4〜6月）'],['Q3','Q3（7〜9月）'],['Q4','Q4（10〜12月）']].map(function(p) {
+      return '<option value="' + p[0] + '"' + (sel === p[0] ? ' selected' : '') + '>' + p[1] + '</option>';
+    }).join('');
+  }
+
+  function _mainHTML() {
+    if (cm) {
+      if (view === 'daily') {
+        return '<input type="date" id="office-hist-date-input" value="' + officeHistState.date + '" />';
+      } else if (view === 'weekly') {
+        return '<input type="month" id="office-hist-month-input" value="' + officeHistState.yearMonth + '" style="flex:1" />' +
+               '<select id="office-hist-week-select" style="flex:1">' + _weekOpts(officeHistState.weekIndex) + '</select>';
+      } else if (view === 'monthly') {
+        return '<input type="number" id="office-hist-year-input" value="' + officeHistState.year + '" min="2020" max="2040" />';
+      } else if (view === 'quarterly') {
+        return '<input type="number" id="office-hist-year-input" value="' + officeHistState.year + '" min="2020" max="2040" style="flex:1" />' +
+               '<select id="office-hist-quarter-select" style="flex:1">' + _qOpts(officeHistState.quarter) + '</select>';
+      } else if (view === 'yearly') {
+        return '<input type="number" id="office-hist-year-input" value="' + officeHistState.year + '" min="2020" max="2040" />';
+      }
+      return '';
+    }
+    if (view === 'daily' || view === 'weekly') {
+      return '<input type="month" id="office-hist-month-input" value="' + officeHistState.yearMonth + '" />';
+    } else if (view === 'quarterly') {
+      return '<input type="number" id="office-hist-year-input" value="' + officeHistState.year + '" min="2020" max="2040" style="flex:1" />' +
+             '<select id="office-hist-quarter-select" style="flex:1">' + _qOpts(officeHistState.quarter) + '</select>';
+    } else if (view !== 'yearly') {
+      return '<input type="number" id="office-hist-year-input" value="' + officeHistState.year + '" min="2020" max="2040" />';
+    }
+    return '';
+  }
+
+  function _cmpHTML() {
+    if (view === 'daily') {
+      var dd = new Date(officeHistState.date); dd.setDate(dd.getDate() - 1);
+      var v = cp.date || dd.toISOString().slice(0, 10);
+      return '<input type="date" id="office-hist-cmp-date-input" value="' + v + '" />';
+    } else if (view === 'weekly') {
+      var vm = cp.weekYearMonth || cp.yearMonth || officeHistState.yearMonth;
+      var vw = cp.weekIndex || 1;
+      return '<input type="month" id="office-hist-cmp-month-input" value="' + vm + '" style="flex:1" />' +
+             '<select id="office-hist-cmp-week-select" style="flex:1">' + _weekOpts(vw) + '</select>';
+    } else if (view === 'monthly' || view === 'yearly') {
+      var v2 = cp.year || (officeHistState.year - 1);
+      return '<input type="number" id="office-hist-cmp-year-input" value="' + v2 + '" min="2020" max="2040" />';
+    } else if (view === 'quarterly') {
+      var cy = cp.year || (officeHistState.year - 1);
+      var cq = cp.quarter || 'Q4';
+      return '<input type="number" id="office-hist-cmp-year-input" value="' + cy + '" min="2020" max="2040" style="flex:1" />' +
+             '<select id="office-hist-cmp-quarter-select" style="flex:1">' + _qOpts(cq) + '</select>';
+    }
+    return '';
+  }
+
+  if (cm) {
+    container.innerHTML =
+      '<div class="cmp-period-row">' +
+        '<span class="cmp-period-label">当期</span>' +
+        '<div class="cmp-period-inputs">' + _mainHTML() + '</div>' +
+      '</div>' +
+      '<div class="cmp-period-row">' +
+        '<span class="cmp-period-label cmp-period-label-base">比較</span>' +
+        '<div class="cmp-period-inputs">' + _cmpHTML() + '</div>' +
+      '</div>';
+  } else {
+    container.innerHTML = _mainHTML();
+  }
+
+  var dIn  = document.getElementById('office-hist-date-input');
+  var mIn  = document.getElementById('office-hist-month-input');
+  var wSel = document.getElementById('office-hist-week-select');
+  var yIn  = document.getElementById('office-hist-year-input');
+  var qSel = document.getElementById('office-hist-quarter-select');
+  if (dIn)  dIn.addEventListener('change', _onOfficeHistPeriodChange);
+  if (mIn)  mIn.addEventListener('change', _onOfficeHistPeriodChange);
+  if (wSel) wSel.addEventListener('change', _onOfficeHistPeriodChange);
+  if (yIn)  yIn.addEventListener('change', _onOfficeHistPeriodChange);
+  if (qSel) qSel.addEventListener('change', _onOfficeHistPeriodChange);
+
+  var cdIn  = document.getElementById('office-hist-cmp-date-input');
+  var cmIn  = document.getElementById('office-hist-cmp-month-input');
+  var cwSel = document.getElementById('office-hist-cmp-week-select');
+  var cyIn  = document.getElementById('office-hist-cmp-year-input');
+  var cqSel = document.getElementById('office-hist-cmp-quarter-select');
+  if (cdIn)  cdIn.addEventListener('change', _onOfficeHistCmpPeriodChange);
+  if (cmIn)  cmIn.addEventListener('change', _onOfficeHistCmpPeriodChange);
+  if (cwSel) cwSel.addEventListener('change', _onOfficeHistCmpPeriodChange);
+  if (cyIn)  cyIn.addEventListener('change', _onOfficeHistCmpPeriodChange);
+  if (cqSel) cqSel.addEventListener('change', _onOfficeHistCmpPeriodChange);
 }
 
 async function ensureOfficeHistData() {
@@ -2470,7 +2917,7 @@ async function renderOfficeHistContent() {
     }
     _renderOfficeCompareContent(view);
   } catch (e) {
-    container.innerHTML = '<div style="color:var(--accent-red);font-size:13px">読み込みエラー: ' + e.message + '</div>';
+    _renderError(container, '読み込みエラー: ' + e.message);
   }
 }
 
@@ -2678,15 +3125,45 @@ let _officeCompareChart = null;
 
 function _onOfficeHistCompareModeToggle() {
   officeHistState.compareMode = !officeHistState.compareMode;
+  if (officeHistState.compareMode) {
+    const view = officeHistState.view;
+    const cp = officeHistState.comparePeriod;
+    if (view === 'daily') {
+      if (!officeHistState.date) officeHistState.date = getTodayJST();
+      const d = new Date(officeHistState.date);
+      d.setDate(d.getDate() - 1);
+      cp.date = d.toISOString().slice(0, 10);
+    } else if (view === 'weekly') {
+      if (!officeHistState.weekIndex) officeHistState.weekIndex = 1;
+      const parts = officeHistState.yearMonth.split('-').map(Number);
+      const pd = new Date(Date.UTC(parts[0], parts[1] - 2, 1));
+      cp.weekYearMonth = pd.toISOString().slice(0, 7);
+      cp.weekIndex = officeHistState.weekIndex;
+    } else if (view === 'monthly' || view === 'yearly') {
+      cp.year = officeHistState.year - 1;
+    } else if (view === 'quarterly') {
+      if (officeHistState.quarter === 'all') {
+        cp.year = officeHistState.year - 1;
+        cp.quarter = 'all';
+      } else {
+        const qOrder = ['Q1','Q2','Q3','Q4'];
+        const qi = qOrder.indexOf(officeHistState.quarter);
+        cp.year    = qi === 0 ? officeHistState.year - 1 : officeHistState.year;
+        cp.quarter = qi === 0 ? 'Q4' : qOrder[qi - 1];
+      }
+    }
+  }
   const btn = document.getElementById('office-hist-compare-btn');
   if (btn) btn.classList.toggle('hist-compare-btn-active', officeHistState.compareMode);
+  _renderOfficeHistPeriodControl();
   renderOfficeHistContent();
 }
 
 function _getOfficePrevPeriodInfo(view) {
-  const { yearMonth, year, quarter, allData } = officeHistState;
+  const { yearMonth, year, quarter, allData, comparePeriod } = officeHistState;
   if (!allData) return null;
   const rows = allData;
+  const cp = comparePeriod;
 
   function sumRows(list) {
     if (!list.length) return null;
@@ -2701,53 +3178,72 @@ function _getOfficePrevPeriodInfo(view) {
 
   let currLabel, prevLabel, currRows, prevRows;
 
-  if (view === 'weekly') {
-    const [y, m] = yearMonth.split('-').map(Number);
-    const prevDate = new Date(Date.UTC(y, m - 1, 1));
-    prevDate.setUTCMonth(prevDate.getUTCMonth() - 1);
-    const prevYM = prevDate.toISOString().slice(0, 7);
-    currLabel = yearMonth;
-    prevLabel = prevYM;
-    currRows  = rows.filter(function(r) { return String(r.date).startsWith(yearMonth); });
-    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(prevYM); });
-  } else if (view === 'monthly') {
-    const prevYear = year - 1;
-    currLabel = year + '年';
-    prevLabel = prevYear + '年';
-    currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
-    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(prevYear)); });
-  } else if (view === 'quarterly') {
-    const prevYear = year - 1;
-    const qMap = { Q1:[1,2,3], Q2:[4,5,6], Q3:[7,8,9], Q4:[10,11,12], all:null };
-    const months = qMap[quarter];
-    currLabel = year + ' ' + (quarter === 'all' ? '通年' : quarter);
-    prevLabel = prevYear + ' ' + (quarter === 'all' ? '通年' : quarter);
-    function filterQ(ys, mths) {
+  if (view === 'daily') {
+    var currDate = officeHistState.date || getTodayJST();
+    var ddd = new Date(currDate); ddd.setDate(ddd.getDate() - 1);
+    var cmpDate = cp.date || ddd.toISOString().slice(0, 10);
+    currLabel = formatDate(currDate);
+    prevLabel = formatDate(cmpDate);
+    currRows  = rows.filter(function(r) { return String(r.date) === currDate; });
+    prevRows  = rows.filter(function(r) { return String(r.date) === cmpDate; });
+  } else if (view === 'weekly') {
+    var currYM = yearMonth;
+    var currWI = officeHistState.weekIndex || 1;
+    var cmpYM = cp.weekYearMonth || (function() {
+      var pts = yearMonth.split('-').map(Number);
+      return new Date(Date.UTC(pts[0], pts[1] - 2, 1)).toISOString().slice(0, 7);
+    })();
+    var cmpWI = cp.weekIndex || 1;
+    function _filterOfficeWeek(ym, wi) {
       return rows.filter(function(r) {
-        const d = String(r.date);
+        var d = String(r.date);
+        if (!d.startsWith(ym)) return false;
+        return Math.ceil(Number(d.slice(8, 10)) / 7) === wi;
+      });
+    }
+    currLabel = formatYearMonth(currYM) + ' 第' + currWI + '週';
+    prevLabel = formatYearMonth(cmpYM) + ' 第' + cmpWI + '週';
+    currRows  = _filterOfficeWeek(currYM, currWI);
+    prevRows  = _filterOfficeWeek(cmpYM, cmpWI);
+  } else if (view === 'monthly') {
+    const cmpYear = cp.year || year - 1;
+    currLabel = year + '年';
+    prevLabel = cmpYear + '年';
+    currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
+    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(cmpYear)); });
+  } else if (view === 'quarterly') {
+    const qMap = { Q1:[1,2,3], Q2:[4,5,6], Q3:[7,8,9], Q4:[10,11,12], all:null };
+    const qOrder = ['Q1','Q2','Q3','Q4'];
+    var cmpYear, cmpQ;
+    if (quarter === 'all') {
+      cmpYear = cp.year || year - 1;
+      cmpQ    = 'all';
+    } else {
+      const qi = qOrder.indexOf(quarter);
+      cmpYear = cp.year || (qi === 0 ? year - 1 : year);
+      cmpQ    = cp.quarter || (qi === 0 ? 'Q4' : qOrder[qi - 1]);
+    }
+    currLabel = year + ' ' + (quarter === 'all' ? '通年' : quarter);
+    prevLabel = cmpYear + ' ' + (cmpQ === 'all' ? '通年' : cmpQ);
+    function filterQ(ys, qKey) {
+      var mths = qMap[qKey];
+      return rows.filter(function(r) {
+        var d = String(r.date);
         if (!d.startsWith(String(ys))) return false;
         if (!mths) return true;
         return mths.indexOf(Number(d.slice(5, 7))) >= 0;
       });
     }
-    currRows = filterQ(year, months);
-    prevRows = filterQ(prevYear, months);
+    currRows = filterQ(year,    quarter);
+    prevRows = filterQ(cmpYear, cmpQ);
   } else if (view === 'yearly') {
-    const currYear = year;
-    const prevYear = year - 1;
-    currLabel = currYear + '年';
-    prevLabel = prevYear + '年';
-    currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(currYear)); });
-    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(prevYear)); });
+    const cmpYear = cp.year || year - 1;
+    currLabel = year + '年';
+    prevLabel = cmpYear + '年';
+    currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
+    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(cmpYear)); });
   } else {
-    const [y, m] = yearMonth.split('-').map(Number);
-    const prevDate = new Date(Date.UTC(y, m - 1, 1));
-    prevDate.setUTCMonth(prevDate.getUTCMonth() - 1);
-    const prevYM = prevDate.toISOString().slice(0, 7);
-    currLabel = yearMonth;
-    prevLabel = prevYM;
-    currRows  = rows.filter(function(r) { return String(r.date).startsWith(yearMonth); });
-    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(prevYM); });
+    return null;
   }
 
   const curr = sumRows(currRows);
@@ -3140,7 +3636,7 @@ async function loadOfficeKgi() {
     var plan = await getOfficeSalesPlan(ym);
     renderOfficeSalesPlanFields(plan, ym, container);
   } catch (e) {
-    container.innerHTML = '<div style="color:var(--accent-red);font-size:13px">読み込みエラー: ' + e.message + '</div>';
+    _renderError(container, '読み込みエラー: ' + e.message);
   }
 }
 
@@ -3516,8 +4012,21 @@ function initApp() {
   initOfficeHistoryTab();
   initOfficeKgiTab();
   initSetupTriggersBtn();
+  initAppHeightFix();
   initScrollIntoViewOnFocus();
   console.log('Nice Serviceman 日報 - 初期化完了');
+}
+
+// GAS iframe / 古い iOS 対応: window.innerHeight で app 高さを補正
+function initAppHeightFix() {
+  var app = document.getElementById('app');
+  if (!app) return;
+  function setH() {
+    app.style.height = window.innerHeight + 'px';
+  }
+  setH();
+  window.addEventListener('resize', setH);
+  window.addEventListener('orientationchange', function() { setTimeout(setH, 250); });
 }
 
 // キーボード表示時にフォーカス中の入力欄が隠れないよう scrollIntoView する（iOS Safari 対策）
