@@ -22,14 +22,11 @@ async function _get(params) {
     console.warn('APPS_SCRIPT_URL 未設定。api.js の先頭にURLを貼り付けてください。');
     return null;
   }
-  console.log('[API GET]', params);
   const url = new URL(APPS_SCRIPT_URL);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
   const res = await fetch(url.toString(), { redirect: 'follow' });
   if (!res.ok) throw new Error(`GET エラー: ${res.status}`);
-  const data = await res.json();
-  console.log('[API GET] <=', JSON.stringify(data).slice(0, 300));
-  return data;
+  return res.json();
 }
 
 /**
@@ -42,7 +39,6 @@ async function _post(body) {
     console.warn('APPS_SCRIPT_URL 未設定。api.js の先頭にURLを貼り付けてください。');
     return { success: false };
   }
-  console.log('[API POST]', body.action, body.data?.date || body.data?.yearMonth || '');
   // redirect:'follow' でリダイレクト先へ自動追従。
   // GAS は doPost 実行後に 302→echo URL を返すが、echo URL はレスポンスボディを保持しており
   // GETで追従しても JSON を正常に取得できる。
@@ -54,9 +50,7 @@ async function _post(body) {
     redirect: 'follow',
   });
   if (!res.ok) throw new Error(`POST エラー: ${res.status}`);
-  const data = await res.json();
-  console.log('[API POST] <=', data);
-  return data;
+  return res.json();
 }
 
 // ============================================================

@@ -84,6 +84,7 @@ function switchSubTab(section, tabId) {
   if (tabId === 'tab-office-dashboard') refreshManagement();
   if (tabId === 'tab-office-history')   refreshOfficeHistory();
   if (tabId === 'tab-office-kgi')       loadOfficeKgi();
+  if (tabId === 'tab-office-import')    _ensureXlsx();
 
   document.getElementById('content').scrollTop = 0;
 }
@@ -206,9 +207,17 @@ async function loadEntry(date) {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
   try {
     const yearMonth = date.slice(0, 7);
-    const entries = await getEntries(yearMonth);
+    // allDataキャッシュ優先（未ロードなら待機、失敗時はgetEntriesにフォールバック）
+    if (!historyState.allData) {
+      await ensureHistData().catch(() => {});
+    }
+    let entries;
+    if (historyState.allData) {
+      entries = historyState.allData.entries.filter(e => e.date.startsWith(yearMonth));
+    } else {
+      entries = await getEntries(yearMonth);
+    }
     const entry = entries.find(e => e.date === date);
-    console.log('[loadEntry]', date, '-> entries:', entries.length, '件 / match:', entry ? 'あり' : 'なし');
 
     KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
       const el = document.getElementById(`entry-${field.key}`);
@@ -360,12 +369,10 @@ async function refreshDashboard() {
   const yearMonth = getCurrentYearMonthJST();
   try {
     await ensureHistData();
-    const allEntries = historyState.allData ? historyState.allData.entries : [];
-
-    const [entries, budget] = await Promise.all([
-      getEntries(yearMonth),
-      getBudget(yearMonth),
-    ]);
+    const allData = historyState.allData;
+    const allEntries = allData ? allData.entries : [];
+    const entries = allData ? allData.entries.filter(e => e.date.startsWith(yearMonth)) : [];
+    const budget  = allData ? (allData.budgets.find(b => String(b.yearMonth || '').slice(0, 7) === yearMonth) || null) : null;
     renderTrustScore(entries);
     const totals = calcMonthlyTotals(entries);
     const promotionActual = totals.promotionAmount || 0;
@@ -1058,16 +1065,23 @@ async function renderHistContent() {
   }
 }
 
+var _ensureHistDataPromise = null;
 async function ensureHistData() {
-  if (!historyState.allData) {
-    const data = await getAllData();
+  if (historyState.allData) return;
+  if (_ensureHistDataPromise) return _ensureHistDataPromise;
+  _ensureHistDataPromise = getAllData().then(function(data) {
     const dateMap = new Map();
-    (Array.isArray(data.entries) ? data.entries : []).forEach(e => dateMap.set(e.date, e));
+    (Array.isArray(data.entries) ? data.entries : []).forEach(function(e) { dateMap.set(e.date, e); });
     historyState.allData = {
       entries: [...dateMap.values()],
       budgets: Array.isArray(data.budgets) ? data.budgets : [],
     };
-  }
+    _ensureHistDataPromise = null;
+  }).catch(function(err) {
+    _ensureHistDataPromise = null;
+    throw err;
+  });
+  return _ensureHistDataPromise;
 }
 
 // ------ 集計ヘルパー ------
@@ -3740,11 +3754,29 @@ function initOfficeDailyImport() {
     .addEventListener('change', renderOfficeDailyFields);
 }
 
+var _xlsxLoadPromise = null;
+function _ensureXlsx() {
+  if (typeof XLSX !== 'undefined') return Promise.resolve();
+  if (_xlsxLoadPromise) return _xlsxLoadPromise;
+  _xlsxLoadPromise = new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = resolve;
+    s.onerror = function() {
+      _xlsxLoadPromise = null;
+      reject(new Error('XLSXライブラリの読み込みに失敗しました。ネットワーク接続を確認してください。'));
+    };
+    document.head.appendChild(s);
+  });
+  return _xlsxLoadPromise;
+}
+
 async function onOfficeDailyFileSelect(e) {
   var file = e.target.files[0];
   if (!file) return;
   e.target.value = '';
   try {
+    await _ensureXlsx();
     var buf = await file.arrayBuffer();
     var wb  = XLSX.read(new Uint8Array(buf), { type: 'array' });
     _officeDailyParsed = parseDayReport(wb, getTodayJST());
