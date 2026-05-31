@@ -2435,6 +2435,9 @@ function getWeekStartJST() {
  * app.js は一切変更しない。
  */
 
+// GAS版でもタイトルタップリロードで使用
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCEwdRtZJI36iA85YWkVXizMgN37ebQVCoDRbow8O5_9m3n_Yctw0pYSV1V9IJe09N/exec';
+
 // ============================================================
 // 内部ユーティリティ
 // ============================================================
@@ -7079,10 +7082,8 @@ function initHeaderReload() {
   btn.addEventListener('click', function() {
     var u = location.href;
     if (u.indexOf('googleusercontent') > -1 || u.indexOf('script.google') > -1) {
-      // GAS版: echo URLの ?lib= パラメータから /exec URLを逆算
-      var libMatch = u.match(/[?&]lib=([^&]+)/);
-      if (libMatch) {
-        location.href = 'https://script.google.com/macros/s/' + libMatch[1] + '/exec';
+      if (typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
+        location.href = APPS_SCRIPT_URL;
       } else {
         location.reload();
       }

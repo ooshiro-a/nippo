@@ -4240,10 +4240,8 @@ function initHeaderReload() {
   btn.addEventListener('click', function() {
     var u = location.href;
     if (u.indexOf('googleusercontent') > -1 || u.indexOf('script.google') > -1) {
-      // GAS版: echo URLの ?lib= パラメータから /exec URLを逆算
-      var libMatch = u.match(/[?&]lib=([^&]+)/);
-      if (libMatch) {
-        location.href = 'https://script.google.com/macros/s/' + libMatch[1] + '/exec';
+      if (typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
+        location.href = APPS_SCRIPT_URL;
       } else {
         location.reload();
       }

@@ -7,6 +7,9 @@
  * app.js は一切変更しない。
  */
 
+// GAS版でもタイトルタップリロードで使用
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCEwdRtZJI36iA85YWkVXizMgN37ebQVCoDRbow8O5_9m3n_Yctw0pYSV1V9IJe09N/exec';
+
 // ============================================================
 // 内部ユーティリティ
 // ============================================================
