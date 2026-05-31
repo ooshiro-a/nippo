@@ -76,6 +76,7 @@ function doGet(e) {
   if (!e.parameter.action) {
     return HtmlService.createHtmlOutputFromFile('index')
       .setTitle('Nice Serviceman 日報')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
@@ -114,7 +115,8 @@ function doGet(e) {
     return jsonResponse(result);
 
   } catch (err) {
-    return jsonResponse({ error: err.message });
+    Logger.log('doGet エラー: ' + err.message + '\n' + err.stack);
+    return jsonResponse({ error: 'サーバーエラーが発生しました' });
   }
 }
 
@@ -163,7 +165,8 @@ function doPost(e) {
     return jsonResponse(result);
 
   } catch (err) {
-    return jsonResponse({ error: err.message });
+    Logger.log('doPost エラー: ' + err.message + '\n' + err.stack);
+    return jsonResponse({ error: 'サーバーエラーが発生しました' });
   }
 }
 
