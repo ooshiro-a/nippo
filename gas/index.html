@@ -977,7 +977,7 @@ input.kgi-field-input {
   .cmp-card { border-left: 3px solid #aaa !important; }
   .cmp-table th { color: #555 !important; border-bottom: 1px solid #999 !important; }
   .cmp-table td { border-top: 1px solid #eee !important; }
-  .cmp-label { color: #333 !important; }
+  .cmp-label { color: #1f2430 !important; }
   .cmp-val { color: #111 !important; }
   .cmp-base { color: #666 !important; }
   .cmp-pos { color: #167a16 !important; }
@@ -1810,6 +1810,87 @@ input.kgi-field-input {
 }
 }
 
+
+/* === レポート共通（白紙ライト）カラーパレット === */
+:root {
+  --rpt-text:       #1f2430;
+  --rpt-sub:        #5b6270;
+  --rpt-muted:      #9aa0ac;
+  --rpt-ok-text:    #1f9d61;
+  --rpt-ok-bg:      #e9f7f0;
+  --rpt-ok-border:  #79c6a3;
+  --rpt-warn-text:  #d0453b;
+  --rpt-warn-bg:    #fbecea;
+  --rpt-warn-border:#e0584d;
+  --rpt-surface:    #f4f5f2;
+  --rpt-border:     #e3e6ea;
+}
+/* 4列グリッド行 */
+.rpt-row { display:grid; grid-template-columns:18% 15% 39% 28%; align-items:center; padding:6px 0; border-bottom:1px solid var(--rpt-border); gap:4px; }
+.rpt-row.row-ok   { border-left:3px solid var(--rpt-ok-border); padding-left:6px; }
+.rpt-row.row-warn { border-left:3px solid var(--rpt-warn-border); background:var(--rpt-warn-bg); padding-left:6px; }
+.rpt-row.row-base { border-left:3px solid var(--rpt-border); padding-left:6px; }
+/* 列スタイル */
+.rpt-col-label { color:var(--rpt-text); font-weight:700; font-size:11px; }
+.rpt-col-rate  { font-size:13px; font-weight:700; }
+.rpt-col-rate.ok   { color:var(--rpt-ok-text); }
+.rpt-col-rate.warn { color:var(--rpt-warn-text); }
+.rpt-col-detail { font-size:9px; color:var(--rpt-sub); }
+.rpt-col-diff   { font-size:9px; text-align:right; }
+.rpt-col-diff.up   { color:var(--rpt-ok-text); font-weight:700; }
+.rpt-col-diff.down { color:var(--rpt-warn-text); font-weight:700; }
+.rpt-col-diff.none { color:var(--rpt-muted); }
+/* ブロック */
+.rpt-block { margin-bottom:10px; border:1px solid var(--rpt-border); border-radius:4px; overflow:hidden; }
+.rpt-block-hdr { display:flex; align-items:center; gap:6px; padding:7px 10px; background:var(--rpt-surface); border-bottom:1px solid var(--rpt-border); }
+.rpt-block-title { font-size:12px; font-weight:700; color:var(--rpt-text); }
+.rpt-block-badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:8px; }
+.rpt-block-badge.ok      { background:var(--rpt-ok-bg); color:#1f7d4d; }
+.rpt-block-badge.warn    { background:var(--rpt-warn-bg); color:#c0453a; }
+.rpt-block-badge.caution { background:#fbf2dc; color:#9a6a06; }
+.rpt-block-summary { margin-left:auto; font-size:10px; color:var(--rpt-sub); }
+.rpt-block-body { padding:0 10px; }
+/* サブ行（末見通し等） */
+.rpt-sub-row { font-size:9px; color:var(--rpt-sub); padding:3px 0 3px 18px; border-bottom:1px solid var(--rpt-border); }
+/* データなし行 */
+.rpt-missing-row { display:flex; align-items:center; gap:6px; padding:5px 10px; border-bottom:1px solid var(--rpt-border); color:var(--rpt-muted); font-size:11px; }
+.rpt-dot      { font-size:10px; }
+.rpt-dot.ok   { color:var(--rpt-ok-text); }
+.rpt-dot.warn { color:var(--rpt-warn-text); }
+.rpt-dot.none { color:var(--rpt-muted); }
+.rpt-missing-tag { background:#f1f2ef; padding:1px 8px; border-radius:9px; font-size:8px; }
+/* 比較表 */
+.rpt-cmp-table { width:100%; border-collapse:collapse; font-size:11px; }
+.rpt-cmp-table th { font-size:9px; color:var(--rpt-sub); text-align:right; border-bottom:1px solid #cfd3d9; padding:5px 6px; }
+.rpt-cmp-table th:first-child { text-align:left; }
+.rpt-cmp-table td { text-align:right; padding:6px; border-top:1px solid #f0f1f3; }
+.rpt-cmp-table td:first-child { text-align:left; color:var(--rpt-text); font-weight:700; }
+.rpt-diff-up   { color:var(--rpt-ok-text); font-weight:700; }
+.rpt-diff-down { color:var(--rpt-warn-text); font-weight:700; }
+.rpt-diff-zero { color:var(--rpt-muted); }
+/* サマリーバンド */
+.rpt-summary-band { background:var(--rpt-surface); padding:8px 12px; margin-bottom:10px; display:flex; gap:16px; flex-wrap:wrap; border-radius:4px; }
+.rpt-summary-item { display:flex; flex-direction:column; gap:2px; }
+.rpt-summary-label { font-size:9px; color:var(--rpt-sub); }
+.rpt-summary-val   { font-size:13px; font-weight:700; color:var(--rpt-text); }
+/* レイアウト切替トグル */
+.rpt-layout-toggle { display:flex; gap:2px; }
+.rpt-layout-btn    { padding:3px 10px; font-size:11px; border:1px solid var(--rpt-border); background:var(--bg-card); color:var(--text-secondary); border-radius:3px; cursor:pointer; }
+.rpt-layout-btn.on { background:var(--accent-amber); color:#1f2430; border-color:var(--accent-amber); font-weight:700; }
+/* 週次グリッド（個人） */
+.rpt-week-grid { display:grid; grid-template-columns:1fr 1fr; gap:3px 14px; font-size:9px; padding:6px 0; }
+.rpt-wrow { display:flex; justify-content:space-between; border-bottom:1px solid #f0f1f3; padding:3px 0; }
+.rpt-wrow.trust { grid-column:1/-1; border-top:1px solid var(--rpt-border); margin-top:3px; }
+.rpt-wrow.zero  { color:var(--rpt-muted); }
+.rpt-wrow b { color:var(--rpt-text); }
+/* 印刷専用 */
+@media print {
+  .rpt-layout-toggle { display:none !important; }
+  .rpt-print-section + .rpt-print-section { break-before:page; }
+  .rpt-block, .rpt-week-block { break-inside:avoid; }
+  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 </head>
@@ -2067,6 +2148,10 @@ input.kgi-field-input {
                 <option value="quarterly">四半期</option>
                 <option value="yearly">年次</option>
               </select>
+              <div class="rpt-layout-toggle" id="hist-layout-toggle">
+                <button class="rpt-layout-btn on" data-l="list">リスト</button>
+                <button class="rpt-layout-btn" data-l="card">カード</button>
+              </div>
               <button class="btn btn-secondary hist-compare-btn" id="hist-compare-btn">比較</button>
             </div>
             <div id="hist-period-control"></div>
@@ -2200,6 +2285,10 @@ input.kgi-field-input {
                 <option value="quarterly">四半期</option>
                 <option value="yearly">年次</option>
               </select>
+              <div class="rpt-layout-toggle" id="office-hist-layout-toggle">
+                <button class="rpt-layout-btn on" data-l="list">リスト</button>
+                <button class="rpt-layout-btn" data-l="card">カード</button>
+              </div>
               <button class="btn btn-secondary hist-compare-btn" id="office-hist-compare-btn">比較</button>
             </div>
             <div id="office-hist-period-control"></div>
@@ -3693,6 +3782,7 @@ const historyState = {
   allData: null,
   compareMode: false,
   comparePeriod: { yearMonth: '', year: 0, quarter: 'all', date: '', weekYearMonth: '', weekIndex: 1 },
+  layout: 'list',
 };
 
 function initHistoryTab() {
@@ -3708,6 +3798,15 @@ function initHistoryTab() {
     if (deleteBtn) handleDeleteHistoryEntry(deleteBtn.dataset.date, deleteBtn);
   });
   document.getElementById('hist-compare-btn').addEventListener('click', onHistCompareModeToggle);
+  document.getElementById('hist-layout-toggle').addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-l]');
+    if (!btn) return;
+    historyState.layout = btn.dataset.l;
+    document.querySelectorAll('#hist-layout-toggle .rpt-layout-btn').forEach(function(b) {
+      b.classList.toggle('on', b === btn);
+    });
+    renderHistContent();
+  });
   renderHistPeriodControl();
   initReportControls();
 }
@@ -4065,9 +4164,121 @@ function buildDailyCard(entry) {
   </div>`;
 }
 
+// ------ リスト型描画ヘルパー ------
+
+function _rptDiffChip(curr, prev, unit, isYen) {
+  if (prev === null || prev === undefined) return '<span class="rpt-col-diff none">—</span>';
+  const diff = curr - prev;
+  if (diff === 0) return '<span class="rpt-col-diff none">—</span>';
+  const sign = diff > 0 ? '▲ +' : '▼ ';
+  const valStr = isYen ? formatCurrency(Math.abs(diff)) : formatNumber(Math.abs(diff)) + unit;
+  const cls = diff > 0 ? 'up' : 'down';
+  return `<span class="rpt-col-diff ${cls}">${sign}${valStr}</span>`;
+}
+
+function _rptBadge(rate) {
+  if (rate === null) return '';
+  if (rate >= 100) return '<span class="rpt-block-badge ok">順調</span>';
+  if (rate >= 70)  return '<span class="rpt-block-badge caution">注意</span>';
+  return '<span class="rpt-block-badge warn">要改善</span>';
+}
+
+function _rptDot(rate) {
+  if (rate === null) return '<span class="rpt-dot none">●</span>';
+  if (rate >= 100)   return '<span class="rpt-dot ok">●</span>';
+  if (rate >= 70)    return '<span class="rpt-dot warn" style="color:#e0a93f">●</span>';
+  return '<span class="rpt-dot warn">●</span>';
+}
+
+// 個人：日次リスト型
+function renderDailyViewList(entries) {
+  const content = document.getElementById('hist-content');
+  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+  const cyanFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+
+  const blocks = sorted.map((entry, i) => {
+    const prev = sorted[i + 1] || null;
+    const totalCurr = cyanFields.reduce((s, f) => s + (entry[f.key] || 0), 0);
+    const totalPrev = prev ? cyanFields.reduce((s, f) => s + (prev[f.key] || 0), 0) : null;
+    const diff = totalPrev !== null ? totalCurr - totalPrev : null;
+    const diffStr = diff !== null ? (diff > 0 ? `▲ +${formatNumber(diff)}` : diff < 0 ? `▼ ${formatNumber(diff)}` : '—') : '—';
+    const diffCls = diff === null ? 'none' : diff > 0 ? 'up' : diff < 0 ? 'down' : 'none';
+
+    const rows = cyanFields.map(field => {
+      const val = entry[field.key] || 0;
+      const prevVal = prev ? (prev[field.key] || 0) : null;
+      const isYen = field.unit === '円';
+      const valStr = isYen ? formatCurrency(val) : formatNumber(val) + field.unit;
+      const cls = val === 0 ? 'none' : '';
+      const chip = prevVal !== null ? _rptDiffChip(val, prevVal, field.unit, isYen) : '<span class="rpt-col-diff none">基準日</span>';
+      return `<div class="rpt-row row-base">
+        <span class="rpt-col-label">${field.label}</span>
+        <span class="rpt-col-rate ${cls}" style="${val===0?'color:var(--rpt-muted)':''}">${valStr}</span>
+        <span class="rpt-col-detail"></span>
+        ${chip}
+      </div>`;
+    }).join('');
+
+    const actions = entry.relationshipActions || [];
+    const trustScore = calcTrustIndex(actions, entry.positiveFeedback || 0, entry.negativeFeedback || 0);
+
+    return `<div class="rpt-block">
+      <div class="rpt-block-hdr">
+        ${_rptDot(null)}
+        <span class="rpt-block-title">${formatDate(entry.date)}</span>
+        <span class="rpt-block-summary"><span class="rpt-col-diff ${diffCls}">${diffStr}</span></span>
+      </div>
+      <div class="rpt-block-body">
+        ${rows}
+        ${trustScore > 0 ? `<div class="rpt-row row-base"><span class="rpt-col-label" style="color:var(--accent-rose)">Trust指数</span><span class="rpt-col-rate" style="color:var(--accent-rose)">${trustScore}pt</span><span class="rpt-col-detail"></span><span class="rpt-col-diff none"></span></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  content.innerHTML = blocks || '<div class="hist-empty">この月のデータはありません</div>';
+}
+
+// 個人：週次リスト型
+function renderWeeklyViewList(entries) {
+  const content = document.getElementById('hist-content');
+  const weeks = groupEntriesByWeek(entries, historyState.yearMonth);
+  const cyanFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+
+  const blocks = weeks.map(week => {
+    const totals = calcMonthlyTotals(week.entries);
+    const allActions = week.entries.flatMap(e => e.relationshipActions || []);
+    const pos = week.entries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = week.entries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+
+    const gridRows = cyanFields.map(field => {
+      const val = totals[field.key] || 0;
+      const isYen = field.unit === '円';
+      const valStr = isYen ? formatCurrency(val) : formatNumber(val) + field.unit;
+      const zeroCls = val === 0 ? ' zero' : '';
+      return `<div class="rpt-wrow${zeroCls}"><span class="rpt-col-label">${field.label}</span><b>${valStr}</b></div>`;
+    }).join('');
+
+    const trustRow = trust > 0 ? `<div class="rpt-wrow trust"><span class="rpt-col-label" style="color:var(--accent-rose)">信頼関係指数</span><b style="color:var(--accent-rose)">${trust}pt</b></div>` : '';
+
+    return `<div class="rpt-block">
+      <div class="rpt-block-hdr">
+        <span class="rpt-block-title">${week.label}</span>
+        <span class="rpt-block-summary">${week.entries.length}日分のデータ</span>
+      </div>
+      <div class="rpt-block-body">
+        <div class="rpt-week-grid">${gridRows}${trustRow}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  content.innerHTML = blocks || '<div class="hist-empty">この月のデータはありません</div>';
+}
+
 // ------ ビュー描画 ------
 
 function renderDailyView(entries) {
+  if (historyState.layout === 'list') { renderDailyViewList(entries); return; }
   const content = document.getElementById('hist-content');
   if (entries.length === 0) {
     content.innerHTML = `<div class="hist-empty">この月のデータはありません</div>`;
@@ -4078,6 +4289,7 @@ function renderDailyView(entries) {
 }
 
 function renderWeeklyView(entries) {
+  if (historyState.layout === 'list') { renderWeeklyViewList(entries); return; }
   const content = document.getElementById('hist-content');
   if (entries.length === 0) {
     content.innerHTML = `<div class="hist-empty">この月のデータはありません</div>`;
@@ -4686,7 +4898,7 @@ function _buildPrintHtml({ title, periodText, today, cmpHtml, histHtml }) {
     '.print-date{font-size:11px;color:#888}' +
     '.card{border:1px solid #ccc;padding:12px 14px;margin-bottom:12px;page-break-inside:avoid;background:#fff;border-radius:0}' +
     '.card-title{font-size:14px;font-weight:700;margin-bottom:8px;color:#333;text-transform:none;letter-spacing:normal}' +
-    '.kgi-field-label{color:#333;font-size:13px}' +
+    '.kgi-field-label{color:#1f2430;font-size:13px}' +
     '.kgi-field-value{color:#111;font-size:15px;font-weight:700}' +
     '.kgi-field-unit{color:#555;font-size:12px}' +
     '.hist-empty{color:#999}' +
@@ -4709,7 +4921,7 @@ function _buildPrintHtml({ title, periodText, today, cmpHtml, histHtml }) {
     '.cmp-table th{color:#555;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:6px;text-align:right;border-bottom:1px solid #999}' +
     '.cmp-table th:first-child{text-align:left}' +
     '.cmp-table td{padding:6px;border-top:1px solid #eee;vertical-align:middle}' +
-    '.cmp-label{font-size:12px;color:#333;white-space:nowrap}' +
+    '.cmp-label{font-size:12px;color:#1f2430;white-space:nowrap}' +
     '.cmp-val{font-size:12px;text-align:right;white-space:nowrap;color:#111}' +
     '.cmp-base{color:#666}' +
     '.cmp-pos{color:#167a16;font-weight:700}' +
@@ -4762,26 +4974,140 @@ function _printWithFallback(periodText) {
   window.print();
 }
 
+function _buildPrintHtmlFromData(opts) {
+  var entries  = opts.entries || [];
+  var budgets  = opts.budgets || [];
+  var yearMonth = opts.yearMonth || historyState.yearMonth;
+  var today    = opts.today || getTodayJST();
+  var title    = opts.title || '個人履歴レポート';
+  var periodText = opts.periodText || '';
+
+  // 比較テーブルセクション HTML
+  var cmpSectionHtml = '';
+  if (opts.cmpInfo) {
+    var info = opts.cmpInfo;
+    var currTotals = calcMonthlyTotals(info.currentEntries);
+    var prevTotals = calcMonthlyTotals(info.prevEntries);
+    var cyanFields = KGI_FIELDS.filter(function(f) { return f.color === 'cyan'; });
+    var rows = cyanFields.map(function(field) {
+      var curr = currTotals[field.key] || 0;
+      var prev = prevTotals[field.key] || 0;
+      var diff = curr - prev;
+      var pct  = prev !== 0 ? ((diff / Math.abs(prev)) * 100).toFixed(1) + '%' : '—';
+      var isYen = field.unit === '円';
+      var fmt = function(v) { return isYen ? formatCurrency(v) : formatNumber(v) + field.unit; };
+      var sign = diff > 0 ? '+' : '';
+      var cls = diff > 0 ? 'rpt-diff-up' : diff < 0 ? 'rpt-diff-down' : 'rpt-diff-zero';
+      return '<tr><td>' + field.label + '</td><td>' + fmt(curr) + '</td><td>' + fmt(prev) + '</td>' +
+        '<td class="' + cls + '">' + sign + fmt(diff) + '</td>' +
+        '<td class="' + cls + '">' + (prev !== 0 ? sign + pct : '—') + '</td></tr>';
+    }).join('');
+    cmpSectionHtml = '<div class="rpt-print-section">' +
+      '<h2 style="font-size:14px;color:#1f2430;margin:0 0 8px">期間比較：' + info.currentLabel + ' vs ' + info.prevLabel + '</h2>' +
+      '<table class="rpt-cmp-table"><thead><tr><th>指標</th><th>' + info.currentLabel + '</th><th>' + info.prevLabel + '</th><th>差分</th><th>増減率</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div>';
+  }
+
+  // 週次内訳セクション HTML
+  var weeklyFiltered = entries.filter(function(e) { return e.date.startsWith(yearMonth); });
+  var weeks = groupEntriesByWeek(weeklyFiltered, yearMonth);
+  var cyanFields2 = KGI_FIELDS.filter(function(f) { return f.color === 'cyan'; });
+  var weekBlocksHtml = weeks.map(function(week) {
+    var totals = calcMonthlyTotals(week.entries);
+    var allActions = week.entries.reduce(function(acc, e) { return acc.concat(e.relationshipActions || []); }, []);
+    var pos = week.entries.reduce(function(s, e) { return s + (e.positiveFeedback || 0); }, 0);
+    var neg = week.entries.reduce(function(s, e) { return s + (e.negativeFeedback || 0); }, 0);
+    var trust = calcTrustIndex(allActions, pos, neg);
+    var gridRows = cyanFields2.map(function(field) {
+      var val = totals[field.key] || 0;
+      var isYen = field.unit === '円';
+      var valStr = isYen ? formatCurrency(val) : formatNumber(val) + field.unit;
+      var zeroCls = val === 0 ? ' zero' : '';
+      return '<div class="rpt-wrow' + zeroCls + '"><span class="rpt-col-label">' + field.label + '</span><b>' + valStr + '</b></div>';
+    }).join('');
+    var trustRow = trust > 0 ? '<div class="rpt-wrow trust"><span class="rpt-col-label">信頼関係指数</span><b>' + trust + 'pt</b></div>' : '';
+    return '<div class="rpt-block">' +
+      '<div class="rpt-block-hdr"><span class="rpt-block-title">' + week.label + '</span><span class="rpt-block-summary">' + week.entries.length + '日分</span></div>' +
+      '<div class="rpt-block-body"><div class="rpt-week-grid">' + gridRows + trustRow + '</div></div></div>';
+  }).join('');
+  var weeklySectionHtml = '<div class="rpt-print-section">' +
+    '<h2 style="font-size:14px;color:#1f2430;margin:0 0 8px">週次内訳</h2>' + weekBlocksHtml + '</div>';
+
+  var printCss = [
+    'body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;padding:16px 20px;max-width:800px;margin:0 auto;color:#1f2430;font-size:12px;line-height:1.6}',
+    '.print-header{margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:8px}',
+    '.print-title{font-size:18px;font-weight:700;margin-bottom:4px;color:#1f2430}',
+    '.print-period{font-size:12px;color:#333;font-weight:600;margin-bottom:2px}',
+    '.print-date{font-size:10px;color:#888}',
+    ':root{--rpt-text:#1f2430;--rpt-sub:#5b6270;--rpt-muted:#9aa0ac;--rpt-ok-text:#1f9d61;--rpt-ok-bg:#e9f7f0;--rpt-ok-border:#79c6a3;--rpt-warn-text:#d0453b;--rpt-warn-bg:#fbecea;--rpt-warn-border:#e0584d;--rpt-surface:#f4f5f2;--rpt-border:#e3e6ea}',
+    '.rpt-block{margin-bottom:10px;border:1px solid var(--rpt-border);border-radius:4px;overflow:hidden;break-inside:avoid}',
+    '.rpt-block-hdr{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--rpt-surface);border-bottom:1px solid var(--rpt-border)}',
+    '.rpt-block-title{font-size:11px;font-weight:700;color:var(--rpt-text)}',
+    '.rpt-block-summary{margin-left:auto;font-size:9px;color:var(--rpt-sub)}',
+    '.rpt-block-body{padding:0 10px}',
+    '.rpt-week-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:9px;padding:5px 0}',
+    '.rpt-wrow{display:flex;justify-content:space-between;border-bottom:1px solid #f0f1f3;padding:2px 0}',
+    '.rpt-wrow.trust{grid-column:1/-1;border-top:1px solid var(--rpt-border);margin-top:3px}',
+    '.rpt-wrow.zero{color:var(--rpt-muted)}',
+    '.rpt-wrow b{color:var(--rpt-text)}',
+    '.rpt-col-label{color:var(--rpt-text);font-weight:700;font-size:10px}',
+    '.rpt-cmp-table{width:100%;border-collapse:collapse;font-size:11px}',
+    '.rpt-cmp-table th{font-size:9px;color:var(--rpt-sub);text-align:right;border-bottom:1px solid #cfd3d9;padding:4px 5px}',
+    '.rpt-cmp-table th:first-child{text-align:left}',
+    '.rpt-cmp-table td{text-align:right;padding:5px;border-top:1px solid #f0f1f3}',
+    '.rpt-cmp-table td:first-child{text-align:left;color:var(--rpt-text);font-weight:700}',
+    '.rpt-diff-up{color:var(--rpt-ok-text);font-weight:700}',
+    '.rpt-diff-down{color:var(--rpt-warn-text);font-weight:700}',
+    '.rpt-diff-zero{color:var(--rpt-muted)}',
+    '.rpt-print-section+.rpt-print-section{break-before:page;margin-top:16px}',
+    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+    '@page{size:A4 portrait;margin:12mm}',
+  ].join('');
+
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>' + title + '</title>' +
+    '<style>' + printCss + '</style></head><body>' +
+    '<div class="print-header">' +
+    '<div class="print-title">' + title + '</div>' +
+    (periodText ? '<div class="print-period">' + periodText + '</div>' : '') +
+    '<div class="print-date">出力日：' + today + '</div>' +
+    '</div>' +
+    cmpSectionHtml + weeklySectionHtml +
+    '</body></html>';
+}
+
 async function handlePrintReport() {
   const btn = document.getElementById('report-print-btn');
   if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
 
   try {
-    // データ未ロード時はロードを待つ
     await ensureHistData();
     const view = historyState.view;
-    // データロード後に表示を更新（集計カードが確実に描画されるよう）
     await renderHistContent();
 
     const today = getTodayJST();
-    let periodText = '';
+    let periodText = _getPeriodLabel(view);
+    const { entries, budgets } = historyState.allData;
+    const yearMonth = historyState.yearMonth;
+
+    // リスト型のときはデータドリブンHTML
+    if (historyState.layout === 'list') {
+      let cmpInfo = null;
+      if (historyState.compareMode) {
+        const info = getPrevPeriodInfo(view);
+        if (info) { cmpInfo = info; periodText = '当期：' + info.currentLabel + '　／　比較期：' + info.prevLabel; }
+      }
+      const html = _buildPrintHtmlFromData({ entries, budgets, yearMonth, today, title: '個人履歴レポート', periodText, cmpInfo });
+      const win = window.open('', '_blank');
+      if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(function() { win.print(); }, 400); }
+      else { _printWithFallback(periodText); }
+      return;
+    }
+
+    // カード型は従来通り DOM dump
     if (historyState.compareMode) {
       const info = getPrevPeriodInfo(view);
       if (info) periodText = '当期：' + info.currentLabel + '　／　比較期：' + info.prevLabel;
-    } else {
-      periodText = _getPeriodLabel(view);
     }
-
     let cmpHtml = '';
     if (historyState.compareMode) {
       const cmpEl = document.getElementById('hist-compare-content');
@@ -4790,30 +5116,17 @@ async function handlePrintReport() {
         let inner = cmpEl.innerHTML;
         if (canvas) {
           const imgSrc = canvas.toDataURL('image/png');
-          inner = inner.replace(
-            /<canvas[^>]*id="cmp-chart"[^>]*><\/canvas>/,
-            '<img src="' + imgSrc + '" style="width:100%;max-height:220px;object-fit:contain">'
-          );
+          inner = inner.replace(/<canvas[^>]*id="cmp-chart"[^>]*><\/canvas>/, '<img src="' + imgSrc + '" style="width:100%;max-height:220px;object-fit:contain">');
         }
         cmpHtml = inner;
       }
     }
-
     const histEl = document.getElementById('hist-content');
     const histHtml = histEl ? histEl.innerHTML : '';
-
     const html = _buildPrintHtml({ title: '履歴レポート', periodText, today, cmpHtml, histHtml });
-
     const win = window.open('', '_blank');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(function() { win.print(); }, 400);
-    } else {
-      // フォールバック：期間ラベルをDOMに一時挿入してwindow.print()
-      _printWithFallback(periodText);
-    }
+    if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(function() { win.print(); }, 400); }
+    else { _printWithFallback(periodText); }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '印刷/PDF'; }
   }
@@ -5768,6 +6081,7 @@ const officeHistState = {
   allData:       null,
   compareMode:   false,
   comparePeriod: { yearMonth: '', year: 0, quarter: 'all', date: '', weekYearMonth: '', weekIndex: 1 },
+  layout:        'list',
 };
 
 function initOfficeHistoryTab() {
@@ -5781,6 +6095,15 @@ function initOfficeHistoryTab() {
   document.getElementById('office-report-copy-btn').addEventListener('click',     _handleOfficeHistCopy);
   document.getElementById('office-report-settings-btn').addEventListener('click', _toggleOfficeReportSettings);
   document.getElementById('office-hist-compare-btn').addEventListener('click',    _onOfficeHistCompareModeToggle);
+  document.getElementById('office-hist-layout-toggle').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-l]');
+    if (!btn) return;
+    officeHistState.layout = btn.dataset.l;
+    document.querySelectorAll('#office-hist-layout-toggle .rpt-layout-btn').forEach(function(b) {
+      b.classList.toggle('on', b === btn);
+    });
+    renderOfficeHistContent();
+  });
   _buildOfficeReportSettingsPanel();
   _renderOfficeHistPeriodControl();
 }
@@ -6069,13 +6392,108 @@ function _renderOfficeQuarterlyView(entries, container) {
   container.innerHTML = cards.join('');
 }
 
+// === 営業所 リスト型描画関数 ===
+
+function _rptOfficeDiffChip(curr, prev, unit) {
+  if (prev === null || prev === undefined) return '<span class="rpt-col-diff none">基準日</span>';
+  var diff = curr - prev;
+  if (diff === 0) return '<span class="rpt-col-diff none">—</span>';
+  var sign = diff > 0 ? '▲ +' : '▼ ';
+  var isYen = unit === '円';
+  var valStr = isYen ? formatCurrency(Math.abs(diff)) : formatNumber(Math.abs(diff)) + unit;
+  var cls = diff > 0 ? 'up' : 'down';
+  return '<span class="rpt-col-diff ' + cls + '">' + sign + valStr + '</span>';
+}
+
+function _rptOfficeKpiRow(kpiDef, entry, prevEntry) {
+  var plan   = Number(entry[kpiDef.planKey])   || 0;
+  var actual = Number(entry[kpiDef.actualKey]) || 0;
+  var rate   = plan > 0 ? Math.min(Math.round(actual / plan * 100), 999) : null;
+  var isYen  = kpiDef.unit === '円';
+  var rateCls = rate === null ? '' : rate >= 100 ? 'ok' : 'warn';
+  var rowCls  = rate === null ? 'row-base' : rate >= 100 ? 'row-ok' : 'row-warn';
+  var actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + kpiDef.unit;
+  var planStr   = plan > 0 ? '／ ' + (isYen ? formatCurrency(plan) : formatNumber(plan) + kpiDef.unit) : '';
+  var rateStr   = rate !== null ? rate + '%' : '—';
+  var prevActual = prevEntry ? (Number(prevEntry[kpiDef.actualKey]) || 0) : null;
+  var chip = _rptOfficeDiffChip(actual, prevActual, kpiDef.unit);
+  var html = '<div class="rpt-row ' + rowCls + '">' +
+    '<span class="rpt-col-label">' + kpiDef.label + '</span>' +
+    '<span class="rpt-col-rate ' + rateCls + '">' + rateStr + '</span>' +
+    '<span class="rpt-col-detail">' + actualStr + ' ' + planStr + '</span>' +
+    chip +
+    '</div>';
+  if (kpiDef.forecastKey && entry[kpiDef.forecastKey]) {
+    var fc     = Number(entry[kpiDef.forecastKey]);
+    var fcRate = plan > 0 ? Math.round(fc / plan * 100) : null;
+    var fcRateStr = fcRate !== null ? '（' + fcRate + '%）' : '';
+    html += '<div class="rpt-sub-row">└ 末見通し ' + formatCurrency(fc) + fcRateStr + '</div>';
+  }
+  return html;
+}
+
+function _renderOfficeDailyViewList(entries, container) {
+  if (!entries.length) { container.innerHTML = '<div class="hist-empty">この月のデータはありません</div>'; return; }
+  var sorted = entries.slice().sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
+
+  var blocks = sorted.map(function(entry, i) {
+    var prevEntry = sorted[i + 1] || null;
+    var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(entry, d); }).filter(function(r) { return r !== null; });
+    var avgRate = rates.length ? Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length) : null;
+    var dot = avgRate === null ? '<span class="rpt-dot none">●</span>' : avgRate >= 100 ? '<span class="rpt-dot ok">●</span>' : avgRate >= 70 ? '<span class="rpt-dot warn" style="color:#e0a93f">●</span>' : '<span class="rpt-dot warn">●</span>';
+    var badge = avgRate !== null ? (avgRate >= 100 ? '<span class="rpt-block-badge ok">順調</span>' : avgRate >= 70 ? '<span class="rpt-block-badge caution">注意</span>' : '<span class="rpt-block-badge warn">要改善</span>') : '';
+    var rows = _OFFICE_KPI_DEFS.map(function(d) { return _rptOfficeKpiRow(d, entry, prevEntry); }).join('');
+
+    return '<div class="rpt-block">' +
+      '<div class="rpt-block-hdr">' + dot + '<span class="rpt-block-title">' + String(entry.date).slice(0, 10) + '</span>' + badge +
+      (avgRate !== null ? '<span class="rpt-block-summary">総合 ' + avgRate + '%</span>' : '') +
+      '</div>' +
+      '<div class="rpt-block-body">' + rows + '</div>' +
+      '</div>';
+  }).join('');
+
+  container.innerHTML = blocks;
+}
+
+function _renderOfficeWeeklyViewList(entries, container) {
+  var ym = officeHistState.yearMonth;
+  var allData = officeHistState.allData || [];
+  var weeks = _groupOfficeByWeek(entries).reverse();
+  if (!weeks.length) { container.innerHTML = '<div class="hist-empty">この月のデータはありません</div>'; return; }
+
+  var prevMonthYM = (function() {
+    var p = ym.split('-').map(Number);
+    var m = p[1] - 1, y = p[0];
+    if (m === 0) { m = 12; y--; }
+    return y + '-' + String(m).padStart(2, '0');
+  })();
+  var pmEntries = allData.filter(function(r) { return String(r.date).startsWith(prevMonthYM); });
+  var pmLatest  = pmEntries.length ? pmEntries.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, pmEntries[0]) : null;
+
+  var weekBlocks = weeks.map(function(w, i) {
+    var prevEntry = i < weeks.length - 1 ? weeks[i + 1].latest : pmLatest;
+    var weekLabel = w.weekStart + ' 〜 ' + String(w.latest.date).slice(0, 10);
+    var rows = _OFFICE_KPI_DEFS.map(function(d) { return _rptOfficeKpiRow(d, w.latest, prevEntry); }).join('');
+    return '<div class="rpt-block">' +
+      '<div class="rpt-block-hdr"><span class="rpt-block-title">' + weekLabel + '</span></div>' +
+      '<div class="rpt-block-body">' + rows + '</div>' +
+      '</div>';
+  }).join('');
+
+  container.innerHTML = weekBlocks;
+}
+
+// === 営業所 リスト型dispatch ===
+
 function _renderOfficeDailyView(entries, container) {
+  if (officeHistState.layout === 'list') { _renderOfficeDailyViewList(entries, container); return; }
   if (!entries.length) { container.innerHTML = '<div class="hist-empty">この月のデータはありません</div>'; return; }
   const sorted = entries.slice().sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
   container.innerHTML = sorted.map(function(e) { return _buildOfficeHistoryCard(e); }).join('');
 }
 
 function _renderOfficeWeeklyView(entries, container) {
+  if (officeHistState.layout === 'list') { _renderOfficeWeeklyViewList(entries, container); return; }
   var weeks = _groupOfficeByWeek(entries).reverse(); // 新→旧
   if (!weeks.length) { container.innerHTML = '<div class="hist-empty">この月のデータはありません</div>'; return; }
 
@@ -6507,7 +6925,7 @@ function _buildOfficePrintHtml(opts) {
     '.cmp-table th{color:#555;font-size:11px;font-weight:700;padding:6px;text-align:right;border-bottom:1px solid #999}' +
     '.cmp-table th:first-child{text-align:left}' +
     '.cmp-table td{padding:6px;border-top:1px solid #eee;vertical-align:middle}' +
-    '.cmp-label{font-size:12px;color:#333}' +
+    '.cmp-label{font-size:12px;color:#1f2430}' +
     '.cmp-val{font-size:12px;text-align:right;color:#111}' +
     '.cmp-base{color:#666;text-align:right}' +
     '.cmp-pos{color:#167a16;font-weight:700;text-align:right}' +
@@ -6529,6 +6947,86 @@ function _buildOfficePrintHtml(opts) {
     '</body></html>';
 }
 
+function _buildOfficePrintHtmlFromData(opts) {
+  var rows = opts.rows || [];
+  var yearMonth = opts.yearMonth || officeHistState.yearMonth;
+  var today = opts.today || getTodayJST();
+  var title = opts.title || '営業所レポート';
+  var periodText = opts.periodText || '';
+
+  var printCss = [
+    'body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;padding:16px 20px;max-width:800px;margin:0 auto;color:#1f2430;font-size:12px;line-height:1.6}',
+    '.print-header{margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:8px}',
+    '.print-title{font-size:18px;font-weight:700;margin-bottom:4px;color:#1f2430}',
+    '.print-period{font-size:12px;color:#333;font-weight:600;margin-bottom:2px}',
+    '.print-date{font-size:10px;color:#888}',
+    ':root{--rpt-text:#1f2430;--rpt-sub:#5b6270;--rpt-muted:#9aa0ac;--rpt-ok-text:#1f9d61;--rpt-ok-bg:#e9f7f0;--rpt-ok-border:#79c6a3;--rpt-warn-text:#d0453b;--rpt-warn-bg:#fbecea;--rpt-warn-border:#e0584d;--rpt-surface:#f4f5f2;--rpt-border:#e3e6ea}',
+    '.rpt-block{margin-bottom:10px;border:1px solid var(--rpt-border);border-radius:4px;overflow:hidden;break-inside:avoid}',
+    '.rpt-block-hdr{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--rpt-surface);border-bottom:1px solid var(--rpt-border)}',
+    '.rpt-block-title{font-size:11px;font-weight:700;color:var(--rpt-text)}',
+    '.rpt-block-badge{font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px}',
+    '.rpt-block-badge.ok{background:var(--rpt-ok-bg);color:#1f7d4d}',
+    '.rpt-block-badge.warn{background:var(--rpt-warn-bg);color:#c0453a}',
+    '.rpt-block-badge.caution{background:#fbf2dc;color:#9a6a06}',
+    '.rpt-block-summary{margin-left:auto;font-size:9px;color:var(--rpt-sub)}',
+    '.rpt-block-body{padding:0 10px}',
+    '.rpt-row{display:grid;grid-template-columns:18% 15% 39% 28%;align-items:center;padding:5px 0;border-bottom:1px solid var(--rpt-border);gap:4px}',
+    '.rpt-row.row-ok{border-left:3px solid var(--rpt-ok-border);padding-left:5px}',
+    '.rpt-row.row-warn{border-left:3px solid var(--rpt-warn-border);background:var(--rpt-warn-bg);padding-left:5px}',
+    '.rpt-row.row-base{border-left:3px solid var(--rpt-border);padding-left:5px}',
+    '.rpt-col-label{color:var(--rpt-text);font-weight:700;font-size:10px}',
+    '.rpt-col-rate{font-size:12px;font-weight:700}',
+    '.rpt-col-rate.ok{color:var(--rpt-ok-text)}',
+    '.rpt-col-rate.warn{color:var(--rpt-warn-text)}',
+    '.rpt-col-detail{font-size:9px;color:var(--rpt-sub)}',
+    '.rpt-col-diff{font-size:9px;text-align:right}',
+    '.rpt-col-diff.up{color:var(--rpt-ok-text);font-weight:700}',
+    '.rpt-col-diff.down{color:var(--rpt-warn-text);font-weight:700}',
+    '.rpt-col-diff.none{color:var(--rpt-muted)}',
+    '.rpt-sub-row{font-size:9px;color:var(--rpt-sub);padding:2px 0 2px 16px;border-bottom:1px solid var(--rpt-border)}',
+    '.rpt-print-section+.rpt-print-section{break-before:page;margin-top:16px}',
+    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+    '@page{size:A4 portrait;margin:12mm}',
+  ].join('');
+
+  // 日次セクション
+  var dailyRows = rows.filter(function(r) { return String(r.date).startsWith(yearMonth); });
+  dailyRows.sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
+  var dailyHtml = dailyRows.map(function(entry, i) {
+    var prevEntry = dailyRows[i + 1] || null;
+    var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(entry, d); }).filter(function(r) { return r !== null; });
+    var avgRate = rates.length ? Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length) : null;
+    var badge = avgRate !== null ? (avgRate >= 100 ? '<span class="rpt-block-badge ok">順調</span>' : avgRate >= 70 ? '<span class="rpt-block-badge caution">注意</span>' : '<span class="rpt-block-badge warn">要改善</span>') : '';
+    var kpiRows = _OFFICE_KPI_DEFS.map(function(d) { return _rptOfficeKpiRow(d, entry, prevEntry); }).join('');
+    return '<div class="rpt-block">' +
+      '<div class="rpt-block-hdr"><span class="rpt-block-title">' + String(entry.date).slice(0, 10) + '</span>' + badge +
+      (avgRate !== null ? '<span class="rpt-block-summary">総合 ' + avgRate + '%</span>' : '') + '</div>' +
+      '<div class="rpt-block-body">' + kpiRows + '</div></div>';
+  }).join('');
+
+  // 週次セクション
+  var weekGroups = _groupOfficeByWeek(dailyRows).reverse();
+  var weekHtml = weekGroups.map(function(w, i) {
+    var prevEntry = i < weekGroups.length - 1 ? weekGroups[i + 1].latest : null;
+    var weekLabel = w.weekStart + ' 〜 ' + String(w.latest.date).slice(0, 10);
+    var kpiRows = _OFFICE_KPI_DEFS.map(function(d) { return _rptOfficeKpiRow(d, w.latest, prevEntry); }).join('');
+    return '<div class="rpt-block">' +
+      '<div class="rpt-block-hdr"><span class="rpt-block-title">' + weekLabel + '</span></div>' +
+      '<div class="rpt-block-body">' + kpiRows + '</div></div>';
+  }).join('');
+
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>' + title + '</title>' +
+    '<style>' + printCss + '</style></head><body>' +
+    '<div class="print-header">' +
+    '<div class="print-title">' + title + '</div>' +
+    (periodText ? '<div class="print-period">' + periodText + '</div>' : '') +
+    '<div class="print-date">出力日：' + today + '</div>' +
+    '</div>' +
+    '<div class="rpt-print-section"><h2 style="font-size:14px;color:#1f2430;margin:0 0 8px">日次実績</h2>' + (dailyHtml || '<p style="color:#9aa0ac">データなし</p>') + '</div>' +
+    '<div class="rpt-print-section"><h2 style="font-size:14px;color:#1f2430;margin:0 0 8px">週次サマリー</h2>' + (weekHtml || '<p style="color:#9aa0ac">データなし</p>') + '</div>' +
+    '</body></html>';
+}
+
 async function _handleOfficeHistPrint() {
   var btn = document.getElementById('office-report-print-btn');
   if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
@@ -6538,15 +7036,32 @@ async function _handleOfficeHistPrint() {
 
     var view = officeHistState.view;
     var today = getTodayJST();
-    var periodText = '';
+    var periodText = officeHistState.compareMode ? '' : _getOfficePeriodLabel(view);
+
+    // リスト型はデータドリブンHTML
+    if (officeHistState.layout === 'list') {
+      if (officeHistState.compareMode) {
+        var info = _getOfficePrevPeriodInfo(view);
+        if (info) periodText = '当期：' + info.currentLabel + '　／　比較期：' + info.prevLabel;
+      }
+      var html = _buildOfficePrintHtmlFromData({
+        rows: officeHistState.allData || [],
+        yearMonth: officeHistState.yearMonth,
+        today: today,
+        title: '営業所 ' + (({ daily:'日次', weekly:'週次', monthly:'月次', quarterly:'四半期', yearly:'年次' })[view] || '') + 'レポート',
+        periodText: periodText,
+      });
+      var win = window.open('', '_blank');
+      if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(function() { win.print(); }, 400); }
+      else { window.print(); }
+      return;
+    }
+
+    // カード型は従来 DOM dump
     if (officeHistState.compareMode) {
       var info = _getOfficePrevPeriodInfo(view);
       if (info) periodText = '当期：' + info.currentLabel + '　／　比較期：' + info.prevLabel;
-    } else {
-      periodText = _getOfficePeriodLabel(view);
     }
-
-    // 比較カードHTML（canvas→img変換）
     var cmpHtml = '';
     if (officeHistState.compareMode) {
       var cmpEl = document.getElementById('office-hist-compare-content');
@@ -6555,28 +7070,17 @@ async function _handleOfficeHistPrint() {
         var inner = cmpEl.innerHTML;
         if (officeCanvas) {
           var imgSrc = officeCanvas.toDataURL('image/png');
-          inner = inner.replace(
-            /<canvas[^>]*id="office-cmp-chart"[^>]*><\/canvas>/,
-            '<img src="' + imgSrc + '" style="width:100%;max-height:220px;object-fit:contain">'
-          );
+          inner = inner.replace(/<canvas[^>]*id="office-cmp-chart"[^>]*><\/canvas>/, '<img src="' + imgSrc + '" style="width:100%;max-height:220px;object-fit:contain">');
         }
         cmpHtml = inner;
       }
     }
-
     var histEl = document.getElementById('office-history-container');
     var histHtml = histEl ? histEl.innerHTML : '';
-
     var html = _buildOfficePrintHtml({ periodText: periodText, today: today, cmpHtml: cmpHtml, histHtml: histHtml });
     var win = window.open('', '_blank');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(function() { win.print(); }, 400);
-    } else {
-      window.print();
-    }
+    if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(function() { win.print(); }, 400); }
+    else { window.print(); }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '印刷/PDF'; }
   }
