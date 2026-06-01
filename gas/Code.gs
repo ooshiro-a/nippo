@@ -737,44 +737,75 @@ function getLatestReportImpl(type) {
 }
 
 function generateOfficeReportImpl(data) {
-  var type    = data.type; // 'weekly' | 'monthly'
-  var today   = dateToYMD(new Date());
-  var ym      = today.slice(0, 7);
+  var type   = data.type;
+  var period = data.period || null;
+  var today  = dateToYMD(new Date());
 
-  var curRows  = getOfficeDailyImpl({ dateFrom: ym + '-01', dateTo: ym + '-31', scope: 'office' });
-  var parts    = ym.split('-').map(Number);
-  var pY = parts[0], pM = parts[1] - 1;
-  if (pM === 0) { pY--; pM = 12; }
-  var prevYm   = pY + '-' + (pM < 10 ? '0' + pM : String(pM));
-  var prevRows = getOfficeDailyImpl({ dateFrom: prevYm + '-01', dateTo: prevYm + '-31', scope: 'office' });
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  var dateFrom, dateTo, prevFrom, prevTo, periodLabel, tLabel, pKey;
+
+  if (type === 'yearly') {
+    var yr = period ? Number(String(period).slice(0, 4)) : Number(today.slice(0, 4));
+    dateFrom = yr + '-01-01'; dateTo = yr + '-12-31';
+    prevFrom = (yr - 1) + '-01-01'; prevTo = (yr - 1) + '-12-31';
+    periodLabel = yr + '年（年次）'; tLabel = '年次'; pKey = '年';
+
+  } else if (type === 'quarterly') {
+    var yr = period ? Number(String(period).slice(0, 4)) : Number(today.slice(0, 4));
+    var q  = period ? Number(String(period).slice(-1)) : Math.ceil(Number(today.slice(5, 7)) / 3);
+    var sm = (q - 1) * 3 + 1, em = q * 3;
+    dateFrom = yr + '-' + pad(sm) + '-01'; dateTo = yr + '-' + pad(em) + '-31';
+    prevFrom = (yr - 1) + '-' + pad(sm) + '-01'; prevTo = (yr - 1) + '-' + pad(em) + '-31';
+    periodLabel = yr + '年Q' + q; tLabel = '四半期'; pKey = '四半期';
+
+  } else if (type === 'daily') {
+    var d = period || today;
+    var dParts = d.split('-').map(Number);
+    var prevMs = Date.UTC(dParts[0], dParts[1] - 1, dParts[2]) - 86400000;
+    prevFrom = prevTo = dateToYMD(new Date(prevMs));
+    dateFrom = dateTo = d;
+    periodLabel = d; tLabel = '日次'; pKey = '日';
+
+  } else if (type === 'weekly') {
+    var ym = period || today.slice(0, 7);
+    var isCurrentMonth = (ym === today.slice(0, 7));
+    var refDateStr = isCurrentMonth ? today : (function() {
+      var yr2 = Number(ym.slice(0, 4)), mo2 = Number(ym.slice(5, 7));
+      return ym + '-' + pad(new Date(Date.UTC(yr2, mo2, 0)).getUTCDate());
+    })();
+    var rp = refDateStr.split('-').map(Number);
+    var jstRef = new Date(Date.UTC(rp[0], rp[1] - 1, rp[2]) + 9 * 3600000);
+    var dow = jstRef.getUTCDay() || 7;
+    var weekStartMs   = jstRef.getTime() - (dow - 1) * 86400000;
+    var weekStart     = new Date(weekStartMs).toISOString().slice(0, 10);
+    var prevWeekStart = new Date(weekStartMs - 7 * 86400000).toISOString().slice(0, 10);
+    var prevWeekEnd   = new Date(weekStartMs - 86400000).toISOString().slice(0, 10);
+    dateFrom = weekStart; dateTo = isCurrentMonth ? today : refDateStr;
+    prevFrom = prevWeekStart; prevTo = prevWeekEnd;
+    periodLabel = weekStart + ' 〜 ' + dateTo; tLabel = '週次'; pKey = '週';
+
+  } else { // monthly (default)
+    var ym = period || today.slice(0, 7);
+    var parts = ym.split('-').map(Number);
+    var pY = parts[0], pM = parts[1] - 1;
+    if (pM === 0) { pY--; pM = 12; }
+    var prevYm = pY + '-' + pad(pM);
+    dateFrom = ym + '-01'; dateTo = ym + '-31';
+    prevFrom = prevYm + '-01'; prevTo = prevYm + '-31';
+    periodLabel = ym; tLabel = '月次'; pKey = '月';
+  }
+
+  var curRows  = getOfficeDailyImpl({ dateFrom: dateFrom, dateTo: dateTo, scope: 'office' });
+  var prevRows = getOfficeDailyImpl({ dateFrom: prevFrom, dateTo: prevTo, scope: 'office' });
 
   function getLatest(rows) {
     if (!rows.length) return {};
     return rows.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, rows[0]);
   }
 
-  var curEntry, prevEntry, periodLabel;
-
-  if (type === 'weekly') {
-    var jstNow     = new Date(new Date().getTime() + 9 * 3600000);
-    var dow        = jstNow.getUTCDay() || 7;
-    var weekStartMs = jstNow.getTime() - (dow - 1) * 86400000;
-    var weekStart  = new Date(weekStartMs).toISOString().slice(0, 10);
-    var prevWeekStart = new Date(weekStartMs - 7 * 86400000).toISOString().slice(0, 10);
-    var prevWeekEnd   = new Date(weekStartMs - 86400000).toISOString().slice(0, 10);
-
-    var curWeek  = curRows.filter(function(r) { return r.date >= weekStart && r.date <= today; });
-    var pwYm     = prevWeekStart.slice(0, 7);
-    var pwBase   = (pwYm === ym) ? curRows : prevRows;
-    var prevWeek = pwBase.filter(function(r) { return r.date >= prevWeekStart && r.date <= prevWeekEnd; });
-    curEntry  = getLatest(curWeek);
-    prevEntry = getLatest(prevWeek);
-    periodLabel = weekStart + ' 〜 ' + today;
-  } else {
-    curEntry  = getLatest(curRows);
-    prevEntry = getLatest(prevRows);
-    periodLabel = ym;
-  }
+  var curEntry  = getLatest(curRows);
+  var prevEntry = getLatest(prevRows);
 
   var n = function(e, key) { return Number(e[key]) || 0; };
   var fmt = function(key, v) {
@@ -789,16 +820,13 @@ function generateOfficeReportImpl(data) {
     { key: 'totalMaintActual',     planKey: 'totalMaintPlan',      label: '総保守台数' },
   ];
 
-  var tLabel = type === 'weekly' ? '週次' : '月次';
-  var pKey   = type === 'weekly' ? '週' : '月';
-
   var kpiLines = KPI_DEFS.map(function(def) {
     var cur  = n(curEntry,  def.key);
     var prev = n(prevEntry, def.key);
     var plan = n(curEntry,  def.planKey);
     var rateStr = plan > 0 ? '（' + Math.round(cur / plan * 100) + '%）' : '';
     var diff    = cur - prev;
-    var compStr = (type === 'weekly' ? ' 先週末比' : ' 先月比') + (diff >= 0 ? '+' : '') + diff;
+    var compStr = ' 前' + pKey + '比' + (diff >= 0 ? '+' : '') + diff;
     return '  - ' + def.label + ': 実績' + fmt(def.key, cur) + ' / 目標' + fmt(def.key, plan) + rateStr + compStr;
   }).join('\n');
 
@@ -812,14 +840,15 @@ function generateOfficeReportImpl(data) {
   // ── 遅れ指標（月次のみ）──
   var officeLagSection = '';
   if (type === 'monthly') {
-    var bdStats2     = _getBusinessDayStats(ym);
+    var ym2      = period || today.slice(0, 7);
+    var bdStats2 = _getBusinessDayStats(ym2);
     var idealRate2   = bdStats2.total > 0 ? bdStats2.elapsed / bdStats2.total : 0;
     var remainDays2  = bdStats2.total - bdStats2.elapsed;
     var officeLagDefs = [
-      { key: 'inspectionActual', planKey: 'inspectionPlan',        label: '点検件数',   isMoney: false },
-      { key: 'salesActual',      planKey: 'salesPlan',             label: '売上実績',   isMoney: true  },
-      { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop', label: '次月継続',  isMoney: false },
-      { key: 'totalMaintActual', planKey: 'totalMaintPlan',        label: '総保守台数', isMoney: false },
+      { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検件数',   isMoney: false },
+      { key: 'salesActual',          planKey: 'salesPlan',           label: '売上実績',   isMoney: true  },
+      { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop',  label: '次月継続',   isMoney: false },
+      { key: 'totalMaintActual',     planKey: 'totalMaintPlan',      label: '総保守台数', isMoney: false },
     ];
     var officeLagLines = officeLagDefs.filter(function(def) {
       var cur  = n(curEntry, def.key);
@@ -829,7 +858,7 @@ function generateOfficeReportImpl(data) {
       var cur  = n(curEntry, def.key);
       var plan = n(curEntry, def.planKey);
       var remaining = plan - cur;
-      var perDay = remainDays2 > 0 ? Math.ceil(remaining / remainDays2) : remaining;
+      var perDay    = remainDays2 > 0 ? Math.ceil(remaining / remainDays2) : remaining;
       var perDayStr = def.isMoney ? '¥' + perDay.toLocaleString() : perDay + '件';
       return '  - ' + def.label + ': 計画比' + Math.round(cur / plan * 100)
            + '%、残' + remainDays2 + '日で1日あたり' + perDayStr + '必要';
@@ -1047,8 +1076,12 @@ function gasGetLatestReport(type) {
   return JSON.stringify(getLatestReportImpl(type || ''));
 }
 
-function gasGenerateOfficeReport(type) {
-  return JSON.stringify(generateOfficeReportImpl({ type: type }));
+function gasGenerateOfficeReport(payload) {
+  var d = {};
+  if (typeof payload === 'string') {
+    try { d = JSON.parse(payload); } catch(e) { d = { type: payload }; }
+  } else { d = payload || {}; }
+  return JSON.stringify(generateOfficeReportImpl(d));
 }
 
 function gasGetAllOfficeData() {
@@ -1438,6 +1471,60 @@ function gasSaveOfficeSettings(dataJson) {
 function gasSaveFeedback(dataJson) {
   var d = typeof dataJson === 'string' ? JSON.parse(dataJson) : dataJson;
   return JSON.stringify(saveFeedbackImpl(d));
+}
+
+// ============================================================
+// LINE通知機能
+// ============================================================
+
+function sendLineNotification(message) {
+  var token = PropertiesService.getScriptProperties().getProperty('LINE_NOTIFY_TOKEN');
+  if (!token) { Logger.log('LINE_NOTIFY_TOKEN が未設定です'); return; }
+  UrlFetchApp.fetch('https://notify-api.line.me/api/notify', {
+    method: 'post',
+    headers: { 'Authorization': 'Bearer ' + token },
+    payload: { message: message }
+  });
+}
+
+// 日曜または祝日のみスキップ（土曜は出勤があるため通知する）
+function isSundayOrHoliday(dateStr) {
+  var d = new Date(Date.UTC(
+    Number(dateStr.slice(0,4)),
+    Number(dateStr.slice(5,7)) - 1,
+    Number(dateStr.slice(8,10))
+  ) + 9 * 3600000);
+  if (d.getUTCDay() === 0) return true;
+  try {
+    var cal = CalendarApp.getCalendarById('ja.japanese#holiday@group.v.calendar.google.com');
+    return cal.getEventsForDay(new Date(Date.UTC(
+      Number(dateStr.slice(0,4)),
+      Number(dateStr.slice(5,7)) - 1,
+      Number(dateStr.slice(8,10))
+    ))).length > 0;
+  } catch(e) { return false; }
+}
+
+function checkDailyEntryAndNotify() {
+  var today = dateToYMD(new Date());
+  if (isSundayOrHoliday(today)) return;
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ENTRIES);
+  if (!sheet) return;
+  var rows = sheet.getDataRange().getValues();
+  var hasEntry = rows.slice(1).some(function(r) { return dateToYMD(r[0]) === today; });
+  if (!hasEntry) {
+    sendLineNotification('\n📋 本日の日報が未記入です。\n記録をお忘れなく。');
+  }
+}
+
+// GASエディタから1回だけ実行してトリガー登録
+function setupLineNotifyTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'checkDailyEntryAndNotify') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('checkDailyEntryAndNotify')
+    .timeBased().everyDays(1).atHour(18).nearMinute(30).create();
+  Logger.log('LINE通知トリガー登録完了（毎日18:30）');
 }
 
 // ============================================================

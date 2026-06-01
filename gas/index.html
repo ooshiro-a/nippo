@@ -978,6 +978,7 @@ input.kgi-field-input {
   .cmp-table th { color: #555 !important; border-bottom: 1px solid #999 !important; }
   .cmp-table td { border-top: 1px solid #eee !important; }
   .cmp-label { color: #1f2430 !important; }
+  .ohist-kpi-title { color: #1f2430 !important; }
   .cmp-val { color: #111 !important; }
   .cmp-base { color: #666 !important; }
   .cmp-pos { color: #167a16 !important; }
@@ -1292,7 +1293,7 @@ input.kgi-field-input {
 .ohist-kpi-title {
   font-size: 11px;
   font-weight: 700;
-  color: var(--accent-amber);
+  color: #ffffff;
   letter-spacing: 0.04em;
 }
 .ohist-kpi-vals {
@@ -1600,7 +1601,8 @@ input.kgi-field-input {
 
 .cmp-label {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: #1f2430;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -1826,10 +1828,10 @@ input.kgi-field-input {
   --rpt-border:     #e3e6ea;
 }
 /* 4列グリッド行 */
-.rpt-row { display:grid; grid-template-columns:18% 15% 39% 28%; align-items:center; padding:6px 0; border-bottom:1px solid var(--rpt-border); gap:4px; }
+.rpt-row { display:grid; grid-template-columns:18% 15% 39% 28%; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); gap:4px; }
 .rpt-row.row-ok   { border-left:3px solid var(--rpt-ok-border); padding-left:6px; }
 .rpt-row.row-warn { border-left:3px solid var(--rpt-warn-border); background:var(--rpt-warn-bg); padding-left:6px; }
-.rpt-row.row-base { border-left:3px solid var(--rpt-border); padding-left:6px; }
+.rpt-row.row-base { border-left:3px solid var(--border); padding-left:6px; }
 /* 列スタイル */
 .rpt-col-label { color:var(--rpt-text); font-weight:700; font-size:11px; }
 .rpt-col-rate  { font-size:13px; font-weight:700; }
@@ -1883,6 +1885,17 @@ input.kgi-field-input {
 .rpt-wrow.trust { grid-column:1/-1; border-top:1px solid var(--rpt-border); margin-top:3px; }
 .rpt-wrow.zero  { color:var(--rpt-muted); }
 .rpt-wrow b { color:var(--rpt-text); }
+/* rate-bar（率指標の実績バー） */
+.rate-bar { position:relative; height:7px; background:#e3e6ea; border-radius:3px; overflow:visible; margin:3px 0; }
+.rate-bar-fill { height:100%; border-radius:3px; }
+.rate-bar-fill.ok   { background:#1f9d61; }
+.rate-bar-fill.warn { background:#d0453b; }
+.rate-target-line { position:absolute; top:-3px; width:2px; height:13px; background:#1f2430; border-radius:1px; }
+/* 警告タグ（当月継続率 11日以降未達） */
+.warning-alert-tag { display:inline-flex; align-items:center; gap:3px; font-size:8px; font-weight:700; color:#c0453a; background:#fbecea; border:1px solid #e0584d; border-radius:4px; padding:1px 5px; margin-left:4px; }
+/* カウントダウン行（新規保守受注数） */
+.countdown-row { font-size:9px; color:var(--rpt-sub); padding:2px 0 4px 18px; }
+.countdown-row.warn { color:#d0453b; }
 /* 印刷専用 */
 @media print {
   .rpt-layout-toggle { display:none !important; }
@@ -2301,8 +2314,16 @@ input.kgi-field-input {
               <button class="btn btn-secondary report-btn" id="office-report-print-btn">印刷/PDF</button>
               <button class="btn btn-secondary report-btn" id="office-report-copy-btn">上長報告</button>
               <button class="btn btn-secondary report-btn" id="office-report-settings-btn">出力設定</button>
+              <button class="btn btn-secondary report-btn" id="office-hist-ai-btn">🤖 AIレポート</button>
             </div>
             <div id="office-report-settings" class="report-settings" style="display:none"></div>
+            <div id="office-hist-ai-result" style="display:none;margin-top:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <span class="ai-report-label" style="font-size:12px">🤖 AIレポート &nbsp;<span id="office-hist-ai-period" style="font-weight:400;color:var(--text-secondary)"></span></span>
+                <button id="office-hist-ai-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px">✕</button>
+              </div>
+              <div id="office-hist-ai-body" class="ai-report-body"></div>
+            </div>
           </div>
           </div>
           <div class="sort-item" data-sort-id="sort-office-hist-compare"><div id="office-hist-compare-content"></div></div>
@@ -2348,12 +2369,12 @@ input.kgi-field-input {
     <!-- 下部メインナビゲーション（個人 / 営業所） -->
     <nav id="bottom-nav">
       <button class="main-nav-btn active" data-section="personal">
-        <span class="nav-icon">👤</span>
-        <span class="nav-label">個人</span>
+        <span class="nav-icon">🔧</span>
+        <span class="nav-label">Personal</span>
       </button>
       <button class="main-nav-btn" data-section="office">
         <span class="nav-icon">🏢</span>
-        <span class="nav-label">営業所</span>
+        <span class="nav-label">Office</span>
       </button>
     </nav>
 
@@ -2651,8 +2672,8 @@ async function saveOfficeReport(report) {
   return _callGas('gasSaveOfficeReport', JSON.stringify(report));
 }
 
-async function generateOfficeReport(type) {
-  return _callGas('gasGenerateOfficeReport', type);
+async function generateOfficeReport(type, period) {
+  return _callGas('gasGenerateOfficeReport', JSON.stringify({ type: type, period: period || null }));
 }
 
 async function getAllOfficeData() {
@@ -4314,7 +4335,213 @@ function renderWeeklyView(entries) {
   }).join('');
 }
 
+// ── 個人：月次リスト型 ──
+function renderMonthlyViewList(entries, budgets) {
+  const content = document.getElementById('hist-content');
+  const year = historyState.year;
+  const monthMap = groupEntriesByMonth(entries, year);
+  const cyanFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`)
+    .filter(ym => monthMap[ym] && monthMap[ym].length > 0)
+    .reverse();
+  if (!months.length) {
+    content.innerHTML = `<div class="hist-empty">${year}年のデータはありません</div>`;
+    return;
+  }
+  const blocks = months.map((ym, i) => {
+    const mEntries = monthMap[ym];
+    const totals = calcMonthlyTotals(mEntries);
+    const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+    const prevYM = months[i + 1];
+    const prevTotals = prevYM ? calcMonthlyTotals(monthMap[prevYM]) : null;
+    const allActions = mEntries.flatMap(e => e.relationshipActions || []);
+    const pos = mEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = mEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    const rows = cyanFields.map(field => {
+      const actual = totals[field.key] || 0;
+      const prevActual = prevTotals !== null ? (prevTotals[field.key] || 0) : null;
+      const plan = budget ? (budget[field.key] || 0) : 0;
+      const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
+      const isYen = field.unit === '円';
+      const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + field.unit;
+      const planStr = plan > 0 ? '／ ' + (isYen ? formatCurrency(plan) : formatNumber(plan) + field.unit) : '';
+      const rateStr = rate !== null ? rate + '%' : '';
+      const rateCls = rate !== null ? (rate >= 100 ? 'ok' : 'warn') : '';
+      const rowCls = rate !== null ? (rate >= 100 ? 'row-ok' : 'row-warn') : 'row-base';
+      const chip = prevActual !== null ? _rptDiffChip(actual, prevActual, field.unit, isYen) : '<span class="rpt-col-diff none">—</span>';
+      return `<div class="rpt-row ${rowCls}">
+        <span class="rpt-col-label">${field.label}</span>
+        <span class="rpt-col-rate ${rateCls}">${rateStr || actualStr}</span>
+        <span class="rpt-col-detail">${rateStr ? actualStr + (planStr ? ' ' + planStr : '') : ''}</span>
+        ${chip}
+      </div>`;
+    }).join('');
+    return `<div class="rpt-block">
+      <div class="rpt-block-hdr">
+        <span class="rpt-block-title">${formatYearMonth(ym)}</span>
+        <span class="rpt-block-summary">${mEntries.length}日分</span>
+      </div>
+      <div class="rpt-block-body">
+        ${rows}
+        ${trust > 0 ? `<div class="rpt-row row-base"><span class="rpt-col-label" style="color:var(--accent-rose)">Trust指数</span><span class="rpt-col-rate" style="color:var(--accent-rose)">${trust}pt</span><span class="rpt-col-detail"></span><span class="rpt-col-diff none"></span></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  content.innerHTML = blocks;
+}
+
+// ── 個人：四半期リスト型 ──
+function renderQuarterlyViewList(entries, budgets) {
+  const content = document.getElementById('hist-content');
+  const year = historyState.year;
+  const selectedQ = historyState.quarter;
+  const quarters = groupEntriesByQuarter(entries, year);
+  const allQDefs = [
+    { key: 'Q1', label: 'Q1（1月〜3月）',   months: ['01','02','03'] },
+    { key: 'Q2', label: 'Q2（4月〜6月）',   months: ['04','05','06'] },
+    { key: 'Q3', label: 'Q3（7月〜9月）',   months: ['07','08','09'] },
+    { key: 'Q4', label: 'Q4（10月〜12月）', months: ['10','11','12'] },
+  ];
+  const qDefs = selectedQ === 'all' ? allQDefs : allQDefs.filter(q => q.key === selectedQ);
+  const cyanFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+  const qOrder = ['Q1','Q2','Q3','Q4'];
+
+  const blocks = qDefs.filter(q => quarters[q.key].length > 0).map(q => {
+    const qEntries = quarters[q.key];
+    const totals = calcMonthlyTotals(qEntries);
+    const yearMonths = q.months.map(m => `${year}-${m}`);
+    const budget = sumBudgets(budgets, yearMonths);
+    const qi = qOrder.indexOf(q.key);
+    const prevQKey = qi > 0 ? qOrder[qi - 1] : null;
+    const prevTotals = prevQKey && quarters[prevQKey].length ? calcMonthlyTotals(quarters[prevQKey]) : null;
+    const allActions = qEntries.flatMap(e => e.relationshipActions || []);
+    const pos = qEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = qEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    const rows = cyanFields.map(field => {
+      const actual = totals[field.key] || 0;
+      const prevActual = prevTotals !== null ? (prevTotals[field.key] || 0) : null;
+      const plan = budget[field.key] || 0;
+      const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
+      const isYen = field.unit === '円';
+      const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + field.unit;
+      const planStr = plan > 0 ? '／ ' + (isYen ? formatCurrency(plan) : formatNumber(plan) + field.unit) : '';
+      const rateStr = rate !== null ? rate + '%' : '';
+      const rateCls = rate !== null ? (rate >= 100 ? 'ok' : 'warn') : '';
+      const rowCls = rate !== null ? (rate >= 100 ? 'row-ok' : 'row-warn') : 'row-base';
+      const chip = prevActual !== null ? _rptDiffChip(actual, prevActual, field.unit, isYen) : '<span class="rpt-col-diff none">—</span>';
+      return `<div class="rpt-row ${rowCls}">
+        <span class="rpt-col-label">${field.label}</span>
+        <span class="rpt-col-rate ${rateCls}">${rateStr || actualStr}</span>
+        <span class="rpt-col-detail">${rateStr ? actualStr + (planStr ? ' ' + planStr : '') : ''}</span>
+        ${chip}
+      </div>`;
+    }).join('');
+    let monthBreakdown = '';
+    if (selectedQ !== 'all') {
+      const monthMap = groupEntriesByMonth(qEntries, year);
+      const mBlocks = q.months.map(m => `${year}-${m}`)
+        .filter(ym => monthMap[ym] && monthMap[ym].length > 0)
+        .map(ym => {
+          const mEntries = monthMap[ym];
+          const mTotals = calcMonthlyTotals(mEntries);
+          const mBudget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+          const mRows = cyanFields.map(field => {
+            const actual = mTotals[field.key] || 0;
+            const plan = mBudget ? (mBudget[field.key] || 0) : 0;
+            const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
+            const isYen = field.unit === '円';
+            const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + field.unit;
+            const planStr = plan > 0 ? '／ ' + (isYen ? formatCurrency(plan) : formatNumber(plan) + field.unit) : '';
+            const rateStr = rate !== null ? rate + '%' : '';
+            const rateCls = rate !== null ? (rate >= 100 ? 'ok' : 'warn') : '';
+            const rowCls = rate !== null ? (rate >= 100 ? 'row-ok' : 'row-warn') : 'row-base';
+            return `<div class="rpt-row ${rowCls}">
+              <span class="rpt-col-label">${field.label}</span>
+              <span class="rpt-col-rate ${rateCls}">${rateStr || actualStr}</span>
+              <span class="rpt-col-detail">${rateStr ? actualStr + (planStr ? ' ' + planStr : '') : ''}</span>
+              <span class="rpt-col-diff none"></span>
+            </div>`;
+          }).join('');
+          return `<div class="rpt-block" style="margin-top:8px;border-left:3px solid var(--rpt-ok-border)">
+            <div class="rpt-block-hdr"><span class="rpt-block-title">${formatYearMonth(ym)}</span><span class="rpt-block-summary">${mEntries.length}日分</span></div>
+            <div class="rpt-block-body">${mRows}</div>
+          </div>`;
+        });
+      if (mBlocks.length > 0) monthBreakdown = `<div style="margin-top:10px">${mBlocks.join('')}</div>`;
+    }
+    return `<div class="rpt-block">
+      <div class="rpt-block-hdr">
+        <span class="rpt-block-title">${year}年 ${q.label}</span>
+        <span class="rpt-block-summary">${qEntries.length}日分</span>
+      </div>
+      <div class="rpt-block-body">
+        ${rows}
+        ${trust > 0 ? `<div class="rpt-row row-base"><span class="rpt-col-label" style="color:var(--accent-rose)">Trust指数</span><span class="rpt-col-rate" style="color:var(--accent-rose)">${trust}pt</span><span class="rpt-col-detail"></span><span class="rpt-col-diff none"></span></div>` : ''}
+      </div>
+      ${monthBreakdown}
+    </div>`;
+  }).join('');
+  const emptyMsg = selectedQ === 'all' ? `${year}年のデータはありません` : `${year}年 ${selectedQ} のデータはありません`;
+  content.innerHTML = blocks || `<div class="hist-empty">${emptyMsg}</div>`;
+}
+
+// ── 個人：年次リスト型 ──
+function renderYearlyViewList(entries, budgets) {
+  const content = document.getElementById('hist-content');
+  const yearMap = groupEntriesByYear(entries);
+  const years = Object.keys(yearMap).sort((a, b) => b.localeCompare(a));
+  const cyanFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+  if (!years.length) {
+    content.innerHTML = `<div class="hist-empty">データがありません</div>`;
+    return;
+  }
+  content.innerHTML = years.map((yr, i) => {
+    const yEntries = yearMap[yr];
+    const totals = calcMonthlyTotals(yEntries);
+    const yearMonths = Array.from({ length: 12 }, (_, j) => `${yr}-${String(j + 1).padStart(2, '0')}`);
+    const budget = sumBudgets(budgets, yearMonths);
+    const prevYr = years[i + 1];
+    const prevTotals = prevYr ? calcMonthlyTotals(yearMap[prevYr]) : null;
+    const allActions = yEntries.flatMap(e => e.relationshipActions || []);
+    const pos = yEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
+    const neg = yEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
+    const trust = calcTrustIndex(allActions, pos, neg);
+    const rows = cyanFields.map(field => {
+      const actual = totals[field.key] || 0;
+      const prevActual = prevTotals !== null ? (prevTotals[field.key] || 0) : null;
+      const plan = budget[field.key] || 0;
+      const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
+      const isYen = field.unit === '円';
+      const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + field.unit;
+      const planStr = plan > 0 ? '／ ' + (isYen ? formatCurrency(plan) : formatNumber(plan) + field.unit) : '';
+      const rateStr = rate !== null ? rate + '%' : '';
+      const rateCls = rate !== null ? (rate >= 100 ? 'ok' : 'warn') : '';
+      const rowCls = rate !== null ? (rate >= 100 ? 'row-ok' : 'row-warn') : 'row-base';
+      const chip = prevActual !== null ? _rptDiffChip(actual, prevActual, field.unit, isYen) : '<span class="rpt-col-diff none">—</span>';
+      return `<div class="rpt-row ${rowCls}">
+        <span class="rpt-col-label">${field.label}</span>
+        <span class="rpt-col-rate ${rateCls}">${rateStr || actualStr}</span>
+        <span class="rpt-col-detail">${rateStr ? actualStr + (planStr ? ' ' + planStr : '') : ''}</span>
+        ${chip}
+      </div>`;
+    }).join('');
+    return `<div class="rpt-block">
+      <div class="rpt-block-hdr">
+        <span class="rpt-block-title">${yr}年</span>
+        <span class="rpt-block-summary">${yEntries.length}日分</span>
+      </div>
+      <div class="rpt-block-body">
+        ${rows}
+        ${trust > 0 ? `<div class="rpt-row row-base"><span class="rpt-col-label" style="color:var(--accent-rose)">Trust指数</span><span class="rpt-col-rate" style="color:var(--accent-rose)">${trust}pt</span><span class="rpt-col-detail"></span><span class="rpt-col-diff none"></span></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderMonthlyView(entries, budgets) {
+  if (historyState.layout === 'list') { renderMonthlyViewList(entries, budgets); return; }
   const content = document.getElementById('hist-content');
   const year = historyState.year;
   const monthMap = groupEntriesByMonth(entries, year);
@@ -4340,6 +4567,7 @@ function renderMonthlyView(entries, budgets) {
 }
 
 function renderQuarterlyView(entries, budgets) {
+  if (historyState.layout === 'list') { renderQuarterlyViewList(entries, budgets); return; }
   const content = document.getElementById('hist-content');
   const year = historyState.year;
   const selectedQ = historyState.quarter;
@@ -4409,6 +4637,7 @@ function renderQuarterlyView(entries, budgets) {
 }
 
 function renderYearlyView(entries, budgets) {
+  if (historyState.layout === 'list') { renderYearlyViewList(entries, budgets); return; }
   const content = document.getElementById('hist-content');
   const yearMap = groupEntriesByYear(entries);
   const years = Object.keys(yearMap).sort((a, b) => b.localeCompare(a));
@@ -6055,18 +6284,22 @@ async function saveOfficePlanFromModal() {
 // ------------------------------------------------------------------
 
 var _OFFICE_KPI_DEFS = [
-  { id: 'inspection', label: '点検',    planKey: 'inspectionPlan',    actualKey: 'inspectionActual',    unit: '件' },
-  { id: 'sales',      label: '売上',    planKey: 'salesPlan',         actualKey: 'salesActual',         unit: '円',
+  { id: 'inspection',  label: '点検',         planKey: 'inspectionPlan',    actualKey: 'inspectionActual',    unit: '件' },
+  { id: 'sales',       label: '売上',         planKey: 'salesPlan',         actualKey: 'salesActual',         unit: '円',
     forecastKey: 'salesForecast', showForecast: true },
-  { id: 'renewal',    label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
-  { id: 'maint',      label: '保全',    planKey: 'totalMaintPlan',    actualKey: 'totalMaintActual',    unit: '件' },
+  { id: 'newMaint',    label: '新規保守受注数', planKey: 'newMaintPlan',      actualKey: 'newMaintActual',      unit: '台', showCountdown: true },
+  { id: 'renewalThis', label: '当月継続率',    planKey: 'renewalThisPlan',   actualKey: 'renewalThisActual',   unit: '件', type: 'rate', threshold: 100, warnAfterDay: 10 },
+  { id: 'renewalNext', label: '次月受注残率',  planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件', type: 'rate', threshold: 70 },
+  { id: 'renewalNext2',label: '次々月受注残率', planKey: 'renewalNext2Plan',  actualKey: 'renewalNext2Actual',  unit: '件', type: 'rate', threshold: 50 },
 ];
 
 var officeReportSettings = {
   inspection:   true,
   sales:        true,
-  renewal:      true,
-  maint:        true,
+  newMaint:     true,
+  renewalThis:  true,
+  renewalNext:  true,
+  renewalNext2: true,
   showDelta:    true,
   showForecast: true,
 };
@@ -6084,6 +6317,54 @@ const officeHistState = {
   layout:        'list',
 };
 
+function _getOfficeHistCurrentPeriod(view) {
+  if (view === 'daily') {
+    return officeHistState.date || getTodayJST();
+  } else if (view === 'weekly' || view === 'monthly') {
+    return officeHistState.yearMonth || getCurrentYearMonthJST();
+  } else if (view === 'quarterly') {
+    var yr = officeHistState.year || Number(getTodayJST().slice(0, 4));
+    var q  = (officeHistState.quarter && officeHistState.quarter !== 'all')
+      ? officeHistState.quarter
+      : 'Q' + Math.ceil(Number(getTodayJST().slice(5, 7)) / 3);
+    return yr + '-' + q;
+  } else { // yearly
+    return String(officeHistState.year || getTodayJST().slice(0, 4));
+  }
+}
+
+async function _handleOfficeHistAiReport() {
+  var btn      = document.getElementById('office-hist-ai-btn');
+  var resultEl = document.getElementById('office-hist-ai-result');
+  var bodyEl   = document.getElementById('office-hist-ai-body');
+  var periodEl = document.getElementById('office-hist-ai-period');
+
+  var view   = officeHistState.view;
+  var period = _getOfficeHistCurrentPeriod(view);
+
+  btn.disabled    = true;
+  btn.textContent = '生成中...';
+  resultEl.style.display = 'none';
+
+  try {
+    var res = await generateOfficeReport(view, period);
+    if (res && res.content) {
+      periodEl.textContent  = res.period || period;
+      bodyEl.innerHTML      = res.content.replace(/\n/g, '<br>');
+      resultEl.style.display = 'block';
+    } else {
+      bodyEl.innerHTML       = '<span style="color:#e06c75">レポート生成に失敗しました</span>';
+      resultEl.style.display = 'block';
+    }
+  } catch (e) {
+    bodyEl.innerHTML       = '<span style="color:#e06c75">エラー: ' + (e.message || e) + '</span>';
+    resultEl.style.display = 'block';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '🤖 AIレポート';
+  }
+}
+
 function initOfficeHistoryTab() {
   document.getElementById('office-hist-view-select').addEventListener('change', _onOfficeHistViewChange);
   document.querySelector('[data-tab="tab-office-history"]').addEventListener('click', function() {
@@ -6094,6 +6375,10 @@ function initOfficeHistoryTab() {
   document.getElementById('office-report-print-btn').addEventListener('click',    _handleOfficeHistPrint);
   document.getElementById('office-report-copy-btn').addEventListener('click',     _handleOfficeHistCopy);
   document.getElementById('office-report-settings-btn').addEventListener('click', _toggleOfficeReportSettings);
+  document.getElementById('office-hist-ai-btn').addEventListener('click',         _handleOfficeHistAiReport);
+  document.getElementById('office-hist-ai-close').addEventListener('click', function() {
+    document.getElementById('office-hist-ai-result').style.display = 'none';
+  });
   document.getElementById('office-hist-compare-btn').addEventListener('click',    _onOfficeHistCompareModeToggle);
   document.getElementById('office-hist-layout-toggle').addEventListener('click', function(e) {
     var btn = e.target.closest('[data-l]');
@@ -6109,6 +6394,7 @@ function initOfficeHistoryTab() {
 }
 
 async function refreshOfficeHistory() {
+  officeHistState.allData = null;
   _renderOfficeHistPeriodControl();
   await renderOfficeHistContent();
 }
@@ -6351,6 +6637,7 @@ function _groupOfficeByQuarter(entries) {
 }
 
 function _renderOfficeQuarterlyView(entries, container) {
+  if (officeHistState.layout === 'list') { _renderOfficeQuarterlyViewList(entries, container); return; }
   var year     = officeHistState.year;
   var selectedQ = officeHistState.quarter;
   var quarters = _groupOfficeByQuarter(entries);
@@ -6406,6 +6693,39 @@ function _rptOfficeDiffChip(curr, prev, unit) {
 }
 
 function _rptOfficeKpiRow(kpiDef, entry, prevEntry) {
+  // --- rate型（当月継続率 / 次月受注残率 / 次々月受注残率）---
+  if (kpiDef.type === 'rate') {
+    var plan   = Number(entry[kpiDef.planKey])   || 0;
+    var actual = Number(entry[kpiDef.actualKey]) || 0;
+    if (!plan) return '';
+    var pct     = Math.round(actual / plan * 100);
+    var ok      = pct >= kpiDef.threshold;
+    var rowCls  = ok ? 'row-ok' : 'row-warn';
+    var rateCls = ok ? 'ok' : 'warn';
+    var barPct  = Math.min(pct, 100);
+    var tgtPos  = Math.min(kpiDef.threshold, 100);
+    var prevPlan   = prevEntry ? (Number(prevEntry[kpiDef.planKey])   || 0) : 0;
+    var prevActual = prevEntry ? (Number(prevEntry[kpiDef.actualKey]) || 0) : 0;
+    var prevPct    = (prevEntry && prevPlan > 0) ? Math.round(prevActual / prevPlan * 100) : null;
+    var chip = prevPct !== null ? _rptOfficeDiffChip(pct, prevPct, 'pt') : '<span class="rpt-col-diff none">基準日</span>';
+    var warnTag = '';
+    if (!ok && kpiDef.warnAfterDay) {
+      var entryDay = Number(String(entry.date).slice(8, 10));
+      if (entryDay > kpiDef.warnAfterDay) warnTag = '<span class="warning-alert-tag">⚠ 未達</span>';
+    }
+    var bar = '<div class="rate-bar" style="grid-column:3/5;margin:2px 0 4px">' +
+      '<div class="rate-bar-fill ' + rateCls + '" style="width:' + barPct + '%"></div>' +
+      '<div class="rate-target-line" style="left:' + tgtPos + '%"></div>' +
+      '</div>';
+    var sub = '<div class="rpt-sub-row">└ ' + plan + '件中 ' + actual + '件（目標' + kpiDef.threshold + '%）</div>';
+    return '<div class="rpt-row ' + rowCls + '" style="flex-wrap:wrap">' +
+      '<span class="rpt-col-label">' + kpiDef.label + warnTag + '</span>' +
+      '<span class="rpt-col-rate ' + rateCls + '">' + pct + '%</span>' +
+      '<span class="rpt-col-detail">目標 ' + kpiDef.threshold + '%</span>' +
+      chip + bar + '</div>' + sub;
+  }
+
+  // --- 通常型（inspection / sales / newMaint）---
   var plan   = Number(entry[kpiDef.planKey])   || 0;
   var actual = Number(entry[kpiDef.actualKey]) || 0;
   var rate   = plan > 0 ? Math.min(Math.round(actual / plan * 100), 999) : null;
@@ -6421,13 +6741,24 @@ function _rptOfficeKpiRow(kpiDef, entry, prevEntry) {
     '<span class="rpt-col-label">' + kpiDef.label + '</span>' +
     '<span class="rpt-col-rate ' + rateCls + '">' + rateStr + '</span>' +
     '<span class="rpt-col-detail">' + actualStr + ' ' + planStr + '</span>' +
-    chip +
-    '</div>';
+    chip + '</div>';
+  // 末見通しサブ行（sales）
   if (kpiDef.forecastKey && entry[kpiDef.forecastKey]) {
     var fc     = Number(entry[kpiDef.forecastKey]);
     var fcRate = plan > 0 ? Math.round(fc / plan * 100) : null;
     var fcRateStr = fcRate !== null ? '（' + fcRate + '%）' : '';
     html += '<div class="rpt-sub-row">└ 末見通し ' + formatCurrency(fc) + fcRateStr + '</div>';
+  }
+  // カウントダウンサブ行（newMaint）
+  if (kpiDef.showCountdown && plan > 0) {
+    var dateStr  = String(entry.date).slice(0, 10);
+    var yr = Number(dateStr.slice(0, 4)), mo = Number(dateStr.slice(5, 7));
+    var lastDay  = new Date(yr, mo, 0).getDate();
+    var today    = Number(dateStr.slice(8, 10));
+    var daysLeft = lastDay - today;
+    var needed   = Math.max(plan - actual, 0);
+    var cdCls    = (needed > 0 && daysLeft < 5) ? 'warn' : '';
+    html += '<div class="countdown-row ' + cdCls + '">└ 月末まで残り ' + daysLeft + '日 ／ あと ' + needed + kpiDef.unit + '</div>';
   }
   return html;
 }
@@ -6531,7 +6862,95 @@ function _renderOfficeWeeklyView(entries, container) {
   }).join('');
 }
 
+// ── 営業所：月次リスト型 ──
+function _renderOfficeMonthlyViewList(entries, container) {
+  var allMonths = _groupOfficeByMonth(entries).reverse();
+  if (!allMonths.length) { container.innerHTML = '<div class="hist-empty">この年のデータはありません</div>'; return; }
+  container.innerHTML = allMonths.map(function(m, i) {
+    var prevEntry = i < allMonths.length - 1 ? allMonths[i + 1].latest : null;
+    var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(m.latest, d); }).filter(function(r) { return r !== null; });
+    var avgRate = rates.length ? Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length) : null;
+    var dot = avgRate === null ? '<span class="rpt-dot none">●</span>' : avgRate >= 100 ? '<span class="rpt-dot ok">●</span>' : avgRate >= 70 ? '<span class="rpt-dot warn" style="color:#e0a93f">●</span>' : '<span class="rpt-dot warn">●</span>';
+    var badge = avgRate !== null ? (avgRate >= 100 ? '<span class="rpt-block-badge ok">順調</span>' : avgRate >= 70 ? '<span class="rpt-block-badge caution">注意</span>' : '<span class="rpt-block-badge warn">要改善</span>') : '';
+    var rows = _OFFICE_KPI_DEFS.map(function(d) { return _rptOfficeKpiRow(d, m.latest, prevEntry); }).join('');
+    var monthLabel = formatYearMonth(m.ym) + '（' + m.entries.length + '日分）';
+    return '<div class="rpt-block">' +
+      '<div class="rpt-block-hdr">' + dot + '<span class="rpt-block-title">' + monthLabel + '</span>' + badge +
+      (avgRate !== null ? '<span class="rpt-block-summary">総合 ' + avgRate + '%</span>' : '') +
+      '</div><div class="rpt-block-body">' + rows + '</div></div>';
+  }).join('');
+}
+
+// ── 営業所：四半期リスト型 ──
+function _renderOfficeQuarterlyViewList(entries, container) {
+  var year = officeHistState.year;
+  var selectedQ = officeHistState.quarter;
+  var quarters = _groupOfficeByQuarter(entries);
+  var allQDefs = [
+    { key: 'Q1', label: 'Q1（1月〜3月）' },
+    { key: 'Q2', label: 'Q2（4月〜6月）' },
+    { key: 'Q3', label: 'Q3（7月〜9月）' },
+    { key: 'Q4', label: 'Q4（10月〜12月）' },
+  ];
+  var qDefs = selectedQ === 'all' ? allQDefs : allQDefs.filter(function(q) { return q.key === selectedQ; });
+  var qOrder = ['Q1','Q2','Q3','Q4'];
+  var blocks = [];
+  qDefs.forEach(function(qDef) {
+    var qEntries = quarters[qDef.key];
+    if (!qEntries.length) return;
+    var latest = qEntries.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, qEntries[0]);
+    var qi = qOrder.indexOf(qDef.key);
+    var prevQKey = qi > 0 ? qOrder[qi - 1] : null;
+    var prevLatest = null;
+    if (prevQKey && quarters[prevQKey] && quarters[prevQKey].length) {
+      prevLatest = quarters[prevQKey].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, quarters[prevQKey][0]);
+    }
+    var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(latest, d); }).filter(function(r) { return r !== null; });
+    var avgRate = rates.length ? Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length) : null;
+    var dot = avgRate === null ? '<span class="rpt-dot none">●</span>' : avgRate >= 100 ? '<span class="rpt-dot ok">●</span>' : avgRate >= 70 ? '<span class="rpt-dot warn" style="color:#e0a93f">●</span>' : '<span class="rpt-dot warn">●</span>';
+    var badge = avgRate !== null ? (avgRate >= 100 ? '<span class="rpt-block-badge ok">順調</span>' : avgRate >= 70 ? '<span class="rpt-block-badge caution">注意</span>' : '<span class="rpt-block-badge warn">要改善</span>') : '';
+    var rows = _OFFICE_KPI_DEFS.map(function(d) { return _rptOfficeKpiRow(d, latest, prevLatest); }).join('');
+    blocks.push('<div class="rpt-block">' +
+      '<div class="rpt-block-hdr">' + dot + '<span class="rpt-block-title">' + year + '年 ' + qDef.label + '（期末実績）</span>' + badge +
+      (avgRate !== null ? '<span class="rpt-block-summary">総合 ' + avgRate + '%</span>' : '') +
+      '</div><div class="rpt-block-body">' + rows + '</div></div>');
+  });
+  if (!blocks.length) {
+    container.innerHTML = '<div class="hist-empty">' + year + '年' + (selectedQ !== 'all' ? ' ' + selectedQ : '') + 'のデータはありません</div>';
+    return;
+  }
+  container.innerHTML = blocks.join('');
+}
+
+// ── 営業所：年次リスト型 ──
+function _renderOfficeYearlyViewList(entries, container) {
+  var years = {};
+  entries.forEach(function(e) {
+    var y = String(e.date).slice(0, 4);
+    if (!years[y]) years[y] = [];
+    years[y].push(e);
+  });
+  var list = Object.entries(years).sort(function(a, b) { return b[0].localeCompare(a[0]); }).map(function(kv) {
+    var latest = kv[1].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, kv[1][0]);
+    return { year: kv[0], entries: kv[1], latest: latest };
+  });
+  if (!list.length) { container.innerHTML = '<div class="hist-empty">データがありません</div>'; return; }
+  container.innerHTML = list.map(function(y, i) {
+    var prevLatest = i < list.length - 1 ? list[i + 1].latest : null;
+    var rates = _OFFICE_KPI_DEFS.map(function(d) { return _calcOfficeKpiRate(y.latest, d); }).filter(function(r) { return r !== null; });
+    var avgRate = rates.length ? Math.round(rates.reduce(function(s, r) { return s + r; }, 0) / rates.length) : null;
+    var dot = avgRate === null ? '<span class="rpt-dot none">●</span>' : avgRate >= 100 ? '<span class="rpt-dot ok">●</span>' : avgRate >= 70 ? '<span class="rpt-dot warn" style="color:#e0a93f">●</span>' : '<span class="rpt-dot warn">●</span>';
+    var badge = avgRate !== null ? (avgRate >= 100 ? '<span class="rpt-block-badge ok">順調</span>' : avgRate >= 70 ? '<span class="rpt-block-badge caution">注意</span>' : '<span class="rpt-block-badge warn">要改善</span>') : '';
+    var rows = _OFFICE_KPI_DEFS.map(function(d) { return _rptOfficeKpiRow(d, y.latest, prevLatest); }).join('');
+    return '<div class="rpt-block">' +
+      '<div class="rpt-block-hdr">' + dot + '<span class="rpt-block-title">' + y.year + '年（年末実績）</span>' + badge +
+      (avgRate !== null ? '<span class="rpt-block-summary">総合 ' + avgRate + '%</span>' : '') +
+      '</div><div class="rpt-block-body">' + rows + '</div></div>';
+  }).join('');
+}
+
 function _renderOfficeMonthlyView(entries, container) {
+  if (officeHistState.layout === 'list') { _renderOfficeMonthlyViewList(entries, container); return; }
   var allMonths = _groupOfficeByMonth(entries).reverse(); // 新→旧
   if (!allMonths.length) { container.innerHTML = '<div class="hist-empty">この年のデータはありません</div>'; return; }
 
@@ -6571,6 +6990,7 @@ function _renderOfficeMonthlyView(entries, container) {
 }
 
 function _renderOfficeYearlyView(entries, container) {
+  if (officeHistState.layout === 'list') { _renderOfficeYearlyViewList(entries, container); return; }
   var years = {};
   entries.forEach(function(e) {
     var y = String(e.date).slice(0, 4);
@@ -7207,7 +7627,12 @@ function _calcOfficeKpiRate(entry, kpiDef) {
   var plan   = Number(entry[kpiDef.planKey])   || 0;
   var actual = Number(entry[kpiDef.actualKey]) || 0;
   if (plan === 0) return null;
-  return Math.min(Math.round(actual / plan * 100), 999);
+  var raw = Math.min(Math.round(actual / plan * 100), 999);
+  // rate型はしきい値で正規化（100=達成）
+  if (kpiDef.type === 'rate' && kpiDef.threshold) {
+    return Math.round(raw / kpiDef.threshold * 100);
+  }
+  return raw;
 }
 
 function _buildOfficeKpiBlock(kpiDef, entry, prevEntry) {
@@ -7763,7 +8188,8 @@ function initHeaderReload() {
   var btn = document.getElementById('header-title');
   if (!btn) return;
   btn.addEventListener('click', function() {
-    historyState.allData = null;
+    historyState.allData    = null;
+    officeHistState.allData = null;
     var origText = btn.textContent;
     btn.textContent = '更新中...';
     btn.style.opacity = '0.5';
