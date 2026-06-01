@@ -1474,17 +1474,13 @@ function gasSaveFeedback(dataJson) {
 }
 
 // ============================================================
-// LINE通知機能
+// メール通知機能
 // ============================================================
 
-function sendLineNotification(message) {
-  var token = PropertiesService.getScriptProperties().getProperty('LINE_NOTIFY_TOKEN');
-  if (!token) { Logger.log('LINE_NOTIFY_TOKEN が未設定です'); return; }
-  UrlFetchApp.fetch('https://notify-api.line.me/api/notify', {
-    method: 'post',
-    headers: { 'Authorization': 'Bearer ' + token },
-    payload: { message: message }
-  });
+function sendEmailNotification(subject, body) {
+  var email = PropertiesService.getScriptProperties().getProperty('NOTIFY_EMAIL');
+  if (!email) { Logger.log('NOTIFY_EMAIL が未設定です'); return; }
+  MailApp.sendEmail(email, subject, body);
 }
 
 // 日曜または祝日のみスキップ（土曜は出勤があるため通知する）
@@ -1513,18 +1509,21 @@ function checkDailyEntryAndNotify() {
   var rows = sheet.getDataRange().getValues();
   var hasEntry = rows.slice(1).some(function(r) { return dateToYMD(r[0]) === today; });
   if (!hasEntry) {
-    sendLineNotification('\n📋 本日の日報が未記入です。\n記録をお忘れなく。');
+    sendEmailNotification(
+      '📋 日報未記入のお知らせ',
+      '本日（' + today + '）の日報が未記入です。\n記録をお忘れなく。'
+    );
   }
 }
 
 // GASエディタから1回だけ実行してトリガー登録
-function setupLineNotifyTrigger() {
+function setupEmailNotifyTrigger() {
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'checkDailyEntryAndNotify') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('checkDailyEntryAndNotify')
     .timeBased().everyDays(1).atHour(18).nearMinute(30).create();
-  Logger.log('LINE通知トリガー登録完了（毎日18:30）');
+  Logger.log('メール通知トリガー登録完了（毎日18:30）');
 }
 
 // ============================================================
