@@ -1480,7 +1480,7 @@ function gasSaveFeedback(dataJson) {
 function sendEmailNotification(subject, body) {
   var email = PropertiesService.getScriptProperties().getProperty('NOTIFY_EMAIL');
   if (!email) { Logger.log('NOTIFY_EMAIL が未設定です'); return; }
-  MailApp.sendEmail(email, subject, body);
+  GmailApp.sendEmail(email, subject, body);
 }
 
 // 日曜または祝日のみスキップ（土曜は出勤があるため通知する）
