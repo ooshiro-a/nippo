@@ -2556,11 +2556,12 @@ function renderManagementDashboard(entry) {
           '</div>';
 
   // 売上
-  var fRate = rate(n('salesPlan'), n('salesForecast'));
+  var forecastVal = _officeSalesForecast(entry);
+  var fRate = rate(n('salesPlan'), forecastVal);
   html += '<div class="office-section">' +
           '<div class="office-section-title">売上</div>' +
           gaugeBlock('売上 実績', n('salesPlan'), n('salesActual')) +
-          gaugeBlock('末見通し', n('salesPlan'), n('salesForecast')) +
+          gaugeBlock('末見通し', n('salesPlan'), forecastVal) +
           fieldRow('A案件', formatNumber(n('salesAcase'))) +
           fieldRow('対計画率', '<span style="color:' + getAccentColor(getProgressColorClass(vsPlanPct)) + '">' + vsPlanPct + '%</span>') +
           '</div>';
@@ -2638,7 +2639,7 @@ function renderOfficeKpiChart(entry) {
   var items = [
     { label: '点検',      rate: pct(n('inspectionPlan'),      n('inspectionActual')) },
     { label: '売上',      rate: pct(n('salesPlan'),           n('salesActual')) },
-    { label: '末見通し',  rate: pct(n('salesPlan'),           n('salesForecast')) },
+    { label: '末見通し',  rate: pct(n('salesPlan'),           _officeSalesForecast(entry)) },
     { label: '総保守台数', rate: pct(n('totalMaintPlan'),     n('totalMaintActual')) },
     { label: '次月継続',  rate: pct(n('renewalNextPlanTop'),  n('renewalNextActualTop')) }
   ].filter(function(item) { return item.rate > 0; });
@@ -2885,10 +2886,14 @@ async function saveOfficePlanFromModal() {
 // 営業所 履歴タブ（B-2）
 // ------------------------------------------------------------------
 
+function _officeSalesForecast(e) {
+  return (Number(e.salesActual) || 0) + (Number(e.salesAcase) || 0);
+}
+
 var _OFFICE_KPI_DEFS = [
   { id: 'inspection', label: '点検',    planKey: 'inspectionPlan',    actualKey: 'inspectionActual',    unit: '件' },
   { id: 'sales',      label: '売上',    planKey: 'salesPlan',         actualKey: 'salesActual',         unit: '円',
-    forecastKey: 'salesForecast', showForecast: true },
+    forecastCalc: _officeSalesForecast, showForecast: true },
   { id: 'renewal',    label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
   { id: 'maint',      label: '保全',    planKey: 'totalMaintPlan',    actualKey: 'totalMaintActual',    unit: '件' },
 ];
@@ -3199,7 +3204,17 @@ function _renderOfficeQuarterlyView(entries, container) {
           var cl = getAccentColor(getProgressColorClass(r));
           return '<span style="color:' + cl + '">' + d.label + ' ' + r + '%</span>';
         }).filter(Boolean).join(' / ');
-        return '<div style="font-size:11px;padding:2px 0;color:var(--text-secondary)">' + formatYearMonth(m.ym) + ': ' + (parts || '—') + '</div>';
+        var forecastPart = (function() {
+          var fd = _OFFICE_KPI_DEFS.find(function(d) { return d.showForecast && d.forecastCalc; });
+          if (!fd) return '';
+          var fc = fd.forecastCalc(m.latest);
+          var fp = Number(m.latest[fd.planKey]) || 0;
+          var fr = fp > 0 ? Math.min(Math.round(fc / fp * 100), 999) : null;
+          var fcl = fr !== null ? getAccentColor(getProgressColorClass(fr)) : 'var(--text-muted)';
+          return '<span style="color:' + fcl + ';font-weight:700">末見通し ' + formatCurrency(fc) + (fr !== null ? '(' + fr + '%)' : '') + '</span>';
+        })();
+        return '<div style="font-size:11px;padding:2px 0;color:var(--text-secondary)">' + formatYearMonth(m.ym) + ': ' + (parts || '—') +
+          (forecastPart ? ' / ' + forecastPart : '') + '</div>';
       }).join('');
       monthBreakdown = '<details style="margin-top:8px"><summary style="font-size:11px;color:var(--text-muted);cursor:pointer">月別内訳を見る</summary>' +
         '<div style="padding:4px 0">' + rows + '</div></details>';
@@ -3319,7 +3334,17 @@ function _renderOfficeYearlyView(entries, container) {
           var cl = getAccentColor(getProgressColorClass(r));
           return '<span style="color:' + cl + '">' + d.label + ' ' + r + '%</span>';
         }).filter(Boolean).join(' / ');
-        return '<div style="font-size:11px;padding:2px 0;color:var(--text-secondary)">' + formatYearMonth(m.ym) + ': ' + (parts || '—') + '</div>';
+        var forecastPart = (function() {
+          var fd = _OFFICE_KPI_DEFS.find(function(d) { return d.showForecast && d.forecastCalc; });
+          if (!fd) return '';
+          var fc = fd.forecastCalc(m.latest);
+          var fp = Number(m.latest[fd.planKey]) || 0;
+          var fr = fp > 0 ? Math.min(Math.round(fc / fp * 100), 999) : null;
+          var fcl = fr !== null ? getAccentColor(getProgressColorClass(fr)) : 'var(--text-muted)';
+          return '<span style="color:' + fcl + ';font-weight:700">末見通し ' + formatCurrency(fc) + (fr !== null ? '(' + fr + '%)' : '') + '</span>';
+        })();
+        return '<div style="font-size:11px;padding:2px 0;color:var(--text-secondary)">' + formatYearMonth(m.ym) + ': ' + (parts || '—') +
+          (forecastPart ? ' / ' + forecastPart : '') + '</div>';
       }).join('');
       monthBreakdown = '<details style="margin-top:8px"><summary style="font-size:11px;color:var(--text-muted);cursor:pointer">月別内訳を見る</summary>' +
         '<div style="padding:4px 0">' + rows + '</div></details>';
@@ -3376,11 +3401,12 @@ function _getOfficePrevPeriodInfo(view) {
   function sumRows(list) {
     if (!list.length) return null;
     const s = { inspectionPlan:0, inspectionActual:0, salesPlan:0, salesActual:0,
-                salesForecast:0, renewalNextPlanTop:0, renewalNextActualTop:0,
+                salesAcase:0, renewalNextPlanTop:0, renewalNextActualTop:0,
                 totalMaintPlan:0, totalMaintActual:0 };
     list.forEach(function(r) {
       Object.keys(s).forEach(function(k) { s[k] += (Number(r[k]) || 0); });
     });
+    s.salesForecast = _officeSalesForecast(s);
     return s;
   }
 
@@ -3573,7 +3599,7 @@ async function _handleOfficeHistCsv(evt) {
     // 出力設定に応じて列を絞り込む
     const csvColDefs = [
       { key: 'inspection', headers: ['点検計画', '点検実績'], vals: function(e) { return [e.inspectionPlan, e.inspectionActual]; } },
-      { key: 'sales',      headers: ['売上計画', '売上実績', '末見通し'], vals: function(e) { return [e.salesPlan, e.salesActual, e.salesForecast]; } },
+      { key: 'sales',      headers: ['売上計画', '売上実績', '末見通し'], vals: function(e) { return [e.salesPlan, e.salesActual, _officeSalesForecast(e)]; } },
       { key: 'renewal',    headers: ['次月継続計画', '次月継続実績'], vals: function(e) { return [e.renewalNextPlanTop, e.renewalNextActualTop]; } },
       { key: 'maint',      headers: ['総保守計画', '総保守実績'], vals: function(e) { return [e.totalMaintPlan, e.totalMaintActual]; } },
     ].filter(function(col) { return officeReportSettings[col.key] !== false; });
@@ -3636,7 +3662,7 @@ function _buildOfficePrintHtml(opts) {
     '.ohist-actual{font-weight:700;font-size:13px}' +
     '.ohist-plan{font-size:11px;color:#999}' +
     '.ohist-rate{font-weight:700;font-size:12px;min-width:40px;text-align:right}' +
-    '.ohist-forecast-row{display:flex;justify-content:space-between;font-size:11px;color:#555;margin-top:2px}' +
+    '.ohist-forecast-row{display:flex;justify-content:space-between;font-size:12px;margin-top:4px;padding-top:3px;border-top:1px solid rgba(255,255,255,0.08)}' +
     '.ohist-delta-row{font-size:11px;color:#555;padding-top:3px;margin-top:3px;border-top:1px solid #f0f0f0}' +
     '.ohist-delta-pos{color:#167a16;font-weight:700}.ohist-delta-neg{color:#c00;font-weight:700}' +
     '.ohist-delta-label{color:#999;margin-right:2px}' +
@@ -3784,7 +3810,7 @@ function _buildOfficeReportText(rows, view) {
     return [
       '  点検: ' + fmt(e.inspectionActual) + '/' + fmt(e.inspectionPlan) + '件',
       '  売上: ¥' + fmt(e.salesActual) + '/¥' + fmt(e.salesPlan),
-      '  末見通し: ¥' + fmt(e.salesForecast),
+      '  末見通し: ¥' + fmt(_officeSalesForecast(e)),
       '  次月継続: ' + fmt(e.renewalNextActualTop) + '/' + fmt(e.renewalNextPlanTop) + '件',
     ].join('\n');
   };
@@ -3871,16 +3897,16 @@ function _buildOfficeKpiBlock(kpiDef, entry, prevEntry) {
     '</div></div>' +
     '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + barWidth + '%"></div></div>';
 
-  if (kpiDef.showForecast && kpiDef.forecastKey) {
-    var forecast = Number(entry[kpiDef.forecastKey]) || 0;
+  if (kpiDef.showForecast && (kpiDef.forecastCalc || kpiDef.forecastKey)) {
+    var forecast = kpiDef.forecastCalc ? kpiDef.forecastCalc(entry) : (Number(entry[kpiDef.forecastKey]) || 0);
     var fRate    = plan > 0 ? Math.min(Math.round(forecast / plan * 100), 999) : null;
     var fcl      = fRate !== null ? getAccentColor(getProgressColorClass(fRate)) : 'var(--text-muted)';
     var diff     = forecast - plan;
     var diffCls  = diff >= 0 ? 'ohist-delta-pos' : 'ohist-delta-neg';
     var diffStr  = (diff >= 0 ? '＋' : '−') + formatCurrency(Math.abs(diff));
     html += '<div class="ohist-forecast-row">' +
-      '<span>末見通し ' + formatCurrency(forecast) +
-      (fRate !== null ? ' <span style="color:' + fcl + '">(' + fRate + '%)</span>' : '') + '</span>' +
+      '<span style="font-weight:700;color:' + fcl + '">末見通し ' + formatCurrency(forecast) +
+      (fRate !== null ? ' (' + fRate + '%)' : '') + '</span>' +
       '<span class="' + diffCls + '">対計画 ' + diffStr + '</span>' +
       '</div>';
   }

@@ -378,7 +378,7 @@ function saveBudgetImpl(data) {
     var col = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
     var matchRows = [];
     for (var i = 0; i < col.length; i++) {
-      if (String(col[i][0]).trim() === yearMonth) matchRows.push(i + 2);
+      if (dateToYMD(col[i][0]).slice(0, 7) === yearMonth) matchRows.push(i + 2);
     }
     for (var j = matchRows.length - 1; j >= 1; j--) {
       sheet.deleteRow(matchRows[j]);
@@ -531,7 +531,7 @@ function normalizeEntry(row) {
 
 function normalizeBudget(row) {
   return {
-    yearMonth:              String(row.year_month || ''),
+    yearMonth:              dateToYMD(row.year_month).slice(0, 7),
     inspection:             Number(row.inspection) || 0,
     promotionAmount:        Number(row.promotion_amount) || 0,
     promotionCount:         Number(row.promotion_count) || 0,
