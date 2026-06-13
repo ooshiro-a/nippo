@@ -357,9 +357,18 @@ async function handleSaveEntry() {
 
 let dashboardChart = null;
 let _dashboardRefreshing = false;
+let _kgiProgressView = 'monthly';
 
 function initDashboardTab() {
   document.querySelector('[data-tab="tab-dashboard"]').addEventListener('click', refreshDashboard);
+  document.querySelectorAll('#kgi-progress-toggle .seg-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (_kgiProgressView === btn.dataset.view) return;
+      _kgiProgressView = btn.dataset.view;
+      document.querySelectorAll('#kgi-progress-toggle .seg-toggle-btn').forEach(b => b.classList.toggle('active', b === btn));
+      refreshDashboard();
+    });
+  });
   refreshDashboard();
 }
 
@@ -398,7 +407,34 @@ async function refreshDashboard() {
       { actual: 'office-unsettled-actual', budget: 'office-unsettled-budget',
         rate: 'office-unsettled-rate', bar: 'office-unsettled-bar', shortage: 'office-unsettled-shortage' }
     );
-    renderWeeklyGauge(entries, budget);
+    renderKgiProgressCard(entries, budget);
+
+    const today = getTodayJST();
+    const yesterday = addCalendarDays(today, -1);
+    const prevEntries = entries.filter(e => e.date <= yesterday);
+    const prevSortedEntries = [...prevEntries].sort((a, b) => b.date.localeCompare(a.date));
+
+    renderPaceLine('personal-plan-pace', {
+      itemKey: 'promotionAmount',
+      plan: budget ? (budget.promotionAmount || 0) : 0,
+      actual: promotionActual,
+      prevActual: calcMonthlyTotals(prevEntries).promotionAmount || 0,
+      unit: '円', yearMonth, asOfDateStr: today,
+    });
+    renderPaceLine('personal-unsettled-pace', {
+      itemKey: 'personalUnsettled',
+      plan: budget ? (budget.personalPlan || 0) : 0,
+      actual: personalUnsettled,
+      prevActual: (prevSortedEntries.find(e => e.personalUnsettled > 0) || {}).personalUnsettled || 0,
+      unit: '円', yearMonth, asOfDateStr: today,
+    });
+    renderPaceLine('office-unsettled-pace', {
+      itemKey: 'officeUnsettled',
+      plan: budget ? (budget.officePlan || 0) : 0,
+      actual: officeUnsettled,
+      prevActual: (prevSortedEntries.find(e => e.officeUnsettled > 0) || {}).officeUnsettled || 0,
+      unit: '円', yearMonth, asOfDateStr: today,
+    });
     renderStreakBadge(allEntries);
   } catch (e) {
     console.warn('ダッシュボードロード失敗:', e);
@@ -407,7 +443,78 @@ async function refreshDashboard() {
   }
 }
 
-function renderWeeklyGauge(entries, budget) {
+function renderKgiProgressCard(entries, budget) {
+  const remainingEl = document.getElementById('kgi-remaining-days');
+  if (_kgiProgressView === 'weekly') {
+    if (remainingEl) remainingEl.textContent = '';
+    renderWeeklyKgiProgress(entries, budget);
+  } else {
+    renderMonthlyKgiProgress(entries, budget);
+  }
+}
+
+function renderMonthlyKgiProgress(entries, budget) {
+  const today = getTodayJST();
+  const yearMonth = today.slice(0, 7);
+  const [y, m] = yearMonth.split('-').map(Number);
+  const monthEnd = `${yearMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+  const remainingEl = document.getElementById('kgi-remaining-days');
+  if (remainingEl) remainingEl.textContent = `残${countBusinessDays(today, monthEnd)}営業日（月末まで）`;
+
+  const totals = calcMonthlyTotals(entries);
+  const yesterday = addCalendarDays(today, -1);
+  const prevTotals = calcMonthlyTotals(entries.filter(e => e.date <= yesterday));
+
+  const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
+    const actual = totals[f.key] || 0;
+    const plan = budget ? (budget[f.key] || 0) : 0;
+    const isYen = f.unit === '円';
+    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+
+    if (plan <= 0) {
+      if (actual === 0) return '';
+      return `<div class="weekly-gauge-row">
+        <div class="weekly-gauge-label">
+          <span>${f.label}</span>
+          <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr}</span>
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">目標未設定</span>
+        </div>
+      </div>`;
+    }
+
+    const rate = Math.round(actual / plan * 100);
+    const colorClass = getProgressColorClass(rate);
+    const color = getAccentColor(colorClass);
+    const planStr = isYen ? formatCurrency(plan) : formatNumber(plan) + f.unit;
+
+    const pace = buildPaceInfo({
+      itemKey: f.key,
+      plan, actual,
+      prevActual: prevTotals[f.key] || 0,
+      unit: f.unit,
+      yearMonth,
+      asOfDateStr: today,
+    });
+    const paceColor = getAccentColor(pace.colorClass);
+
+    return `<div class="weekly-gauge-row">
+      <div class="weekly-gauge-label">
+        <span>${f.label}</span>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr} / ${planStr}</span>
+        <span style="font-family:var(--font-mono);font-weight:700;color:${color}">${rate}%</span>
+      </div>
+      <div class="progress-bar" style="margin-top:4px">
+        <div class="progress-fill ${colorClass}" style="width:${Math.min(rate, 100)}%"></div>
+      </div>
+      <div class="kgi-pace-line" style="color:${paceColor}">${pace.text}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  document.getElementById('weekly-gauge-container').innerHTML =
+    rows || '<div style="color:var(--text-muted);font-size:13px">KGI設定タブで計画を入力してください</div>';
+}
+
+function renderWeeklyKgiProgress(entries, budget) {
   const weekStart = getWeekStartJST();
   const weekEntries = entries.filter(e => e.date >= weekStart);
   const weekTotals = {};
@@ -751,6 +858,18 @@ function renderPlanCard(actual, plan, ids) {
 
 function getAccentColor(colorClass) {
   return { green: '#4ade80', cyan: '#22d3ee', amber: '#fbbf24', red: '#f87171' }[colorClass] || '#94a3b8';
+}
+
+function renderPaceLine(elId, params) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!params.plan || params.plan <= 0) {
+    el.innerHTML = '';
+    return;
+  }
+  const pace = buildPaceInfo(params);
+  el.innerHTML = pace.text;
+  el.style.color = getAccentColor(pace.colorClass);
 }
 
 function renderKpiChart(totals, budget) {
@@ -2493,32 +2612,47 @@ async function refreshManagement() {
     officeRows.sort(function(a, b) {
       return String(b.date).slice(0, 10).localeCompare(String(a.date).slice(0, 10));
     });
-    renderManagementDashboard(officeRows[0]);
+    renderManagementDashboard(officeRows[0], officeRows);
   } catch (e) {
     _renderError(container, '読み込みエラー: ' + e.message);
   }
 }
 
-function renderManagementDashboard(entry) {
+function renderManagementDashboard(entry, officeRows) {
   var container = document.getElementById('management-container');
   if (!container) return;
 
+  var lastDate  = String(entry.date).slice(0, 10);
+  var yearMonth = lastDate.slice(0, 7);
+  var yesterday = addCalendarDays(lastDate, -1);
+  var prevEntry = (officeRows || []).find(function(r) { return String(r.date).slice(0, 10) === yesterday; }) || null;
+
   function n(key) { return Number(entry[key]) || 0; }
+  function pn(key) { return prevEntry ? (Number(prevEntry[key]) || 0) : null; }
   function rate(plan, actual) {
     return (plan && plan > 0) ? Math.min(Math.round(actual / plan * 100), 999) : 0;
   }
-  function gaugeBlock(label, plan, actual) {
+  function gaugeBlock(label, plan, actual, itemKey, unit, prevActual) {
     var r  = rate(plan, actual);
     var cc = getProgressColorClass(r);
     var cl = getAccentColor(cc);
-    return '<div class="office-gauge-block">' +
+    var html = '<div class="office-gauge-block">' +
            '<div class="office-gauge-row">' +
            '<span class="office-gauge-label">' + label + '</span>' +
            '<span class="office-gauge-vals">' + formatNumber(actual) + ' / ' + formatNumber(plan) + '</span>' +
            '<span class="import-rate" style="color:' + cl + '">' + r + '%</span>' +
            '</div>' +
-           '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + Math.min(r,100) + '%"></div></div>' +
-           '</div>';
+           '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + Math.min(r,100) + '%"></div></div>';
+    if (itemKey && plan > 0) {
+      var pace = buildPaceInfo({
+        itemKey: itemKey, plan: plan, actual: actual,
+        prevActual: (typeof prevActual === 'number') ? prevActual : null,
+        unit: unit, yearMonth: yearMonth, asOfDateStr: lastDate,
+      });
+      html += '<div class="kgi-pace-line" style="color:' + getAccentColor(pace.colorClass) + '">' + pace.text + '</div>';
+    }
+    html += '</div>';
+    return html;
   }
   function fieldRow(label, val) {
     return '<div class="office-field-row">' +
@@ -2527,8 +2661,6 @@ function renderManagementDashboard(entry) {
            '</div>';
   }
 
-  var lastDate = String(entry.date).slice(0, 10);
-
   var vsPlanVal   = n('vsPlan');
   var vsPlanPct   = Math.floor(vsPlanVal   < 5 ? vsPlanVal   * 100 : vsPlanVal);
   var rrVal       = n('renewalRate');
@@ -2536,8 +2668,12 @@ function renderManagementDashboard(entry) {
   var rn2RateVal  = n('renewalNext2Rate');
   var rn2RatePct  = Math.floor(rn2RateVal  < 5 ? rn2RateVal  * 100 : rn2RateVal);
 
+  var monthEnd = yearMonth + '-' + String(new Date(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)), 0).getDate()).padStart(2, '0');
+  var remainingBizDays = countBusinessDays(lastDate, monthEnd);
+
   var html = '<div class="mgmt-header">' +
              '<span class="card-title" style="font-size:14px">営業所 日次管理</span>' +
+             '<span class="kgi-remaining-days">残' + remainingBizDays + '営業日（月末まで）</span>' +
              '<span class="mgmt-last-date">最終取込: ' + lastDate + '</span>' +
              '</div>';
 
@@ -2552,16 +2688,17 @@ function renderManagementDashboard(entry) {
   // 点検
   html += '<div class="office-section">' +
           '<div class="office-section-title">点検</div>' +
-          gaugeBlock('点検', n('inspectionPlan'), n('inspectionActual')) +
+          gaugeBlock('点検', n('inspectionPlan'), n('inspectionActual'), 'office_inspection', '件', pn('inspectionActual')) +
           '</div>';
 
   // 売上
   var forecastVal = _officeSalesForecast(entry);
+  var prevForecastVal = prevEntry ? _officeSalesForecast(prevEntry) : null;
   var fRate = rate(n('salesPlan'), forecastVal);
   html += '<div class="office-section">' +
           '<div class="office-section-title">売上</div>' +
           gaugeBlock('売上 実績', n('salesPlan'), n('salesActual')) +
-          gaugeBlock('末見通し', n('salesPlan'), forecastVal) +
+          gaugeBlock('末見通し', n('salesPlan'), forecastVal, 'office_forecast', '円', prevForecastVal) +
           fieldRow('A案件', formatNumber(n('salesAcase'))) +
           fieldRow('対計画率', '<span style="color:' + getAccentColor(getProgressColorClass(vsPlanPct)) + '">' + vsPlanPct + '%</span>') +
           '</div>';
@@ -2569,8 +2706,8 @@ function renderManagementDashboard(entry) {
   // 保守
   html += '<div class="office-section">' +
           '<div class="office-section-title">保守</div>' +
-          gaugeBlock('総保守台数', n('totalMaintPlan'), n('totalMaintActual')) +
-          gaugeBlock('新規保守台数', n('newMaintPlan'), n('newMaintActual')) +
+          gaugeBlock('総保守台数', n('totalMaintPlan'), n('totalMaintActual'), 'office_totalMaint', '台', pn('totalMaintActual')) +
+          gaugeBlock('新規保守台数', n('newMaintPlan'), n('newMaintActual'), 'office_newMaint', '台', pn('newMaintActual')) +
           fieldRow('保守売上 実績', formatNumber(n('maintActual'))) +
           fieldRow('保守 新規', formatNumber(n('maintNew'))) +
           fieldRow('保守 継続', formatNumber(n('maintCont'))) +
@@ -2579,7 +2716,8 @@ function renderManagementDashboard(entry) {
   // 継続
   html += '<div class="office-section">' +
           '<div class="office-section-title">継続</div>' +
-          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop')) +
+          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop'), 'office_renewalNext', '件', pn('renewalNextActualTop')) +
+          gaugeBlock('当月継続', n('renewalThisPlan'), n('renewalThisActual'), 'office_renewalThis', '件', pn('renewalThisActual')) +
           fieldRow('当月継続 前受', formatNumber(n('renewalThisPrev'))) +
           fieldRow('当月継続 計画', formatNumber(n('renewalThisPlan'))) +
           fieldRow('当月継続 実績', formatNumber(n('renewalThisActual'))) +
@@ -2591,7 +2729,7 @@ function renderManagementDashboard(entry) {
           '<div class="office-section-title">翌月以降</div>' +
           fieldRow('翌月分 受注残', formatNumber(n('nextMonthBacklog'))) +
           fieldRow('翌月案件', formatNumber(n('nextMonthCase'))) +
-          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual')) +
+          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual'), 'office_renewalNext2', '件', pn('renewalNext2Actual')) +
           fieldRow('次々月継続受注率', '<span style="color:' + getAccentColor(getProgressColorClass(rn2RatePct)) + '">' + rn2RatePct + '%</span>') +
           '</div>';
 

@@ -564,7 +564,7 @@ function _ensureAiReportsSheet() {
 function _callGemini(prompt) {
   var key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('GEMINI_API_KEY が設定されていません');
-  var url = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=' + key;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + key;
   var res = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',

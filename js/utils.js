@@ -165,3 +165,157 @@ function getWeekStartJST() {
   const diff = dow === 0 ? -6 : 1 - dow;
   return new Date(date.getTime() + diff * 86400000).toISOString().slice(0, 10);
 }
+
+// ------------------------------------------------------------------
+// 営業日・必要ペース計算（進捗タブ用）
+// JP_HOLIDAYS (holidaysConfig.js) / KGI_DEADLINE_CONFIG (kgiDeadlineConfig.js) に依存
+// ------------------------------------------------------------------
+
+function _dateUTC(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+/**
+ * 指定日が日本の祝日かどうか
+ * @param {string} dateStr - "YYYY-MM-DD"
+ */
+function isJpHoliday(dateStr) {
+  return JP_HOLIDAYS.indexOf(dateStr) >= 0;
+}
+
+/**
+ * 指定日が営業日かどうか（土日祝は休み）
+ * @param {string} dateStr - "YYYY-MM-DD"
+ */
+function isBusinessDay(dateStr) {
+  const dow = _dateUTC(dateStr).getUTCDay();
+  if (dow === 0 || dow === 6) return false;
+  return !isJpHoliday(dateStr);
+}
+
+/**
+ * 暦日を加減算する
+ * @param {string} dateStr - "YYYY-MM-DD"
+ * @param {number} n - 加減算する日数（負数可）
+ */
+function addCalendarDays(dateStr, n) {
+  return new Date(_dateUTC(dateStr).getTime() + n * 86400000).toISOString().slice(0, 10);
+}
+
+/**
+ * 指定日が営業日になるまで日付をずらす
+ * @param {string} dateStr - "YYYY-MM-DD"
+ * @param {number} direction - -1: 直前の営業日へ、+1: 直後の営業日へ
+ */
+function rollToBusinessDay(dateStr, direction) {
+  let d = dateStr;
+  while (!isBusinessDay(d)) d = addCalendarDays(d, direction);
+  return d;
+}
+
+/**
+ * 期限日から「実質目標日」（期限の2暦日前。営業日でなければ直前の営業日に繰り上げ）を返す
+ * @param {string} deadlineDateStr - "YYYY-MM-DD"
+ */
+function getEffectiveTargetDate(deadlineDateStr) {
+  return rollToBusinessDay(addCalendarDays(deadlineDateStr, -2), -1);
+}
+
+/**
+ * 指定範囲（両端含む）の営業日数を返す
+ * @param {string} startDateStr - "YYYY-MM-DD"
+ * @param {string} endDateStr - "YYYY-MM-DD"
+ */
+function countBusinessDays(startDateStr, endDateStr) {
+  if (startDateStr > endDateStr) return 0;
+  let count = 0;
+  let d = startDateStr;
+  while (d <= endDateStr) {
+    if (isBusinessDay(d)) count++;
+    d = addCalendarDays(d, 1);
+  }
+  return count;
+}
+
+/**
+ * KGI項目の達成期限日を返す（KGI_DEADLINE_CONFIGに無ければ月末）
+ * @param {string} itemKey
+ * @param {string} yearMonth - "YYYY-MM"
+ */
+function getKgiDeadlineDate(itemKey, yearMonth) {
+  const cfg = KGI_DEADLINE_CONFIG[itemKey];
+  const [y, m] = yearMonth.split('-').map(Number);
+  if (cfg && cfg.day) {
+    return `${yearMonth}-${String(cfg.day).padStart(2, '0')}`;
+  }
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
+}
+
+/**
+ * "YYYY-MM-DD" → "M/D"
+ * @param {string} dateStr
+ */
+function formatMonthDay(dateStr) {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${m}/${d}`;
+}
+
+/**
+ * 残必要数・必要ペース・期限超過/達成済を判定する
+ * @param {object} params
+ * @param {string} params.itemKey - KGI_DEADLINE_CONFIGのキー
+ * @param {number} params.plan - 月間目標値
+ * @param {number} params.actual - 実績累計（基準日時点）
+ * @param {number|null} [params.prevActual] - 前日時点の実績累計（前日比表示用、無ければnull）
+ * @param {string} params.unit - '円' | '件' | '台' など
+ * @param {string} params.yearMonth - "YYYY-MM"
+ * @param {string} params.asOfDateStr - 基準日 "YYYY-MM-DD"
+ * @returns {{ achieved: boolean, overdue: boolean, text: string, colorClass: string }}
+ */
+function buildPaceInfo(params) {
+  const { itemKey, plan, actual, prevActual, unit, yearMonth, asOfDateStr } = params;
+
+  const remaining = plan - actual;
+  if (remaining <= 0) {
+    return { achieved: true, overdue: false, text: '達成済 ✓', colorClass: 'green' };
+  }
+
+  const deadline = getKgiDeadlineDate(itemKey, yearMonth);
+  const effectiveTarget = getEffectiveTargetDate(deadline);
+  const isCustom = !!KGI_DEADLINE_CONFIG[itemKey];
+  const deadlineLabel = isCustom ? `〆${formatMonthDay(effectiveTarget)}` : '';
+
+  const remainingBizDays = countBusinessDays(asOfDateStr, effectiveTarget);
+  if (asOfDateStr > effectiveTarget || remainingBizDays <= 0) {
+    const text = '期限超過' + (deadlineLabel ? `（${deadlineLabel}）` : '');
+    return { achieved: false, overdue: true, text, colorClass: 'red' };
+  }
+
+  const requiredPaceRaw = remaining / remainingBizDays;
+  const requiredPace = unit === '円' ? Math.floor(requiredPaceRaw) : Math.ceil(requiredPaceRaw);
+  const paceStr = unit === '円' ? formatCurrency(requiredPace) + '/日' : formatNumber(requiredPace) + unit + '/日';
+
+  const monthStart = yearMonth + '-01';
+  const elapsedBizDays = countBusinessDays(monthStart, asOfDateStr);
+  const currentPace = elapsedBizDays > 0 ? actual / elapsedBizDays : 0;
+  const colorClass = currentPace >= requiredPaceRaw ? 'green' : 'red';
+
+  let upMark = '';
+  if (typeof prevActual === 'number') {
+    const yesterday = addCalendarDays(asOfDateStr, -1);
+    if (yesterday >= monthStart && yesterday <= effectiveTarget) {
+      const prevRemainingBizDays = countBusinessDays(yesterday, effectiveTarget);
+      if (prevRemainingBizDays > 0) {
+        const prevRequiredPaceRaw = (plan - prevActual) / prevRemainingBizDays;
+        if (requiredPaceRaw > prevRequiredPaceRaw) {
+          upMark = ' <span style="color:var(--accent-red)">▲</span>';
+        }
+      }
+    }
+  }
+
+  const text = paceStr + (deadlineLabel ? ' ' + deadlineLabel : '') + upMark;
+  return { achieved: false, overdue: false, text, colorClass };
+}

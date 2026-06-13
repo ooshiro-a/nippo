@@ -140,11 +140,18 @@
         <section id="tab-dashboard" class="tab-pane">
 
           <div class="sort-item" data-sort-id="sort-dash-weekly">
-          <!-- 週次進捗ゲージ -->
+          <!-- KGI進捗（月次/週次） -->
           <div class="card dash-card-cyan" id="dash-weekly-card">
             <div class="dash-weekly-header">
-              <span class="card-title">今週の進捗</span>
+              <span class="card-title">今月の進捗</span>
               <span id="streak-badge" class="streak-badge" style="display:none"></span>
+            </div>
+            <div class="kgi-progress-toolbar">
+              <div class="seg-toggle" id="kgi-progress-toggle">
+                <button class="seg-toggle-btn active" data-view="monthly">月次</button>
+                <button class="seg-toggle-btn" data-view="weekly">週次</button>
+              </div>
+              <span id="kgi-remaining-days" class="kgi-remaining-days"></span>
             </div>
             <div id="weekly-gauge-container"><div style="color:var(--text-muted);font-size:13px">読み込み中...</div></div>
           </div>
@@ -209,6 +216,7 @@
               <div class="progress-fill green" id="personal-plan-bar" style="width:0%"></div>
             </div>
             <div class="plan-shortage">不足額 <span id="personal-plan-shortage">¥0</span></div>
+            <div class="kgi-pace-line" id="personal-plan-pace"></div>
           </div>
           </div>
 
@@ -226,6 +234,7 @@
               <div class="progress-fill green" id="personal-unsettled-bar" style="width:0%"></div>
             </div>
             <div class="plan-shortage">不足額 <span id="personal-unsettled-shortage">¥0</span></div>
+            <div class="kgi-pace-line" id="personal-unsettled-pace"></div>
           </div>
           </div>
 
@@ -253,6 +262,7 @@
               <div class="progress-fill amber" id="office-unsettled-bar" style="width:0%"></div>
             </div>
             <div class="plan-shortage">不足額 <span id="office-unsettled-shortage">¥0</span></div>
+            <div class="kgi-pace-line" id="office-unsettled-pace"></div>
           </div>
           </div>
 
@@ -473,6 +483,8 @@
 
   </div>
 
+  <script src="js/holidaysConfig.js"></script>
+  <script src="js/kgiDeadlineConfig.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/api.js"></script>
   <script src="js/parserConfig.js"></script>

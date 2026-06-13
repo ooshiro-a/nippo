@@ -1019,6 +1019,43 @@ input.kgi-field-input {
 }
 .weekly-gauge-label > span:first-child { flex: 1; }
 
+/* 今月の進捗カード ツールバー（月次/週次トグル + 残営業日） */
+.kgi-progress-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.seg-toggle {
+  display: flex;
+  gap: 6px;
+}
+.seg-toggle-btn {
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.seg-toggle-btn.active {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+.kgi-remaining-days {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* KGI項目別 必要ペース表示 */
+.kgi-pace-line {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
 /* AI レポートカード */
 .dash-ai-header {
   display: flex;
