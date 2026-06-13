@@ -79,7 +79,10 @@ function doGet(e) {
       '<meta http-equiv="refresh" content="0; url=https://ooshiro-a.github.io/nippo/">' +
       '<script>location.replace("https://ooshiro-a.github.io/nippo/");</script>' +
       '</head><body><p>リダイレクト中... <a href="https://ooshiro-a.github.io/nippo/">こちら</a>をクリックしてください。</p></body></html>'
-    ).setTitle('Nice Serviceman 日報');
+    )
+      .setTitle('Nice Serviceman 日報')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   // action あり = 後方互換 JSON API（GitHub Pages 版から呼ばれる場合のみ使用）
