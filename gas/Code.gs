@@ -6,7 +6,7 @@
  *   「アクセスできるユーザー」→「自分のみ」（Step S0 以降）
  *
  * 配信方式:
- *   GET（action なし）→ HtmlService でアプリ本体を配信（個人 Gmail 認証必須）
+ *   GET（action なし）→ GitHub Pages 版アプリへリダイレクト
  *   GET（action あり）→ JSON API（後方互換。github pages 版から呼ばれる場合のみ）
  *   google.script.run → gas* 公開関数（GAS 配信版アプリから呼ばれる）
  */
@@ -72,12 +72,14 @@ var NUMERIC_ENTRY_KEYS = [
 // ============================================================
 
 function doGet(e) {
-  // action なし = アプリ本体を HtmlService で配信（個人 Gmail 認証が通った人のみ到達できる）
+  // action なし = GitHub Pages 版アプリへリダイレクト（旧 gas/index.html は使用しない）
   if (!e.parameter.action) {
-    return HtmlService.createHtmlOutputFromFile('index')
-      .setTitle('Nice Serviceman 日報')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return HtmlService.createHtmlOutput(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<meta http-equiv="refresh" content="0; url=https://ooshiro-a.github.io/nippo/">' +
+      '<script>location.replace("https://ooshiro-a.github.io/nippo/");</script>' +
+      '</head><body><p>リダイレクト中... <a href="https://ooshiro-a.github.io/nippo/">こちら</a>をクリックしてください。</p></body></html>'
+    ).setTitle('Nice Serviceman 日報');
   }
 
   // action あり = 後方互換 JSON API（GitHub Pages 版から呼ばれる場合のみ使用）
