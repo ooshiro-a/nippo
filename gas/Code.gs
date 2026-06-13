@@ -101,6 +101,13 @@ function doGet(e) {
     } else if (action === 'getAllOfficeData') {
       result = getOfficeDailyImpl({ scope: 'office' });
 
+    } else if (action === 'getOfficeDaily') {
+      result = getOfficeDailyImpl({
+        dateFrom: e.parameter.dateFrom || '',
+        dateTo:   e.parameter.dateTo   || '',
+        scope:    e.parameter.scope    || ''
+      });
+
     } else if (action === 'getUserSettings') {
       result = getUserSettingsImpl();
 
