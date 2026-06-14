@@ -2592,6 +2592,20 @@ function _gaugeRateHtml(plan, actual, showBar) {
 // ------------------------------------------------------------------
 
 var _officeChart = null;
+var _officeProgressView = 'monthly';
+
+function initOfficeDashboardTab() {
+  document.querySelectorAll('#office-progress-toggle .seg-toggle-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (_officeProgressView === btn.dataset.view) return;
+      _officeProgressView = btn.dataset.view;
+      document.querySelectorAll('#office-progress-toggle .seg-toggle-btn').forEach(function(b) {
+        b.classList.toggle('active', b === btn);
+      });
+      refreshManagement();
+    });
+  });
+}
 
 async function refreshManagement() {
   var container = document.getElementById('management-container');
@@ -2627,23 +2641,30 @@ function renderManagementDashboard(entry, officeRows) {
   var yesterday = addCalendarDays(lastDate, -1);
   var prevEntry = (officeRows || []).find(function(r) { return String(r.date).slice(0, 10) === yesterday; }) || null;
 
+  var isWeekly    = _officeProgressView === 'weekly';
+  var weekStart   = getWeekStartJST();
+  var baselineEntry = (officeRows || []).find(function(r) { return String(r.date).slice(0, 10) < weekStart; }) || null;
+
   function n(key) { return Number(entry[key]) || 0; }
   function pn(key) { return prevEntry ? (Number(prevEntry[key]) || 0) : null; }
+  function wn(key) { return n(key) - (baselineEntry ? (Number(baselineEntry[key]) || 0) : 0); }
   function rate(plan, actual) {
     return (plan && plan > 0) ? Math.min(Math.round(actual / plan * 100), 999) : 0;
   }
-  function gaugeBlock(label, plan, actual, itemKey, unit, prevActual) {
-    var r  = rate(plan, actual);
+  function gaugeBlock(label, plan, actual, itemKey, unit, prevActual, weekActual) {
+    var displayPlan   = isWeekly ? Math.round(plan / 3) : plan;
+    var displayActual = isWeekly ? weekActual : actual;
+    var r  = rate(displayPlan, displayActual);
     var cc = getProgressColorClass(r);
     var cl = getAccentColor(cc);
     var html = '<div class="office-gauge-block">' +
            '<div class="office-gauge-row">' +
            '<span class="office-gauge-label">' + label + '</span>' +
-           '<span class="office-gauge-vals">' + formatNumber(actual) + ' / ' + formatNumber(plan) + '</span>' +
+           '<span class="office-gauge-vals">' + formatNumber(displayActual) + ' / ' + formatNumber(displayPlan) + '</span>' +
            '<span class="import-rate" style="color:' + cl + '">' + r + '%</span>' +
            '</div>' +
            '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + Math.min(r,100) + '%"></div></div>';
-    if (itemKey && plan > 0) {
+    if (!isWeekly && itemKey && plan > 0) {
       var pace = buildPaceInfo({
         itemKey: itemKey, plan: plan, actual: actual,
         prevActual: (typeof prevActual === 'number') ? prevActual : null,
@@ -2670,10 +2691,11 @@ function renderManagementDashboard(entry, officeRows) {
 
   var monthEnd = yearMonth + '-' + String(new Date(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)), 0).getDate()).padStart(2, '0');
   var remainingBizDays = countBusinessDays(lastDate, monthEnd);
+  var remainingDaysText = isWeekly ? '' : '残' + remainingBizDays + '営業日（月末まで）';
 
   var html = '<div class="mgmt-header">' +
              '<span class="card-title" style="font-size:14px">営業所 日次管理</span>' +
-             '<span class="kgi-remaining-days">残' + remainingBizDays + '営業日（月末まで）</span>' +
+             '<span class="kgi-remaining-days">' + remainingDaysText + '</span>' +
              '<span class="mgmt-last-date">最終取込: ' + lastDate + '</span>' +
              '</div>';
 
@@ -2688,17 +2710,18 @@ function renderManagementDashboard(entry, officeRows) {
   // 点検
   html += '<div class="office-section">' +
           '<div class="office-section-title">点検</div>' +
-          gaugeBlock('点検', n('inspectionPlan'), n('inspectionActual'), 'office_inspection', '件', pn('inspectionActual')) +
+          gaugeBlock('点検', n('inspectionPlan'), n('inspectionActual'), 'office_inspection', '件', pn('inspectionActual'), wn('inspectionActual')) +
           '</div>';
 
   // 売上
   var forecastVal = _officeSalesForecast(entry);
   var prevForecastVal = prevEntry ? _officeSalesForecast(prevEntry) : null;
+  var weekForecastVal = forecastVal - (baselineEntry ? _officeSalesForecast(baselineEntry) : 0);
   var fRate = rate(n('salesPlan'), forecastVal);
   html += '<div class="office-section">' +
           '<div class="office-section-title">売上</div>' +
-          gaugeBlock('売上 実績', n('salesPlan'), n('salesActual')) +
-          gaugeBlock('末見通し', n('salesPlan'), forecastVal, 'office_forecast', '円', prevForecastVal) +
+          gaugeBlock('売上 実績', n('salesPlan'), n('salesActual'), null, null, null, wn('salesActual')) +
+          gaugeBlock('末見通し', n('salesPlan'), forecastVal, 'office_forecast', '円', prevForecastVal, weekForecastVal) +
           fieldRow('A案件', formatNumber(n('salesAcase'))) +
           fieldRow('対計画率', '<span style="color:' + getAccentColor(getProgressColorClass(vsPlanPct)) + '">' + vsPlanPct + '%</span>') +
           '</div>';
@@ -2706,8 +2729,8 @@ function renderManagementDashboard(entry, officeRows) {
   // 保守
   html += '<div class="office-section">' +
           '<div class="office-section-title">保守</div>' +
-          gaugeBlock('総保守台数', n('totalMaintPlan'), n('totalMaintActual'), 'office_totalMaint', '台', pn('totalMaintActual')) +
-          gaugeBlock('新規保守台数', n('newMaintPlan'), n('newMaintActual'), 'office_newMaint', '台', pn('newMaintActual')) +
+          gaugeBlock('総保守台数', n('totalMaintPlan'), n('totalMaintActual'), 'office_totalMaint', '台', pn('totalMaintActual'), wn('totalMaintActual')) +
+          gaugeBlock('新規保守台数', n('newMaintPlan'), n('newMaintActual'), 'office_newMaint', '台', pn('newMaintActual'), wn('newMaintActual')) +
           fieldRow('保守売上 実績', formatNumber(n('maintActual'))) +
           fieldRow('保守 新規', formatNumber(n('maintNew'))) +
           fieldRow('保守 継続', formatNumber(n('maintCont'))) +
@@ -2716,8 +2739,8 @@ function renderManagementDashboard(entry, officeRows) {
   // 継続
   html += '<div class="office-section">' +
           '<div class="office-section-title">継続</div>' +
-          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop'), 'office_renewalNext', '件', pn('renewalNextActualTop')) +
-          gaugeBlock('当月継続', n('renewalThisPlan'), n('renewalThisActual'), 'office_renewalThis', '件', pn('renewalThisActual')) +
+          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop'), 'office_renewalNext', '件', pn('renewalNextActualTop'), wn('renewalNextActualTop')) +
+          gaugeBlock('当月継続', n('renewalThisPlan'), n('renewalThisActual'), 'office_renewalThis', '件', pn('renewalThisActual'), wn('renewalThisActual')) +
           fieldRow('当月継続 前受', formatNumber(n('renewalThisPrev'))) +
           fieldRow('当月継続 計画', formatNumber(n('renewalThisPlan'))) +
           fieldRow('当月継続 実績', formatNumber(n('renewalThisActual'))) +
@@ -2729,7 +2752,7 @@ function renderManagementDashboard(entry, officeRows) {
           '<div class="office-section-title">翌月以降</div>' +
           fieldRow('翌月分 受注残', formatNumber(n('nextMonthBacklog'))) +
           fieldRow('翌月案件', formatNumber(n('nextMonthCase'))) +
-          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual'), 'office_renewalNext2', '件', pn('renewalNext2Actual')) +
+          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual'), 'office_renewalNext2', '件', pn('renewalNext2Actual'), wn('renewalNext2Actual')) +
           fieldRow('次々月継続受注率', '<span style="color:' + getAccentColor(getProgressColorClass(rn2RatePct)) + '">' + rn2RatePct + '%</span>') +
           '</div>';
 
@@ -4555,6 +4578,7 @@ function initApp() {
   initOfficeImportTab();
   initOfficeHistoryTab();
   initOfficeKgiTab();
+  initOfficeDashboardTab();
   initSetupTriggersBtn();
   initAppHeightFix();
   initScrollIntoViewOnFocus();
