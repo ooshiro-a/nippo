@@ -124,6 +124,41 @@ const RELATIONSHIP_ACTIONS = [
 // 日付ごとの前回ロード時の累計値（差分計算用）
 const daySnapshot = {};
 
+// 入力タブ: ロード時のフォーム値スナップショット（未保存変更の検知用）
+let _inputFormBaseline = null;
+
+function collectInputFormValues() {
+  const data = {};
+  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
+    const el = document.getElementById(`entry-${field.key}`);
+    data[field.key] = el ? el.value : '';
+  });
+  FORECAST_FIELDS.forEach(field => {
+    const el = document.getElementById(`entry-${field.key}`);
+    data[field.key] = el ? el.value : '';
+  });
+  data.relationshipActions = Array.from(document.querySelectorAll('#relationship-tags .tag-btn.selected'))
+    .map(b => b.textContent).sort().join(',');
+  data.positiveFeedback = document.getElementById('positive-count').textContent;
+  data.negativeFeedback = document.getElementById('negative-count').textContent;
+  data.memorableVisit = document.getElementById('entry-memorable-visit').value;
+  data.notes = document.getElementById('entry-notes').value;
+  data.notesImportant = document.getElementById('entry-notes-important').checked;
+  data.insight = document.getElementById('entry-insight').value;
+  data.nextAction = document.getElementById('entry-next-action').value;
+  return data;
+}
+
+function captureInputFormBaseline() {
+  _inputFormBaseline = collectInputFormValues();
+}
+
+function hasUnsavedInputChanges() {
+  if (!_inputFormBaseline) return false;
+  const current = collectInputFormValues();
+  return Object.keys(current).some(key => String(current[key]) !== String(_inputFormBaseline[key]));
+}
+
 function initInputTab() {
   document.getElementById('entry-date').value = getTodayJST();
   buildInputKpiFields();
@@ -258,6 +293,8 @@ async function loadEntry(date) {
     snap.positiveFeedback = 0;
     snap.negativeFeedback = 0;
     daySnapshot[date] = snap;
+
+    captureInputFormBaseline();
 
     // 累計マイナス警告
     if (entry && entry.hasNegative) {
@@ -4591,11 +4628,14 @@ function initHeaderReload() {
   var btn = document.getElementById('header-title');
   if (!btn) return;
   btn.addEventListener('click', function() {
+    var tabId = (_activeSection === 'office') ? _lastOfficeTab : _lastPersonalTab;
+    if (tabId === 'tab-input' && hasUnsavedInputChanges()) {
+      if (!confirm('入力中の内容が保存されていません。再読み込みすると入力内容は失われます。続行しますか？')) return;
+    }
     historyState.allData = null;
     var origText = btn.textContent;
     btn.textContent = '更新中...';
     btn.style.opacity = '0.5';
-    var tabId = (_activeSection === 'office') ? _lastOfficeTab : _lastPersonalTab;
     var done = function() {
       btn.textContent = origText;
       btn.style.opacity = '';
