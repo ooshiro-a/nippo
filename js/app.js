@@ -4626,19 +4626,29 @@ function initApp() {
 
 function initHeaderReload() {
   var btn = document.getElementById('header-title');
+  var icon = document.getElementById('header-icon');
+  var isReloading = false;
   if (!btn) return;
   btn.addEventListener('click', function() {
+    if (isReloading) return;
     var tabId = (_activeSection === 'office') ? _lastOfficeTab : _lastPersonalTab;
     if (tabId === 'tab-input' && hasUnsavedInputChanges()) {
       if (!confirm('入力中の内容が保存されていません。再読み込みすると入力内容は失われます。続行しますか？')) return;
     }
+    isReloading = true;
     historyState.allData = null;
     var origText = btn.textContent;
     btn.textContent = '更新中...';
     btn.style.opacity = '0.5';
+    if (icon) {
+      var nextRotation = (parseInt(icon.dataset.rotation || '0', 10)) + 360;
+      icon.dataset.rotation = String(nextRotation);
+      icon.style.transform = 'rotate(' + nextRotation + 'deg)';
+    }
     var done = function() {
       btn.textContent = origText;
       btn.style.opacity = '';
+      isReloading = false;
     };
     var p;
     if (tabId === 'tab-dashboard') {

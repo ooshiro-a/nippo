@@ -6,10 +6,12 @@
   <meta name="theme-color" content="#0a0f1e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="日報">
+  <meta name="apple-mobile-web-app-title" content="NS日報">
   <title>Nice Serviceman 日報</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.json?v=2">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=2">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -21,6 +23,14 @@
 
     <!-- ヘッダー -->
     <header id="app-header">
+      <span id="header-icon" style="display:inline-flex; align-items:center; margin-right:10px; transition:transform 0.6s ease;">
+        <svg viewBox="0 0 240 240" width="28" height="28" aria-hidden="true">
+          <circle cx="80" cy="80" r="25" fill="#4FD1E0"/>
+          <path d="M80,112 L80,168" fill="none" stroke="#4FD1E0" stroke-width="32" stroke-linecap="round"/>
+          <path d="M80,148 C80,100 100,88 124,88 C152,88 168,108 168,134 L168,168" fill="none" stroke="#4FD1E0" stroke-width="32" stroke-linecap="round"/>
+          <circle cx="80" cy="80" r="10.5" fill="#111827"/>
+        </svg>
+      </span>
       <span id="header-title" title="タップして更新">Nice Serviceman 日報</span>
       <span id="header-date"></span>
     </header>
