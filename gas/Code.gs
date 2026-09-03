@@ -29,7 +29,11 @@ var BUDGET_COLS = [
   'full_maintenance',
   'toss_up',
   'personal_plan',
-  'office_plan'
+  'office_plan',
+  'proposal_collection',
+  'toss_up_amount',
+  'result_conversion',
+  'production'
 ];
 
 // entries シートの列順（A列から順に）  ← Phase3: id/timestamp を先頭に追加
@@ -56,7 +60,11 @@ var ENTRIES_COLS = [
   'insight',
   'personal_unsettled',
   'office_unsettled',
-  'next_action'
+  'next_action',
+  'proposal_collection',
+  'toss_up_amount',
+  'result_conversion',
+  'production'
 ];
 
 // 積み上げ計算する数値フィールド（camelCase）
@@ -64,6 +72,7 @@ var NUMERIC_ENTRY_KEYS = [
   'inspection', 'promotionAmount', 'promotionCount',
   'maintenanceThisMonth', 'maintenanceNextMonth', 'maintenanceNext2Month',
   'newAcquisition', 'acCleaning', 'fullMaintenance', 'tossUp',
+  'proposalCollection', 'tossUpAmount', 'resultConversion', 'production',
   'positiveFeedback', 'negativeFeedback'
 ];
 
@@ -308,6 +317,7 @@ function aggregateByDate(entries) {
  */
 function saveEntryImpl(data) {
   var sheet = getSheet(SHEET_ENTRIES);
+  _ensureSheetColumns_(sheet, ENTRIES_COLS);
   var date  = String(data.date || '');
   if (!date) throw new Error('date が指定されていません');
 
@@ -466,7 +476,42 @@ function getSheet(name) {
   return sheet;
 }
 
+// 1回の実行で同じシートを何度も確認しないためのフラグ（GASは実行ごとにリセットされる）
+var _ensuredSheetCols = {};
+
+/**
+ * シートの物理列数が cols.length に満たなければ列を追加し、
+ * ヘッダー行の空きセルに列名を書き込む。
+ *
+ * 列定義に項目を追加したとき、Sheets側で列を足し忘れると
+ * getRange() が範囲外で例外を投げて全APIが落ちるため、ここで吸収する。
+ * 既存行の新列は空欄のままだが Number('') || 0 → 0 になるので移行不要。
+ */
+function _ensureSheetColumns_(sheet, cols) {
+  var name = sheet.getSheetName();
+  if (_ensuredSheetCols[name]) return;
+  _ensuredSheetCols[name] = true;
+
+  var need = cols.length;
+  var max  = sheet.getMaxColumns();
+  if (max < need) sheet.insertColumnsAfter(max, need - max);
+
+  var header  = sheet.getRange(1, 1, 1, need).getValues()[0];
+  var changed = false;
+  for (var i = 0; i < need; i++) {
+    if (header[i] === '' || header[i] === null || header[i] === undefined) {
+      header[i] = cols[i];
+      changed = true;
+    }
+  }
+  if (changed) {
+    sheet.getRange(1, 1, 1, need).setValues([header]).setFontWeight('bold');
+  }
+}
+
 function sheetToObjects(sheet, cols) {
+  _ensureSheetColumns_(sheet, cols);
+
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
@@ -557,7 +602,11 @@ function normalizeEntry(row) {
     insight:                String(row.insight || ''),
     personalUnsettled:      Number(row.personal_unsettled) || 0,
     officeUnsettled:        Number(row.office_unsettled) || 0,
-    nextAction:             String(row.next_action || '')
+    nextAction:             String(row.next_action || ''),
+    proposalCollection:     Number(row.proposal_collection) || 0,
+    tossUpAmount:           Number(row.toss_up_amount) || 0,
+    resultConversion:       Number(row.result_conversion) || 0,
+    production:             Number(row.production) || 0
   };
 }
 
@@ -575,7 +624,11 @@ function normalizeBudget(row) {
     fullMaintenance:        Number(row.full_maintenance) || 0,
     tossUp:                 Number(row.toss_up) || 0,
     personalPlan:           Number(row.personal_plan) || 0,
-    officePlan:             Number(row.office_plan) || 0
+    officePlan:             Number(row.office_plan) || 0,
+    proposalCollection:     Number(row.proposal_collection) || 0,
+    tossUpAmount:           Number(row.toss_up_amount) || 0,
+    resultConversion:       Number(row.result_conversion) || 0,
+    production:             Number(row.production) || 0
   };
 }
 
@@ -648,12 +701,15 @@ function generateReportImpl(data) {
 
   var KPI_KEYS   = ['inspection','promotionAmount','promotionCount',
     'maintenanceThisMonth','maintenanceNextMonth','maintenanceNext2Month',
-    'newAcquisition','acCleaning','fullMaintenance','tossUp'];
+    'newAcquisition','acCleaning','fullMaintenance','tossUp',
+    'proposalCollection','tossUpAmount','resultConversion','production'];
   var KPI_LABELS = {
     inspection:'点検件数', promotionAmount:'促進受注額', promotionCount:'促進件数',
     maintenanceThisMonth:'当月保守継続', maintenanceNextMonth:'次月保守継続',
     maintenanceNext2Month:'次々月保守継続', newAcquisition:'新規保守',
-    acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ'
+    acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ',
+    proposalCollection:'提案回収', tossUpAmount:'トスアップ金額',
+    resultConversion:'実績化', production:'増産'
   };
   // 単位はフィールド名の決め打ちではなくこのテーブルを参照する。
   // 「promotionAmountなら円、それ以外は件」という分岐だと、金額項目を
@@ -663,7 +719,9 @@ function generateReportImpl(data) {
     inspection:'件', promotionAmount:'円', promotionCount:'件',
     maintenanceThisMonth:'件', maintenanceNextMonth:'件',
     maintenanceNext2Month:'件', newAcquisition:'件',
-    acCleaning:'件', fullMaintenance:'件', tossUp:'件'
+    acCleaning:'件', fullMaintenance:'件', tossUp:'件',
+    proposalCollection:'円', tossUpAmount:'円',
+    resultConversion:'円', production:'円'
   };
 
   var sum = function(arr, key) {
