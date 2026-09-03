@@ -131,11 +131,11 @@ function collectInputFormValues() {
   const data = {};
   KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    data[field.key] = el ? el.value : '';
+    data[field.key] = el ? parseNumericInput(el.value) : 0;
   });
   FORECAST_FIELDS.forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    data[field.key] = el ? el.value : '';
+    data[field.key] = el ? parseNumericInput(el.value) : 0;
   });
   data.relationshipActions = Array.from(document.querySelectorAll('#relationship-tags .tag-btn.selected'))
     .map(b => b.textContent).sort().join(',');
@@ -172,6 +172,54 @@ function initInputTab() {
   loadEntry(getTodayJST());
 }
 
+/**
+ * KPI入力欄のHTMLを組み立てる。
+ * 金額フィールド(money)はカンマ区切りを表示するため text 入力にする。
+ * type="number" はカンマを含む値を保持できず、value が空文字になってしまう。
+ * 件数フィールドは type="number" のまま（マイナス入力とスピナーを維持するため）。
+ * @param {Object} field - KGI_FIELDS / FORECAST_FIELDS の要素
+ * @param {string} idPrefix - 'entry-' | 'kgi-'
+ * @param {string} [extraAttr] - 追加属性
+ */
+function buildKpiInputHtml(field, idPrefix, extraAttr) {
+  const id = idPrefix + field.key;
+  if (field.money) {
+    return `<input type="text" inputmode="numeric" class="kgi-field-input is-money" id="${id}" value="0" />`;
+  }
+  return `<input type="number" class="kgi-field-input" id="${id}" value="0" ${extraAttr || ''} />`;
+}
+
+/**
+ * KPI入力欄にフォーカス/ブラー挙動を付ける。
+ * 金額欄は focus でカンマを外して素の数値にし、blur でカンマを付け直す。
+ * @param {Element} container
+ */
+function bindKpiInputs(container) {
+  container.querySelectorAll('.kgi-field-input').forEach(input => {
+    const isMoney = input.classList.contains('is-money');
+    input.addEventListener('focus', () => {
+      if (isMoney) input.value = String(parseNumericInput(input.value));
+      input.select();
+    });
+    if (isMoney) {
+      input.addEventListener('blur', () => {
+        input.value = formatNumber(parseNumericInput(input.value));
+      });
+    }
+  });
+}
+
+/**
+ * KPI入力欄に値をセットする（金額欄はカンマ区切りに整形）
+ * @param {HTMLInputElement|null} el
+ * @param {Object} field
+ * @param {number} value
+ */
+function setKpiInputValue(el, field, value) {
+  if (!el) return;
+  el.value = field.money ? formatNumber(value) : value;
+}
+
 function buildInputKpiFields() {
   const container = document.getElementById('entry-kpi-container');
   KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
@@ -180,16 +228,13 @@ function buildInputKpiFields() {
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
-        <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" />
+        ${buildKpiInputHtml(field, 'entry-')}
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
     container.appendChild(row);
   });
-  container.querySelectorAll('.kgi-field-input').forEach(input => {
-    input.addEventListener('focus', () => input.select());
-  });
+  bindKpiInputs(container);
 
   // 末見額カードを KPI実績カードの直後に追加
   const forecastCard = document.createElement('div');
@@ -204,16 +249,13 @@ function buildInputKpiFields() {
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
-        <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" />
+        ${buildKpiInputHtml(field, 'entry-')}
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
     forecastContainer.appendChild(row);
   });
-  forecastContainer.querySelectorAll('.kgi-field-input').forEach(input => {
-    input.addEventListener('focus', () => input.select());
-  });
+  bindKpiInputs(forecastContainer);
 }
 
 function buildRelationshipTags() {
@@ -255,8 +297,7 @@ async function loadEntry(date) {
     const entry = entries.find(e => e.date === date);
 
     KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
-      const el = document.getElementById(`entry-${field.key}`);
-      if (el) el.value = 0;
+      setKpiInputValue(document.getElementById(`entry-${field.key}`), field, 0);
     });
 
     FORECAST_FIELDS.forEach(field => {
@@ -269,7 +310,7 @@ async function loadEntry(date) {
           .sort((a, b) => b.date.localeCompare(a.date))[0];
         val = recent ? (recent[field.key] || 0) : 0;
       }
-      el.value = val;
+      setKpiInputValue(el, field, val);
     });
 
     const actions = entry ? (entry.relationshipActions || []) : [];
@@ -361,13 +402,13 @@ async function handleSaveEntry() {
 
   KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    const current = el ? Number(el.value) || 0 : 0;
+    const current = el ? parseNumericInput(el.value) : 0;
     data[field.key] = current - (snap[field.key] || 0);
   });
 
   FORECAST_FIELDS.forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    const current = el ? Number(el.value) || 0 : 0;
+    const current = el ? parseNumericInput(el.value) : 0;
     data[field.key] = current - (snap[field.key] || 0);
   });
 
@@ -505,8 +546,7 @@ function renderMonthlyKgiProgress(entries, budget) {
   const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
     const actual = totals[f.key] || 0;
     const plan = budget ? (budget[f.key] || 0) : 0;
-    const isYen = f.unit === '円';
-    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const actualStr = formatKpiValue(actual, f);
 
     if (plan <= 0) {
       if (actual === 0) return '';
@@ -522,13 +562,14 @@ function renderMonthlyKgiProgress(entries, budget) {
     const rate = Math.round(actual / plan * 100);
     const colorClass = getProgressColorClass(rate);
     const color = getAccentColor(colorClass);
-    const planStr = isYen ? formatCurrency(plan) : formatNumber(plan) + f.unit;
+    const planStr = formatKpiValue(plan, f);
 
     const pace = buildPaceInfo({
       itemKey: f.key,
       plan, actual,
       prevActual: prevTotals[f.key] || 0,
       unit: f.unit,
+      isMoney: !!f.money,
       yearMonth,
       asOfDateStr: today,
     });
@@ -562,8 +603,7 @@ function renderWeeklyKgiProgress(entries, budget) {
   const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
     const actual = weekTotals[f.key] || 0;
     const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
-    const isYen = f.unit === '円';
-    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const actualStr = formatKpiValue(actual, f);
 
     if (weekTarget === 0) {
       // 予算未設定: 実績が0の項目はスキップ、あれば目標なしで表示
@@ -580,7 +620,7 @@ function renderWeeklyKgiProgress(entries, budget) {
     const rate = Math.round(actual / weekTarget * 100);
     const colorClass = getProgressColorClass(rate);
     const color = getAccentColor(colorClass);
-    const targetStr = isYen ? formatCurrency(weekTarget) : formatNumber(weekTarget) + f.unit;
+    const targetStr = formatKpiValue(weekTarget, f);
     return `<div class="weekly-gauge-row">
       <div class="weekly-gauge-label">
         <span>${f.label}</span>
@@ -1310,9 +1350,8 @@ function buildKgiSummaryRows(totals, budget) {
     const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
     const color = rate !== null ? getAccentColor(getProgressColorClass(rate)) : 'var(--text-secondary)';
     const rateText = rate !== null ? `<span style="color:${color};font-family:var(--font-mono)">${rate}%</span>` : '';
-    const isYen = field.unit === '円';
-    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + field.unit;
-    const planStr = plan > 0 ? (isYen ? ' / ' + formatCurrency(plan) : ' / ' + formatNumber(plan) + field.unit) : '';
+    const actualStr = formatKpiValue(actual, field);
+    const planStr = plan > 0 ? ' / ' + formatKpiValue(plan, field) : '';
     return `<div class="kgi-field-row">
       <span class="kgi-field-label">${field.label}</span>
       <span style="font-family:var(--font-mono);font-size:13px">${actualStr}${planStr}</span>
@@ -1325,10 +1364,9 @@ function buildDailyCard(entry) {
   const kpiRows = KGI_FIELDS.filter(f => f.color === 'cyan').map(field => {
     const val = entry[field.key] || 0;
     if (val === 0) return '';
-    const isYen = field.unit === '円';
     return `<div class="kgi-field-row">
       <span class="kgi-field-label">${field.label}</span>
-      <span style="font-family:var(--font-mono);font-size:13px">${isYen ? formatCurrency(val) : formatNumber(val) + field.unit}</span>
+      <span style="font-family:var(--font-mono);font-size:13px">${formatKpiValue(val, field)}</span>
     </div>`;
   }).filter(Boolean).join('');
 
@@ -1661,9 +1699,8 @@ function buildComparisonCard(info) {
     if (curr === 0 && prev === 0) return '';
     const diff = curr - prev;
     const rate = prev !== 0 ? Math.round(diff / prev * 100) : null;
-    const isYen = field.unit === '円';
-    const fmt = v => isYen ? formatCurrency(v) : formatNumber(v) + field.unit;
-    const diffStr = (diff >= 0 ? '+' : '') + (isYen ? formatCurrency(diff) : formatNumber(diff) + field.unit);
+    const fmt = v => formatKpiValue(v, field);
+    const diffStr = (diff >= 0 ? '+' : '') + fmt(diff);
     const rateStr = rate !== null ? (rate >= 0 ? '+' : '') + rate + '%' : '--';
     const cls = diff > 0 ? 'cmp-pos' : diff < 0 ? 'cmp-neg' : '';
     return `<tr>
@@ -1730,7 +1767,7 @@ function renderCompareChart(info) {
   const { currentLabel, prevLabel, currentEntries, prevEntries } = info;
   const currTotals = calcMonthlyTotals(currentEntries);
   const prevTotals = calcMonthlyTotals(prevEntries);
-  const countFields = KGI_FIELDS.filter(f => f.color === 'cyan' && f.unit !== '円');
+  const countFields = KGI_FIELDS.filter(f => f.color === 'cyan' && !f.money);
   const labels = countFields.map(f =>
     f.label.replace('保守継続', '保守').replace('エアコン洗浄', 'AC洗浄').replace('フルメンテリース', 'フルメンテ').replace('営業トスアップ', 'トスアップ')
   );
@@ -2332,7 +2369,7 @@ function buildWeeklyReportText(week, yearMonth) {
 
   const kpiLines = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false).map(f => {
     const val = totals[f.key] || 0;
-    const formatted = f.unit === '円' ? formatCurrency(val) : formatNumber(val) + f.unit;
+    const formatted = formatKpiValue(val, f);
     return `  ${f.label.padEnd(12, '　')}: ${formatted}`;
   });
 
@@ -2372,9 +2409,9 @@ function buildMonthlyReportText(ym, mEntries, budget) {
   const kpiLines = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false).map(f => {
     const actual = totals[f.key] || 0;
     const plan = budget ? (budget[f.key] || 0) : 0;
-    const actualStr = f.unit === '円' ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const actualStr = formatKpiValue(actual, f);
     const planStr = plan > 0
-      ? (f.unit === '円' ? ` / ${formatCurrency(plan)}（${Math.round(actual / plan * 100)}%）` : ` / ${formatNumber(plan)}${f.unit}（${Math.round(actual / plan * 100)}%）`)
+      ? ` / ${formatKpiValue(plan, f)}（${Math.round(actual / plan * 100)}%）`
       : '';
     return `  ${f.label.padEnd(12, '　')}: ${actualStr}${planStr}`;
   });
@@ -2420,14 +2457,16 @@ function showCopyFeedback() {
 // KGI設定タブ
 // ------------------------------------------------------------------
 
+// money:true は金額フィールド。表示は千円（3桁区切り）。
+// 判定を unit の文字列比較でやらないこと（単位ラベルを変えた瞬間に壊れる）。
 const FORECAST_FIELDS = [
-  { key: 'personalUnsettled', label: '個人末見額',   unit: '円' },
-  { key: 'officeUnsettled',   label: '営業所末見額', unit: '円' },
+  { key: 'personalUnsettled', label: '個人末見額',   unit: '円', money: true },
+  { key: 'officeUnsettled',   label: '営業所末見額', unit: '円', money: true },
 ];
 
 const KGI_FIELDS = [
   { key: 'inspection',            label: '点検件数',         unit: '件', color: 'cyan' },
-  { key: 'promotionAmount',       label: '促進受注額',       unit: '円', color: 'cyan' },
+  { key: 'promotionAmount',       label: '促進受注額',       unit: '円', money: true, color: 'cyan' },
   { key: 'promotionCount',        label: '促進件数',         unit: '件', color: 'cyan' },
   { key: 'maintenanceThisMonth',  label: '当月保守継続',     unit: '件', color: 'cyan' },
   { key: 'maintenanceNextMonth',  label: '次月保守継続',     unit: '件', color: 'cyan' },
@@ -2436,8 +2475,8 @@ const KGI_FIELDS = [
   { key: 'acCleaning',            label: 'エアコン洗浄',     unit: '件', color: 'cyan' },
   { key: 'fullMaintenance',       label: 'フルメンテリース', unit: '件', color: 'cyan' },
   { key: 'tossUp',                label: '営業トスアップ',   unit: '件', color: 'cyan' },
-  { key: 'personalPlan',          label: '個人計画額',       unit: '円', color: 'emerald' },
-  { key: 'officePlan',            label: '営業所計画額',     unit: '円', color: 'amber' },
+  { key: 'personalPlan',          label: '個人計画額',       unit: '円', money: true, color: 'emerald' },
+  { key: 'officePlan',            label: '営業所計画額',     unit: '円', money: true, color: 'amber' },
 ];
 
 function initKgiTab() {
@@ -2488,8 +2527,7 @@ function buildKgiFields() {
       row.innerHTML = `
         <span class="kgi-field-label">${field.label}</span>
         <div class="kgi-field-input-wrap">
-          <input type="number" class="kgi-field-input" id="kgi-${field.key}"
-                 value="0" min="0" inputmode="numeric" />
+          ${buildKpiInputHtml(field, 'kgi-', 'min="0" inputmode="numeric"')}
           <span class="kgi-field-unit">${field.unit}</span>
         </div>
       `;
@@ -2499,9 +2537,7 @@ function buildKgiFields() {
     container.appendChild(card);
   });
 
-  container.querySelectorAll('.kgi-field-input').forEach(input => {
-    input.addEventListener('focus', () => input.select());
-  });
+  bindKpiInputs(container);
 }
 
 async function loadBudget(yearMonth) {
@@ -2511,7 +2547,7 @@ async function loadBudget(yearMonth) {
     console.log('[loadBudget]', yearMonth, '->', data);
     KGI_FIELDS.forEach(field => {
       const el = document.getElementById(`kgi-${field.key}`);
-      if (el) el.value = data ? (data[field.key] ?? 0) : 0;
+      setKpiInputValue(el, field, data ? (data[field.key] ?? 0) : 0);
     });
   } catch (e) {
     console.error('[loadBudget] 失敗:', e);
@@ -2529,7 +2565,7 @@ async function handleSaveBudget() {
   const data = { yearMonth };
   KGI_FIELDS.forEach(field => {
     const el = document.getElementById(`kgi-${field.key}`);
-    data[field.key] = el ? Number(el.value) || 0 : 0;
+    data[field.key] = el ? parseNumericInput(el.value) : 0;
   });
 
   try {

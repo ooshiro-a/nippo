@@ -655,12 +655,22 @@ function generateReportImpl(data) {
     maintenanceNext2Month:'次々月保守継続', newAcquisition:'新規保守',
     acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ'
   };
+  // 単位はフィールド名の決め打ちではなくこのテーブルを参照する。
+  // 「promotionAmountなら円、それ以外は件」という分岐だと、金額項目を
+  // 増やすたびに漏れて「3,500件」のような出力になる。
+  // 金額は円単位（フロントの KGI_FIELDS の unit と一致させること）。
+  var KPI_UNITS  = {
+    inspection:'件', promotionAmount:'円', promotionCount:'件',
+    maintenanceThisMonth:'件', maintenanceNextMonth:'件',
+    maintenanceNext2Month:'件', newAcquisition:'件',
+    acCleaning:'件', fullMaintenance:'件', tossUp:'件'
+  };
 
   var sum = function(arr, key) {
     return arr.reduce(function(s, e) { return s + (Number(e[key]) || 0); }, 0);
   };
   var fmt = function(key, v) {
-    return key === 'promotionAmount' ? '¥' + v.toLocaleString() : v + '件';
+    return (Number(v) || 0).toLocaleString() + (KPI_UNITS[key] || '件');
   };
 
   var kpiLines = KPI_KEYS.map(function(key) {
