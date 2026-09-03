@@ -329,6 +329,20 @@
           <div id="kgi-fields-container"></div>
           <button class="btn btn-primary" id="kgi-save-btn">保存する</button>
           </div>
+          <div class="sort-item" data-sort-id="sort-kgi-tags">
+          <div class="card" id="action-tags-card" style="margin-top:16px">
+            <div class="card-title">🏷 行動タグ</div>
+            <p class="tag-editor-desc">入力タブに出るタグです。週次・月次でTOP3を集計します。</p>
+            <div id="action-tags-editor"></div>
+            <div class="tag-editor-add">
+              <input type="text" id="action-tag-new" placeholder="新しいタグを入力" maxlength="20" />
+              <button class="btn btn-secondary" id="action-tag-add-btn">追加</button>
+            </div>
+            <button class="btn btn-secondary" id="save-action-tags-btn" style="margin-top:10px">保存する</button>
+            <div id="action-tags-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+            <p class="tag-editor-note">※タグ名を変更すると、過去の記録とは別タグとして集計されます。削除しても過去の記録は消えません。</p>
+          </div>
+          </div>
           <div class="sort-item" data-sort-id="sort-kgi-focus">
           <div class="card" id="focus-items-card" style="margin-top:16px">
             <div class="card-title">📌 注力事項（AIレポートに反映）</div>

@@ -116,10 +116,14 @@ function updateHeaderDate() {
 // 日次入力タブ
 // ------------------------------------------------------------------
 
+// 行動タグの初期値。KGI設定タブで編集すると userSettings.actionTags が優先される。
 const RELATIONSHIP_ACTIONS = [
   '挨拶', '雑談', '提案', 'お礼', '訪問',
   '電話', 'メール', 'フォロー', '紹介依頼', 'クレーム対応',
 ];
+
+// 実際に入力タブへ描画するタグ一覧。loadActionTags() でサーバー値に差し替わる。
+let actionTagList = RELATIONSHIP_ACTIONS.slice();
 
 // 日付ごとの前回ロード時の累計値（差分計算用）
 const daySnapshot = {};
@@ -163,6 +167,7 @@ function initInputTab() {
   document.getElementById('entry-date').value = getTodayJST();
   buildInputKpiFields();
   buildRelationshipTags();
+  loadActionTags();
   initCounterBtns();
 
   document.getElementById('entry-notes-important').addEventListener('change', updateNotesImportant);
@@ -258,15 +263,52 @@ function buildInputKpiFields() {
   bindKpiInputs(forecastContainer);
 }
 
-function buildRelationshipTags() {
+/**
+ * 行動タグのチップを描画する。
+ * @param {string[]} [selectedTags] - 選択状態にするタグ。省略時は現在の選択を維持する。
+ *
+ * マスタ(actionTagList)に無いタグ（過去に使っていて後から一覧から削除したもの）も
+ * 末尾に描画する。描画しないとボタンが存在せず、保存時の「.selected を集める」処理から
+ * 漏れて、その日を再保存したときに履歴からタグが消えてしまう。
+ */
+function buildRelationshipTags(selectedTags) {
   const container = document.getElementById('relationship-tags');
-  RELATIONSHIP_ACTIONS.forEach(action => {
+  if (!container) return;
+
+  const selected = selectedTags
+    ? selectedTags.slice()
+    : Array.from(container.querySelectorAll('.tag-btn.selected')).map(b => b.textContent);
+  const selectedSet = new Set(selected);
+  const legacy = selected.filter(t => actionTagList.indexOf(t) === -1);
+
+  container.innerHTML = '';
+  actionTagList.concat(legacy).forEach(action => {
     const btn = document.createElement('button');
-    btn.className = 'tag-btn';
+    btn.className = 'tag-btn' + (selectedSet.has(action) ? ' selected' : '');
     btn.textContent = action;
+    if (legacy.indexOf(action) !== -1) {
+      btn.title = 'タグ一覧から削除済み（この日の記録には残っています）';
+      btn.style.opacity = '0.7';
+    }
     btn.addEventListener('click', () => btn.classList.toggle('selected'));
     container.appendChild(btn);
   });
+}
+
+/**
+ * 行動タグ一覧をサーバー(userSettings)から読み込んで再描画する。
+ * 取得に失敗しても既定タグで動き続ける（入力を止めない）。
+ */
+async function loadActionTags() {
+  try {
+    const s = await getUserSettings();
+    const raw = (s && s.actionTags != null) ? String(s.actionTags) : '';
+    const list = raw.split(',').map(t => t.trim()).filter(Boolean);
+    if (list.length) actionTagList = list;
+  } catch (e) {
+    console.warn('[loadActionTags] 取得失敗。既定タグを使用します:', e);
+  }
+  buildRelationshipTags();
 }
 
 function initCounterBtns() {
@@ -314,9 +356,7 @@ async function loadEntry(date) {
     });
 
     const actions = entry ? (entry.relationshipActions || []) : [];
-    document.querySelectorAll('#relationship-tags .tag-btn').forEach(btn => {
-      btn.classList.toggle('selected', actions.includes(btn.textContent));
-    });
+    buildRelationshipTags(actions);
 
     document.getElementById('positive-count').textContent = 0;
     document.getElementById('negative-count').textContent = 0;
@@ -1341,6 +1381,44 @@ function sumBudgets(budgets, yearMonths) {
   return result;
 }
 
+/**
+ * エントリ群から行動タグの出現頻度を降順で返す。
+ * 集計はタグマスタではなくエントリの実データから行うので、
+ * 一覧から削除したタグも過去期間の集計には正しく出る。
+ * @param {Object[]} entries
+ * @param {number} [topN] - 省略で全件
+ * @returns {{tag: string, count: number}[]}
+ */
+function calcTagFrequency(entries, topN) {
+  const counts = {};
+  (entries || []).forEach(e => {
+    (e.relationshipActions || []).forEach(tag => {
+      if (!tag) return;
+      counts[tag] = (counts[tag] || 0) + 1;
+    });
+  });
+  const list = Object.keys(counts)
+    .map(tag => ({ tag, count: counts[tag] }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ja'));
+  return topN ? list.slice(0, topN) : list;
+}
+
+/**
+ * 行動タグTOP N のチップ行HTMLを返す。タグが1件も無ければ空文字。
+ * @param {Object[]} entries
+ * @param {number} [topN=3]
+ */
+function buildTagTopRow(entries, topN) {
+  const top = calcTagFrequency(entries, topN || 3);
+  if (top.length === 0) return '';
+  const chips = top.map(t =>
+    `<span class="hist-entry-meta-item">${_escapeHtml(t.tag)} ${t.count}</span>`
+  ).join('');
+  return `<div class="hist-entry-meta" style="margin-top:6px">
+        <span class="hist-entry-meta-item" style="color:var(--text-muted)">行動タグ</span>${chips}
+      </div>`;
+}
+
 // ------ カード描画ヘルパー ------
 
 function buildKgiSummaryRows(totals, budget) {
@@ -1436,6 +1514,7 @@ function renderWeeklyView(entries) {
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
         <span class="hist-entry-meta-item">${week.entries.length}日分のデータ</span>
       </div>
+      ${buildTagTopRow(week.entries)}
     </div>`;
   }).join('');
 }
@@ -1460,6 +1539,7 @@ function renderMonthlyView(entries, budgets) {
         <span class="hist-entry-meta-item">${mEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
+      ${buildTagTopRow(mEntries)}
     </div>`;
   });
   content.innerHTML = cards.length > 0 ? cards.join('') : `<div class="hist-empty">${year}年のデータはありません</div>`;
@@ -1510,6 +1590,7 @@ function renderQuarterlyView(entries, budgets) {
               <span class="hist-entry-meta-item">${mEntries.length}日分のデータ</span>
               <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${mTrust}pt</span>
             </div>
+            ${buildTagTopRow(mEntries)}
           </div>`;
         });
       if (monthCards.length > 0) {
@@ -1524,6 +1605,7 @@ function renderQuarterlyView(entries, budgets) {
         <span class="hist-entry-meta-item">${qEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
+      ${buildTagTopRow(qEntries)}
       ${monthBreakdown}
     </div>`;
   });
@@ -1558,6 +1640,7 @@ function renderYearlyView(entries, budgets) {
         <span class="hist-entry-meta-item">${yEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
+      ${buildTagTopRow(yEntries)}
     </div>`;
   }).join('');
 }
@@ -1848,6 +1931,7 @@ const reportSettings = {
   fullMaintenance: true,
   tossUp: true,
   // その他セクション
+  actionTagTop: true,
   trustScore: true,
   importantNotes: true,
   insights: true,
@@ -1857,6 +1941,7 @@ const reportSettings = {
 };
 
 const REPORT_EXTRA_FIELDS = [
+  { key: 'actionTagTop',   label: '行動タグTOP3' },
   { key: 'trustScore',     label: '信頼関係指数' },
   { key: 'importantNotes', label: '重要メモ' },
   { key: 'insights',       label: '気づき' },
@@ -2379,6 +2464,13 @@ function buildWeeklyReportText(week, yearMonth) {
     '─────────────────────',
   ];
   if (kpiLines.length > 0) { lines.push('■ KPI実績'); lines.push(...kpiLines); }
+  if (reportSettings.actionTagTop) {
+    const tagTop = calcTagFrequency(week.entries, 3);
+    if (tagTop.length > 0) {
+      lines.push('■ 行動タグTOP3');
+      lines.push('  ' + tagTop.map(t => `${t.tag} ${t.count}件`).join(' / '));
+    }
+  }
   if (reportSettings.trustScore) {
     lines.push('■ 信頼関係指数');
     lines.push(`  Trust: ${trust}pt（アクション${allActions.length}件×2 + ポジFB${pos}件×5 - ネガFB${neg}件×3）`);
@@ -2422,6 +2514,13 @@ function buildMonthlyReportText(ym, mEntries, budget) {
     '─────────────────────',
   ];
   if (kpiLines.length > 0) { lines.push('■ KPI実績'); lines.push(...kpiLines); }
+  if (reportSettings.actionTagTop) {
+    const tagTop = calcTagFrequency(mEntries, 3);
+    if (tagTop.length > 0) {
+      lines.push('■ 行動タグTOP3');
+      lines.push('  ' + tagTop.map(t => `${t.tag} ${t.count}件`).join(' / '));
+    }
+  }
   if (reportSettings.trustScore) {
     lines.push('■ 信頼関係指数');
     lines.push(`  Trust: ${trust}pt（アクション${allActions.length}件×2 + ポジFB${pos}件×5 - ネガFB${neg}件×3）`);
@@ -2479,6 +2578,107 @@ const KGI_FIELDS = [
   { key: 'officePlan',            label: '営業所計画額',     unit: '円', money: true, color: 'amber' },
 ];
 
+// ------------------------------------------------------------------
+// 行動タグ編集（KGI設定タブ）
+// ------------------------------------------------------------------
+
+// 編集中のタグ一覧。保存を押すまで actionTagList には反映しない。
+let _tagEditorDraft = [];
+
+function renderActionTagEditor() {
+  const box = document.getElementById('action-tags-editor');
+  if (!box) return;
+  box.innerHTML = _tagEditorDraft.map((tag, i) => `
+    <div class="tag-editor-row">
+      <input type="text" data-tag-index="${i}" value="${_escapeHtml(tag)}" maxlength="20" />
+      <button class="tag-editor-del" data-tag-del="${i}" title="削除">✕</button>
+    </div>`).join('');
+
+  box.querySelectorAll('input[data-tag-index]').forEach(input => {
+    input.addEventListener('input', () => {
+      _tagEditorDraft[Number(input.dataset.tagIndex)] = input.value;
+    });
+  });
+  box.querySelectorAll('button[data-tag-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _tagEditorDraft.splice(Number(btn.dataset.tagDel), 1);
+      renderActionTagEditor();
+    });
+  });
+}
+
+/**
+ * 編集内容を検証して正規化する。
+ * カンマは保存形式（join(',')）を壊すので必ず弾く。
+ * @returns {{ok: true, tags: string[]} | {ok: false, error: string}}
+ */
+function validateActionTags(draft) {
+  const tags = [];
+  for (const raw of draft) {
+    const tag = String(raw).trim();
+    if (!tag) continue;
+    if (tag.indexOf(',') !== -1 || tag.indexOf('、') !== -1) {
+      return { ok: false, error: `「${tag}」: タグ名にカンマ（, ）は使えません` };
+    }
+    if (tags.indexOf(tag) !== -1) {
+      return { ok: false, error: `「${tag}」が重複しています` };
+    }
+    tags.push(tag);
+  }
+  if (tags.length === 0) return { ok: false, error: 'タグを1つ以上残してください' };
+  return { ok: true, tags };
+}
+
+function initActionTagEditor() {
+  const addBtn  = document.getElementById('action-tag-add-btn');
+  const newInput = document.getElementById('action-tag-new');
+  const saveBtn = document.getElementById('save-action-tags-btn');
+  const status  = document.getElementById('action-tags-status');
+  if (!addBtn || !saveBtn) return;
+
+  const addTag = () => {
+    const v = newInput.value.trim();
+    if (!v) return;
+    _tagEditorDraft.push(v);
+    newInput.value = '';
+    renderActionTagEditor();
+  };
+  addBtn.addEventListener('click', addTag);
+  newInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addTag(); }
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const result = validateActionTags(_tagEditorDraft);
+    if (!result.ok) {
+      status.textContent = '✕ ' + result.error;
+      status.style.color = 'var(--accent-red)';
+      return;
+    }
+    status.style.color = 'var(--text-muted)';
+    status.textContent = '保存中...';
+    saveBtn.disabled = true;
+    try {
+      await saveUserSettings({ key: 'actionTags', value: result.tags.join(',') });
+      actionTagList = result.tags.slice();
+      _tagEditorDraft = result.tags.slice();
+      renderActionTagEditor();
+      // 入力タブのチップも即時に差し替える（選択中のタグは維持される）
+      buildRelationshipTags();
+      status.textContent = '✓ 保存しました';
+    } catch (e) {
+      status.textContent = 'エラー: ' + e.message;
+      status.style.color = 'var(--accent-red)';
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  // 現在の一覧を編集欄へ流し込む
+  _tagEditorDraft = actionTagList.slice();
+  renderActionTagEditor();
+}
+
 function initKgiTab() {
   const monthInput = document.getElementById('kgi-month');
   monthInput.value = getTodayJST().slice(0, 7);
@@ -2502,7 +2702,12 @@ function initKgiTab() {
   });
   getUserSettings().then(function(s) {
     if (s && s.focusItems) document.getElementById('focus-items-input').value = s.focusItems;
+    // loadActionTags() の結果が先に届いている場合に備え、編集欄を最新化する
+    _tagEditorDraft = actionTagList.slice();
+    renderActionTagEditor();
   }).catch(function() {});
+
+  initActionTagEditor();
 
   loadBudget(monthInput.value);
 }
@@ -4934,10 +5139,19 @@ function restoreSortOrder(tabId) {
     saved = JSON.parse(localStorage.getItem('sortOrder_' + tabId));
   } catch (ex) { return; }
   if (!Array.isArray(saved) || saved.length === 0) return;
+
+  // 保存順に無いカード（アプリ更新で増えたもの）はDOM順のまま末尾に回す。
+  // 保存済みだけを appendChild すると、新規カードが先頭に押し出されてしまう。
+  var current = Array.prototype.slice.call(tab.querySelectorAll(':scope > .sort-item'));
+  var known   = {};
+  saved.forEach(function(id) { known[id] = true; });
+  var unknown = current.filter(function(el) { return !known[el.dataset.sortId]; });
+
   saved.forEach(function(id) {
     var el = tab.querySelector(':scope > [data-sort-id="' + id + '"]');
     if (el) tab.appendChild(el);
   });
+  unknown.forEach(function(el) { tab.appendChild(el); });
 }
 
 // DOMの準備ができたら起動

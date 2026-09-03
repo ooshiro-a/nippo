@@ -685,6 +685,24 @@ function generateReportImpl(data) {
     return '  - ' + KPI_LABELS[key] + ': 実績' + fmt(key, cur) + ' / 目標' + fmt(key, plan) + rateStr + compStr;
   }).join('\n');
 
+  // 行動タグ頻度TOP3。ES5環境なので flatMap / Object.entries は使わない。
+  var tagCounts = {};
+  curData.forEach(function(e) {
+    var tags = e.relationshipActions || [];
+    tags.forEach(function(t) {
+      if (!t) return;
+      tagCounts[t] = (tagCounts[t] || 0) + 1;
+    });
+  });
+  var tagTop = Object.keys(tagCounts).map(function(t) {
+    return { tag: t, count: tagCounts[t] };
+  }).sort(function(a, b) { return b.count - a.count; }).slice(0, 3);
+  var tagSection = tagTop.length
+    ? '\n【行動タグ頻度 TOP3】\n' + tagTop.map(function(t) {
+        return '  ・' + t.tag + ': ' + t.count + '件';
+      }).join('\n') + '\n'
+    : '';
+
   var insights    = curData.filter(function(e) { return e.insight; })
     .slice(0, 3).map(function(e) { return '  ・' + e.insight; }).join('\n');
   var nextActions = curData.filter(function(e) { return e.nextAction; })
@@ -741,13 +759,14 @@ function generateReportImpl(data) {
     '【今' + pKey + 'の気づき・次の一手】\n' +
     (insights    || '  （記録なし）') + '\n' +
     (nextActions || '') + '\n' +
-    focusSection + lagSection + fbSection +
+    tagSection + focusSection + lagSection + fbSection +
     '\n# 出力形式（厳守）\n' +
     '① 良点\n・〇〇\n・〇〇\n\n' +
     '② 改善点\n・〇〇\n・〇〇\n\n' +
     '③ まとめ\n150〜200文字で簡潔に記載\n\n' +
     (focusItems ? '④ 注力事項の進捗コメント\n注力事項それぞれについて1〜2文で現状を評価\n\n' : '') +
     '⑤ ネクストアクション\n' +
+    (tagTop.length ? '・行動タグの偏り（どの行動に時間を使えていて、どれが不足しているか）に1文触れる\n' : '') +
     (lagSection ? '・遅れ指標について：「残◯日で1日あたり◯件/◯円」形式で具体的に記載\n' : '') +
     (focusItems ? '・注力事項を加速させる行動を1〜2点提案\n' : '') +
     '・その他改善に直結する行動提案';
