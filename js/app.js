@@ -2984,6 +2984,15 @@ function renderOfficePlanFields() {
 
   var html = '';
 
+  // KGIタブ9項目のうち取込元セルが空だった項目があれば警告（取込自体はブロックしない）
+  var missing = (isOffice && _officeSalesPlanParsed) ? (_officeSalesPlanParsed.missingFields || []) : [];
+  if (missing.length) {
+    html += '<div style="color:var(--accent-amber, #d97706);font-size:12px;margin-bottom:8px">' +
+            '⚠ 以下の項目が日計表上で空欄でした（取込はそのまま実行できます。反映後にKGIタブで手入力してください）：' +
+            missing.map(function(k) { return OFFICE_SALES_PLAN_LABELS[k] || k; }).join('、') +
+            '</div>';
+  }
+
   html += '<div class="office-section"><div class="office-section-title">保守</div>' +
           simpleRow('maintenancePlanUnits') +
           simpleRow('maintenancePlanAmount') +
@@ -3064,14 +3073,20 @@ async function saveOfficePlanFromModal() {
     await saveOfficeSalesPlan([officeEntry].concat(memberEntries));
     closeOfficePlanModal();
 
+    var missing = p.missingFields || [];
     var fb = document.getElementById('office-plan-import-feedback');
     if (fb) {
-      fb.textContent = '✓ 取込完了 (' + ym + ')';
-      fb.style.color = 'var(--accent-emerald)';
+      fb.textContent = missing.length
+        ? '✓ 取込完了 (' + ym + ') ※未入力項目あり: ' + missing.map(function(k) { return OFFICE_SALES_PLAN_LABELS[k] || k; }).join('、')
+        : '✓ 取込完了 (' + ym + ')';
+      fb.style.color = missing.length ? 'var(--accent-amber, #d97706)' : 'var(--accent-emerald)';
       fb.style.fontSize = '13px';
       fb.style.marginTop = '8px';
-      setTimeout(function() { if (fb) fb.textContent = ''; }, 3000);
+      setTimeout(function() { if (fb) fb.textContent = ''; }, 5000);
     }
+
+    // KGIタブが読み込み済みならlocation.reload不使用で最新値に反映（進捗タブと同じ「表示時に再読込」パターンも維持）
+    if (document.getElementById('office-kgi-fields')) loadOfficeKgi();
   } catch (err) {
     alert('保存エラー: ' + err.message);
   } finally {
@@ -4215,33 +4230,63 @@ async function loadOfficeKgi() {
   var ym = el ? el.value : getTodayJST().slice(0, 7);
   container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">読み込み中...</div>';
   try {
-    var plan = await getOfficeSalesPlan(ym);
+    var plan = await getOfficeSalesPlan(ym, 'office');
     renderOfficeSalesPlanFields(plan, ym, container);
   } catch (e) {
+    // 取得エラー（_postの集約エラー検出と連動）: 失敗理由を表示
     _renderError(container, '読み込みエラー: ' + e.message);
   }
 }
 
+var OFFICE_KGI_LABELS = {
+  maintenancePlanUnits:  '保守台数 計画',
+  maintenancePlanAmount: '保守額 計画',
+  inspectionPlanUnits:   '点検台数 計画',
+  inspectionPlanAmount:  '点検額 計画',
+  renewalPlanUnits:      '継続台数 計画',
+  renewalPlanAmount:     '継続額 計画',
+  newPlanUnits:          '新規台数 計画',
+  newPlanAmount:         '新規額 計画',
+  totalSalesPlan:        '売上計画 合計'
+};
+
+function _officeKgiFieldBadge(entry, key) {
+  var manual = Array.isArray(entry.manualFields) && entry.manualFields.indexOf(key) !== -1;
+  if (manual) return '<span class="office-field-badge" style="font-size:11px;color:var(--text-muted);margin-left:6px">手入力</span>';
+  if (entry.importedAt) {
+    var d = new Date(entry.importedAt);
+    if (!isNaN(d.getTime())) {
+      return '<span class="office-field-badge" style="font-size:11px;color:var(--text-muted);margin-left:6px">' +
+             (d.getMonth() + 1) + '/' + d.getDate() + '取込</span>';
+    }
+  }
+  return '';
+}
+
 function renderOfficeSalesPlanFields(plan, ym, container) {
-  var entry = (plan && plan.length) ? plan[0] : {};
-  var LABELS = {
-    maintenancePlanUnits:  '保守台数 計画',
-    maintenancePlanAmount: '保守額 計画',
-    inspectionPlanUnits:   '点検台数 計画',
-    inspectionPlanAmount:  '点検額 計画',
-    renewalPlanUnits:      '継続台数 計画',
-    renewalPlanAmount:     '継続額 計画',
-    newPlanUnits:          '新規台数 計画',
-    newPlanAmount:         '新規額 計画',
-    totalSalesPlan:        '売上計画 合計'
-  };
-  var html = '<div class="office-section">';
-  Object.keys(LABELS).forEach(function(key) {
-    var val = (entry[key] !== undefined && entry[key] !== '') ? entry[key] : 0;
+  // scope='office'で取得済みだが、念のためoffice行のみを明示的に選ぶ（plan[0]決め打ちにしない）
+  var entry = (plan || []).find(function(p) { return p.scope === 'office'; }) || null;
+
+  var noticeHtml = '';
+  if (!entry) {
+    // (a) 該当月データなし: 売上計画が未取込。手入力での保存も可能なので空欄フォームは表示する
+    noticeHtml = '<div style="color:var(--accent-amber, #d97706);font-size:12px;margin-bottom:8px">' +
+                 '売上計画が未取込です。取込タブからアップロードしてください（手入力での保存も可能です）' +
+                 '</div>';
+    entry = {};
+  }
+
+  var html = noticeHtml + '<div class="office-section">';
+  Object.keys(OFFICE_KGI_LABELS).forEach(function(key) {
+    var val   = (entry[key] !== undefined && entry[key] !== '') ? entry[key] : 0;
+    var badge = _officeKgiFieldBadge(entry, key);
+    var hint  = (key === 'inspectionPlanAmount')
+      ? '<div class="office-field-hint" style="font-size:11px;color:var(--text-muted)">※取込データに項目が無いため手入力が必要です</div>'
+      : '';
     html += '<div class="office-field-row">' +
-            '<span class="office-field-label">' + LABELS[key] + '</span>' +
+            '<span class="office-field-label">' + OFFICE_KGI_LABELS[key] + badge + '</span>' +
             '<input class="office-field-input" type="number" step="any" data-key="' + key + '" value="' + val + '">' +
-            '</div>';
+            '</div>' + hint;
   });
   html += '</div>';
   html += '<button class="btn btn-primary" id="office-kgi-save-btn" style="margin-top:12px">保存する</button>';
@@ -4259,10 +4304,13 @@ async function saveOfficeKgi(ym) {
     document.querySelectorAll('#office-kgi-fields .office-field-input').forEach(function(f) {
       fields[f.dataset.key] = parseFloat(f.value) || 0;
     });
+    // source を付けない = 手動保存（既存の取込済みフィールドを消さずマージ、更新項目はmanualFieldsに記録される）
     var entry = Object.assign({ yearMonth: ym, scope: 'office', memberId: '', memberName: '' }, fields);
     await saveOfficeSalesPlan([entry]);
-    if (btn) { btn.textContent = '✓ 保存しました'; }
-    setTimeout(function() { if (btn) { btn.disabled = false; btn.textContent = '保存する'; } }, 2000);
+    var savedBtn = document.getElementById('office-kgi-save-btn');
+    if (savedBtn) { savedBtn.textContent = '✓ 保存しました'; }
+    // 手入力バッジを反映するため最新値を再読込
+    setTimeout(function() { loadOfficeKgi(); }, 800);
   } catch (e) {
     alert('保存エラー: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
@@ -4580,6 +4628,9 @@ async function saveOfficeDailyFromModal() {
 
     await saveOfficeDaily([officeEntry].concat(memberEntries));
     closeOfficeDailyModal();
+
+    // 進捗タブを即時更新
+    refreshManagement();
 
     // 保存フィードバック
     var fbContainer = document.getElementById('office-daily-import-feedback');

@@ -50,7 +50,9 @@ async function _post(body) {
     redirect: 'follow',
   });
   if (!res.ok) throw new Error(`POST エラー: ${res.status}`);
-  return res.json();
+  const result = await res.json();
+  if (result && result.error) throw new Error(result.error);
+  return result;
 }
 
 // ============================================================
@@ -178,9 +180,10 @@ async function deleteOfficeDaily(params) {
   return _post({ action: 'deleteOfficeDaily', data: params });
 }
 
-async function getOfficeSalesPlan(yearMonth) {
+async function getOfficeSalesPlan(yearMonth, scope) {
   const params = { action: 'getOfficeSalesPlan' };
   if (yearMonth) params.yearMonth = yearMonth;
+  if (scope) params.scope = scope;
   return _get(params);
 }
 

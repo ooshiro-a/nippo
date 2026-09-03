@@ -120,6 +120,9 @@ function doGet(e) {
     } else if (action === 'getLatestReport') {
       result = getLatestReportImpl(e.parameter.type || '');
 
+    } else if (action === 'getOfficeSalesPlan') {
+      result = getOfficeSalesPlanImpl(e.parameter.yearMonth || '', e.parameter.scope || '');
+
     } else {
       result = { status: 'ok', message: 'Nice Serviceman 日報 API', timestamp: new Date().toISOString() };
     }
@@ -169,6 +172,12 @@ function doPost(e) {
 
     } else if (action === 'saveFeedback') {
       result = saveFeedbackImpl(data);
+
+    } else if (action === 'saveOfficeDaily') {
+      result = saveOfficeDailyImpl(data);
+
+    } else if (action === 'saveOfficeSalesPlan') {
+      result = saveOfficeSalesPlanImpl(data);
 
     } else {
       result = { error: '不明なアクション: ' + action };
@@ -501,6 +510,17 @@ function dateToYMD(d) {
     return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
   }
   return s.slice(0, 10);
+}
+
+/**
+ * yearMonth値を "YYYY-MM" に正規化する。
+ * Sheets側で文字列"YYYY-MM"がDate型に自動変換されているケース（例: officeSalesPlanのyearMonth列）を
+ * 吸収するための共通関数。Date型・文字列型のどちらが来ても同じ結果を返す。
+ */
+function normalizeYearMonth(v) {
+  if (!v) return '';
+  if (v instanceof Date) return dateToYMD(v).slice(0, 7);
+  return String(v).trim().slice(0, 7);
 }
 
 function snakeToCamel(str) {
@@ -1137,7 +1157,7 @@ var OFFICE_SALES_PLAN_COLS = [
   'prepaidNew', 'prepaidCont',
   'callPlan', 'repairPlan', 'serPromoPlan',
   'totalSalesPlan', 'unitPrices', 'annualSalesPlan',
-  'source', 'importedAt'
+  'source', 'importedAt', 'manualFields'
 ];
 
 // officeReports 列順
@@ -1308,66 +1328,164 @@ function deleteOfficeDailyImpl(params) {
 // ──────────────────────────────────────────
 // officeSalesPlan 読み書き
 // ──────────────────────────────────────────
+// officeDaily等の共用 sheetToObjects()（列位置決め打ち）とは切り離し、
+// officeSalesPlan専用にヘッダー行の列名を実際に読んでマッピングする。
+// 列の追加・並び替えがあっても壊れないようにするための専用実装。
+// ──────────────────────────────────────────
+
+/**
+ * シートのヘッダー行（1行目）を読み、列名→0始まりの列インデックスのMapを返す
+ */
+function _getOfficeSalesPlanHeaderMap_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return {};
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var map = {};
+  header.forEach(function(name, i) {
+    if (name !== '' && name !== null && name !== undefined) map[String(name).trim()] = i;
+  });
+  return map;
+}
+
+/**
+ * officeSalesPlanシートに指定の列名がなければ末尾に追加する（移行処理）
+ * @returns {Object} 追加後のヘッダーMap
+ */
+function _ensureOfficeSalesPlanColumn_(sheet, colName) {
+  var map = _getOfficeSalesPlanHeaderMap_(sheet);
+  if (Object.prototype.hasOwnProperty.call(map, colName)) return map;
+  var newColIndex = sheet.getLastColumn() + 1;
+  sheet.getRange(1, newColIndex).setValue(colName);
+  map[colName] = newColIndex - 1;
+  return map;
+}
 
 /**
  * officeSalesPlan を取得
  * @param {string} yearMonth - "YYYY-MM"（省略で全件）
+ * @param {string} scope     - "office" | "member"（省略でoffice+member両方）
  */
-function getOfficeSalesPlanImpl(yearMonth) {
-  var sheet = getSheet(SHEET_OFFICE_SALES_PLAN);
-  var rows  = sheetToObjects(sheet, OFFICE_SALES_PLAN_COLS);
+function getOfficeSalesPlanImpl(yearMonth, scope) {
+  var sheet   = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
 
-  if (yearMonth) {
-    rows = rows.filter(function(r) { return String(r.yearMonth).slice(0, 7) === yearMonth; });
-  }
+  var headerMap = _getOfficeSalesPlanHeaderMap_(sheet);
+  var lastCol   = sheet.getLastColumn();
+  var data      = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
 
-  return rows.map(function(r) {
+  var rows = [];
+  data.forEach(function(row) {
+    if (row.every(function(cell) { return cell === '' || cell === null; })) return;
+
     var obj = {};
     OFFICE_SALES_PLAN_COLS.forEach(function(col) {
-      obj[col] = r[col] !== undefined ? r[col] : '';
+      var idx = headerMap[col];
+      var v   = (idx !== undefined) ? row[idx] : undefined;
+      if (col === 'yearMonth') {
+        obj[col] = normalizeYearMonth(v);
+      } else if (col === 'manualFields') {
+        try { obj[col] = v ? JSON.parse(v) : []; } catch (e) { obj[col] = []; }
+      } else {
+        obj[col] = (v !== undefined && v !== null) ? v : '';
+      }
     });
-    return obj;
+    rows.push(obj);
   });
+
+  if (yearMonth) {
+    var ymNorm = normalizeYearMonth(yearMonth);
+    rows = rows.filter(function(r) { return r.yearMonth === ymNorm; });
+  }
+  if (scope) {
+    rows = rows.filter(function(r) { return r.scope === scope; });
+  }
+
+  return rows;
 }
 
 /**
  * officeSalesPlan を保存（upsert: yearMonth+scope+memberId で一意）
+ *
+ * entry.source が指定されている場合（＝取込由来のデータ）は全項目を上書きし、
+ * manualFields はクリアする（再取込は手入力分も含め全項目上書きする仕様）。
+ * entry.source が無い場合（＝KGIタブからの手動保存）は、渡されたキーのみを
+ * 既存行にマージして更新し、更新したキー名を manualFields に記録する
+ * （取込済みの他フィールドを空文字で消してしまわないようにするため）。
+ *
  * @param {Object[]} entries
  */
 function saveOfficeSalesPlanImpl(entries) {
   if (!Array.isArray(entries)) entries = [entries];
-  var sheet   = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var sheet = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var headerMap = _ensureOfficeSalesPlanColumn_(sheet, 'manualFields');
+  var headerNames = Object.keys(headerMap).sort(function(a, b) { return headerMap[a] - headerMap[b]; });
+  var numCols = headerNames.length;
+
+  var META_KEYS = ['yearMonth', 'scope', 'memberId', 'memberName'];
   var lastRow = sheet.getLastRow();
   var saved   = 0;
 
   entries.forEach(function(entry) {
-    var ym       = String(entry.yearMonth || '');
+    var ym       = normalizeYearMonth(entry.yearMonth);
     var scope    = String(entry.scope || '');
     var memberId = String(entry.memberId || '');
+    var isImport = !!entry.source;
 
-    var newRow = OFFICE_SALES_PLAN_COLS.map(function(col) {
-      var v = entry[col];
-      return v !== undefined && v !== null ? v : '';
-    });
-
+    // 既存行を検索
     var matchRow = -1;
+    var existingRowValues = null;
     if (lastRow >= 2) {
-      var ymIdx     = OFFICE_SALES_PLAN_COLS.indexOf('yearMonth') + 1;
-      var scopeIdx  = OFFICE_SALES_PLAN_COLS.indexOf('scope')     + 1;
-      var memberIdx = OFFICE_SALES_PLAN_COLS.indexOf('memberId')  + 1;
-      var keyRange  = sheet.getRange(2, 1, lastRow - 1, OFFICE_SALES_PLAN_COLS.length).getValues();
-      for (var i = 0; i < keyRange.length; i++) {
-        if (dateToYMD(keyRange[i][ymIdx - 1]).slice(0, 7) === ym &&
-            String(keyRange[i][scopeIdx - 1])          === scope &&
-            String(keyRange[i][memberIdx - 1])         === memberId) {
+      var ymIdx     = headerMap['yearMonth'];
+      var scopeIdx  = headerMap['scope'];
+      var memberIdx = headerMap['memberId'];
+      var range     = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+      for (var i = 0; i < range.length; i++) {
+        if (normalizeYearMonth(range[i][ymIdx]) === ym &&
+            String(range[i][scopeIdx])  === scope &&
+            String(range[i][memberIdx]) === memberId) {
           matchRow = i + 2;
+          existingRowValues = range[i];
           break;
         }
       }
     }
 
+    // 既存値をベースに構築（新規行なら全て空）
+    var base = {};
+    headerNames.forEach(function(col) {
+      base[col] = existingRowValues ? existingRowValues[headerMap[col]] : '';
+    });
+
+    var manualFields = [];
+    try { manualFields = base.manualFields ? JSON.parse(base.manualFields) : []; } catch (e) { manualFields = []; }
+
+    if (isImport) {
+      // 取込：渡された値で全項目を上書きし、手入力マークはクリア
+      headerNames.forEach(function(col) {
+        if (col === 'manualFields') return;
+        var v = entry[col];
+        base[col] = (v !== undefined && v !== null) ? v : '';
+      });
+      manualFields = [];
+    } else {
+      // 手動保存：渡されたキーのみ更新（既存の他フィールドは保持）
+      Object.keys(entry).forEach(function(key) {
+        if (key === 'manualFields' || !Object.prototype.hasOwnProperty.call(headerMap, key)) return;
+        base[key] = entry[key];
+        if (META_KEYS.indexOf(key) === -1 && manualFields.indexOf(key) === -1) {
+          manualFields.push(key);
+        }
+      });
+    }
+
+    base.yearMonth     = ym;
+    base.manualFields  = JSON.stringify(manualFields);
+
+    var newRow = headerNames.map(function(col) { return base[col]; });
+
     if (matchRow > 0) {
-      sheet.getRange(matchRow, 1, 1, newRow.length).setValues([newRow]);
+      sheet.getRange(matchRow, 1, 1, numCols).setValues([newRow]);
     } else {
       sheet.appendRow(newRow);
       lastRow++;
@@ -1442,8 +1560,8 @@ function gasDeleteOfficeDaily(paramsJson) {
   return JSON.stringify(deleteOfficeDailyImpl(params));
 }
 
-function gasGetOfficeSalesPlan(yearMonth) {
-  return JSON.stringify(getOfficeSalesPlanImpl(yearMonth || ''));
+function gasGetOfficeSalesPlan(yearMonth, scope) {
+  return JSON.stringify(getOfficeSalesPlanImpl(yearMonth || '', scope || ''));
 }
 
 function gasSaveOfficeSalesPlan(entriesJson) {
