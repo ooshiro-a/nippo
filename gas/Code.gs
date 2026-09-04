@@ -68,7 +68,13 @@ var ENTRIES_COLS = [
   'proposal_collection',
   'toss_up_amount',
   'result_conversion',
-  'production'
+  'production',
+  // 活動内訳（目標を持たない件数項目）。列は必ず末尾に追加すること。
+  // sheetToObjects はヘッダーを読まず列位置決め打ちで読むため、途中挿入すると全履歴がずれる。
+  'fault_diagnosis',
+  'remaining_repair',
+  'delivery',
+  'rediagnosis'
 ];
 
 // 積み上げ計算する数値フィールド（camelCase）
@@ -77,6 +83,7 @@ var NUMERIC_ENTRY_KEYS = [
   'maintenanceThisMonth', 'maintenanceNextMonth', 'maintenanceNext2Month',
   'newAcquisition', 'acCleaning', 'fullMaintenance', 'tossUp',
   'proposalCollection', 'tossUpAmount', 'resultConversion', 'production',
+  'faultDiagnosis', 'remainingRepair', 'delivery', 'rediagnosis',
   'positiveFeedback', 'negativeFeedback'
 ];
 
@@ -610,7 +617,11 @@ function normalizeEntry(row) {
     proposalCollection:     Number(row.proposal_collection) || 0,
     tossUpAmount:           Number(row.toss_up_amount) || 0,
     resultConversion:       Number(row.result_conversion) || 0,
-    production:             Number(row.production) || 0
+    production:             Number(row.production) || 0,
+    faultDiagnosis:         Number(row.fault_diagnosis) || 0,
+    remainingRepair:        Number(row.remaining_repair) || 0,
+    delivery:               Number(row.delivery) || 0,
+    rediagnosis:            Number(row.rediagnosis) || 0
   };
 }
 
@@ -706,14 +717,17 @@ function generateReportImpl(data) {
   var KPI_KEYS   = ['inspection','promotionAmount','promotionCount',
     'maintenanceThisMonth','maintenanceNextMonth','maintenanceNext2Month',
     'newAcquisition','acCleaning','fullMaintenance','tossUp',
-    'proposalCollection','tossUpAmount','resultConversion','production'];
+    'proposalCollection','tossUpAmount','resultConversion','production',
+    'faultDiagnosis','remainingRepair','delivery','rediagnosis'];
   var KPI_LABELS = {
     inspection:'点検件数', promotionAmount:'促進受注額', promotionCount:'促進件数',
     maintenanceThisMonth:'当月保守継続', maintenanceNextMonth:'次月保守継続',
     maintenanceNext2Month:'次々月保守継続', newAcquisition:'新規保守',
     acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ',
     proposalCollection:'提案回収', tossUpAmount:'トスアップ金額',
-    resultConversion:'実績化', production:'増産'
+    resultConversion:'実績化', production:'増産',
+    faultDiagnosis:'故障診断', remainingRepair:'残修理',
+    delivery:'納品', rediagnosis:'再診断・再調整'
   };
   // 単位はフィールド名の決め打ちではなくこのテーブルを参照する。
   // 「promotionAmountなら円、それ以外は件」という分岐だと、金額項目を
@@ -725,7 +739,9 @@ function generateReportImpl(data) {
     maintenanceNext2Month:'件', newAcquisition:'件',
     acCleaning:'件', fullMaintenance:'件', tossUp:'件',
     proposalCollection:'円', tossUpAmount:'円',
-    resultConversion:'円', production:'円'
+    resultConversion:'円', production:'円',
+    faultDiagnosis:'件', remainingRepair:'件',
+    delivery:'件', rediagnosis:'件'
   };
 
   var sum = function(arr, key) {
@@ -762,6 +778,18 @@ function generateReportImpl(data) {
   var tagSection = tagTop.length
     ? '\n【行動タグ頻度 TOP3】\n' + tagTop.map(function(t) {
         return '  ・' + t.tag + ': ' + t.count + '件';
+      }).join('\n') + '\n'
+    : '';
+
+  // 活動内訳（多い順）。単位が「件」のKPIだけを対象にする。
+  // フロントの COUNT_FIELDS（color:'cyan' && !money）と同じ範囲になる。
+  var activityRank = KPI_KEYS.filter(function(k) { return KPI_UNITS[k] === '件'; })
+    .map(function(k) { return { label: KPI_LABELS[k], count: sum(curData, k) }; })
+    .filter(function(r) { return r.count > 0; })
+    .sort(function(a, b) { return b.count - a.count; });
+  var activitySection = activityRank.length
+    ? '\n【活動内訳（多い順）】\n' + activityRank.map(function(r) {
+        return '  ・' + r.label + ': ' + r.count + '件';
       }).join('\n') + '\n'
     : '';
 
@@ -821,7 +849,7 @@ function generateReportImpl(data) {
     '【今' + pKey + 'の気づき・次の一手】\n' +
     (insights    || '  （記録なし）') + '\n' +
     (nextActions || '') + '\n' +
-    tagSection + focusSection + lagSection + fbSection +
+    tagSection + activitySection + focusSection + lagSection + fbSection +
     '\n# 出力形式（厳守）\n' +
     '① 良点\n・〇〇\n・〇〇\n\n' +
     '② 改善点\n・〇〇\n・〇〇\n\n' +
@@ -829,6 +857,7 @@ function generateReportImpl(data) {
     (focusItems ? '④ 注力事項の進捗コメント\n注力事項それぞれについて1〜2文で現状を評価\n\n' : '') +
     '⑤ ネクストアクション\n' +
     (tagTop.length ? '・行動タグの偏り（どの行動に時間を使えていて、どれが不足しているか）に1文触れる\n' : '') +
+    (activityRank.length ? '・活動内訳の偏り（どの作業に時間を取られているか）に1文触れる\n' : '') +
     (lagSection ? '・遅れ指標について：「残◯日で1日あたり◯件/◯円」形式で具体的に記載\n' : '') +
     (focusItems ? '・注力事項を加速させる行動を1〜2点提案\n' : '') +
     '・その他改善に直結する行動提案';
