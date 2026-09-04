@@ -477,6 +477,55 @@ label {
   font-size: 13px;
 }
 
+/* ------------------------------------------------------------
+   活動内訳ランキング（履歴タブ / PDF）
+   ------------------------------------------------------------ */
+.activity-rank {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.activity-rank-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.activity-rank-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  padding: 3px 0;
+}
+
+.activity-rank-no {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.activity-rank-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.activity-rank-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+/* バーはラベルと件数の下に、行いっぱいで敷く */
+.activity-rank-bar {
+  grid-column: 2 / 4;
+  height: 5px;
+}
+
 .tag-group {
   display: flex;
   flex-wrap: wrap;

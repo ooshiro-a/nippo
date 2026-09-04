@@ -225,40 +225,57 @@ function setKpiInputValue(el, field, value) {
   el.value = field.money ? formatNumber(value) : value;
 }
 
+/**
+ * KPI入力欄1行（ラベル + 入力欄 + 単位）のDOMを組み立てる。
+ * @param {Object} field - KGI_FIELDS / FORECAST_FIELDS の要素
+ * @param {string} idPrefix
+ */
+function buildKpiInputRow(field, idPrefix) {
+  const row = document.createElement('div');
+  row.className = 'kgi-field-row';
+  row.innerHTML = `
+    <span class="kgi-field-label">${field.label}</span>
+    <div class="kgi-field-input-wrap">
+      ${buildKpiInputHtml(field, idPrefix)}
+      <span class="kgi-field-unit">${field.unit}</span>
+    </div>
+  `;
+  return row;
+}
+
 function buildInputKpiFields() {
   const container = document.getElementById('entry-kpi-container');
-  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
-    const row = document.createElement('div');
-    row.className = 'kgi-field-row';
-    row.innerHTML = `
-      <span class="kgi-field-label">${field.label}</span>
-      <div class="kgi-field-input-wrap">
-        ${buildKpiInputHtml(field, 'entry-')}
-        <span class="kgi-field-unit">${field.unit}</span>
-      </div>
-    `;
-    container.appendChild(row);
+
+  // KPI実績カード: 成果系のみ。活動内訳は別カードに分ける
+  KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity').forEach(field => {
+    container.appendChild(buildKpiInputRow(field, 'entry-'));
   });
   bindKpiInputs(container);
 
-  // 末見額カードを KPI実績カードの直後に追加
+  // 活動内訳カードを KPI実績カードの直後に追加
+  const activityCard = document.createElement('div');
+  activityCard.className = 'card';
+  activityCard.innerHTML =
+    '<div class="card-title">活動内訳</div>' +
+    '<div class="tag-editor-desc">今日どの作業を何件やったか</div>' +
+    '<div id="entry-activity-container"></div>';
+  container.closest('.card').insertAdjacentElement('afterend', activityCard);
+
+  const activityContainer = document.getElementById('entry-activity-container');
+  KGI_FIELDS.filter(f => f.group === 'activity').forEach(field => {
+    activityContainer.appendChild(buildKpiInputRow(field, 'entry-'));
+  });
+  bindKpiInputs(activityContainer);
+
+  // 末見額カードを 活動内訳カードの直後に追加
   const forecastCard = document.createElement('div');
   forecastCard.className = 'card';
   forecastCard.innerHTML = '<div class="card-title">末見額</div><div id="entry-forecast-container"></div>';
-  container.closest('.card').insertAdjacentElement('afterend', forecastCard);
+  activityCard.insertAdjacentElement('afterend', forecastCard);
 
   const forecastContainer = document.getElementById('entry-forecast-container');
   FORECAST_FIELDS.forEach(field => {
-    const row = document.createElement('div');
-    row.className = 'kgi-field-row';
-    row.innerHTML = `
-      <span class="kgi-field-label">${field.label}</span>
-      <div class="kgi-field-input-wrap">
-        ${buildKpiInputHtml(field, 'entry-')}
-        <span class="kgi-field-unit">${field.unit}</span>
-      </div>
-    `;
-    forecastContainer.appendChild(row);
+    forecastContainer.appendChild(buildKpiInputRow(field, 'entry-'));
   });
   bindKpiInputs(forecastContainer);
 }
@@ -583,7 +600,8 @@ function renderMonthlyKgiProgress(entries, budget) {
   const yesterday = addCalendarDays(today, -1);
   const prevTotals = calcMonthlyTotals(entries.filter(e => e.date <= yesterday));
 
-  const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
+  // 活動内訳は目標を持たないので進捗バーが出せない。除外しないと「目標未設定」の行が並ぶ
+  const rows = KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity').map(f => {
     const actual = totals[f.key] || 0;
     const plan = budget ? (budget[f.key] || 0) : 0;
     const actualStr = formatKpiValue(actual, f);
@@ -636,11 +654,12 @@ function renderWeeklyKgiProgress(entries, budget) {
   const weekStart = getWeekStartJST();
   const weekEntries = entries.filter(e => e.date >= weekStart);
   const weekTotals = {};
-  KGI_FIELDS.filter(f => f.color === 'cyan').forEach(f => {
+  KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity').forEach(f => {
     weekTotals[f.key] = weekEntries.reduce((s, e) => s + (e[f.key] || 0), 0);
   });
 
-  const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
+  // 活動内訳は目標を持たないので除外（月次ゲージと同じ理由）
+  const rows = KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity').map(f => {
     const actual = weekTotals[f.key] || 0;
     const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
     const actualStr = formatKpiValue(actual, f);
@@ -990,7 +1009,8 @@ function renderPaceLine(elId, params) {
 }
 
 function renderKpiChart(totals, budget) {
-  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan');
+  // 達成率チャート。活動内訳は目標が無く常に0%になるため除外する
+  const kpiFields = KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity');
 
   const labels = [];
   const rates = [];
@@ -1308,9 +1328,19 @@ async function ensureHistData() {
   _ensureHistDataPromise = getAllData().then(function(data) {
     const dateMap = new Map();
     (Array.isArray(data.entries) ? data.entries : []).forEach(function(e) { dateMap.set(e.date, e); });
+
+    // budget も同月の重複行を1本に潰す。Map.set は後勝ちなので「最後の行」が残り、
+    // GAS の getBudgetImpl（filtered[length-1] を返す）と同じ行を採用することになる。
+    // これをやらないと renderMonthlyView の .find() が1行目（古い値）を引き、
+    // sumBudgets は全行を合算して四半期・年次の目標が膨らむ。
+    const budgetMap = new Map();
+    (Array.isArray(data.budgets) ? data.budgets : []).forEach(function(b) {
+      budgetMap.set(String(b.yearMonth || '').slice(0, 7), b);
+    });
+
     historyState.allData = {
       entries: [...dateMap.values()],
-      budgets: Array.isArray(data.budgets) ? data.budgets : [],
+      budgets: [...budgetMap.values()],
     };
     _ensureHistDataPromise = null;
   }).catch(function(err) {
@@ -1401,6 +1431,47 @@ function calcTagFrequency(entries, topN) {
     .map(tag => ({ tag, count: counts[tag] }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ja'));
   return topN ? list.slice(0, topN) : list;
+}
+
+/**
+ * 件数KPIを合計し、多い順に並べて返す。0件の項目は含めない。
+ * 対象は COUNT_FIELDS（金額でない cyan 項目すべて）＝点検件数なども含む。
+ * 「何に時間を使っているか」を見るのが目的なので、活動4項目だけに絞らない。
+ * @param {Object[]} entries
+ * @returns {{label: string, count: number, unit: string}[]}
+ */
+function calcActivityRanking(entries) {
+  return COUNT_FIELDS
+    .map(f => ({
+      label: f.label,
+      unit:  f.unit,
+      count: (entries || []).reduce((s, e) => s + (Number(e[f.key]) || 0), 0),
+    }))
+    .filter(r => r.count > 0)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ja'));
+}
+
+/**
+ * 活動内訳（多い順）のHTMLを返す。実績が1件も無ければ空文字。
+ * バーは最大値を100%とした相対幅。
+ * @param {Object[]} entries
+ */
+function buildActivityRankRow(entries) {
+  const list = calcActivityRanking(entries);
+  if (list.length === 0) return '';
+  const max = list[0].count;
+  const rows = list.map((r, i) => `
+      <div class="activity-rank-row">
+        <span class="activity-rank-no">${i + 1}</span>
+        <span class="activity-rank-label">${_escapeHtml(r.label)}</span>
+        <span class="activity-rank-count">${formatNumber(r.count)}${r.unit}</span>
+        <div class="progress-bar activity-rank-bar">
+          <div class="progress-fill cyan" style="width:${Math.round(r.count / max * 100)}%"></div>
+        </div>
+      </div>`).join('');
+  return `<div class="activity-rank">
+      <div class="activity-rank-title">活動内訳（多い順）</div>${rows}
+    </div>`;
 }
 
 /**
@@ -1515,6 +1586,7 @@ function renderWeeklyView(entries) {
         <span class="hist-entry-meta-item">${week.entries.length}日分のデータ</span>
       </div>
       ${buildTagTopRow(week.entries)}
+      ${buildActivityRankRow(week.entries)}
     </div>`;
   }).join('');
 }
@@ -1540,6 +1612,7 @@ function renderMonthlyView(entries, budgets) {
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
       ${buildTagTopRow(mEntries)}
+      ${buildActivityRankRow(mEntries)}
     </div>`;
   });
   content.innerHTML = cards.length > 0 ? cards.join('') : `<div class="hist-empty">${year}年のデータはありません</div>`;
@@ -1606,6 +1679,7 @@ function renderQuarterlyView(entries, budgets) {
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
       ${buildTagTopRow(qEntries)}
+      ${buildActivityRankRow(qEntries)}
       ${monthBreakdown}
     </div>`;
   });
@@ -1641,6 +1715,7 @@ function renderYearlyView(entries, budgets) {
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
       ${buildTagTopRow(yEntries)}
+      ${buildActivityRankRow(yEntries)}
     </div>`;
   }).join('');
 }
@@ -1850,9 +1925,9 @@ function renderCompareChart(info) {
   const { currentLabel, prevLabel, currentEntries, prevEntries } = info;
   const currTotals = calcMonthlyTotals(currentEntries);
   const prevTotals = calcMonthlyTotals(prevEntries);
-  const countFields = KGI_FIELDS.filter(f => f.color === 'cyan' && !f.money);
+  const countFields = COUNT_FIELDS;
   const labels = countFields.map(f =>
-    f.label.replace('保守継続', '保守').replace('エアコン洗浄', 'AC洗浄').replace('フルメンテリース', 'フルメンテ').replace('営業トスアップ', 'トスアップ')
+    f.label.replace('保守継続', '保守').replace('エアコン洗浄', 'AC洗浄').replace('フルメンテリース', 'フルメンテ').replace('営業トスアップ', 'トスアップ').replace('再診断・再調整', '再診断')
   );
   const currData = countFields.map(f => currTotals[f.key] || 0);
   const prevData = countFields.map(f => prevTotals[f.key] || 0);
@@ -1934,8 +2009,13 @@ const reportSettings = {
   proposalCollection: true,
   resultConversion: true,
   production: true,
+  faultDiagnosis: true,
+  remainingRepair: true,
+  delivery: true,
+  rediagnosis: true,
   // その他セクション
   actionTagTop: true,
+  activityRank: true,
   trustScore: true,
   importantNotes: true,
   insights: true,
@@ -1946,6 +2026,7 @@ const reportSettings = {
 
 const REPORT_EXTRA_FIELDS = [
   { key: 'actionTagTop',   label: '行動タグTOP3' },
+  { key: 'activityRank',   label: '活動内訳（多い順）' },
   { key: 'trustScore',     label: '信頼関係指数' },
   { key: 'importantNotes', label: '重要メモ' },
   { key: 'insights',       label: '気づき' },
@@ -2000,6 +2081,7 @@ async function handleExportAllCsv() {
       '当月保守継続', '次月保守継続', '次々月保守継続',
       '新規保守', 'AC洗浄', 'フルメンテ', 'トスアップ',
       'トスアップ金額', '提案回収', '実績化', '増産',
+      '故障診断', '残修理', '納品', '再診断・再調整',
       '信頼関係アクション', 'ポジFB', 'ネガFB', 'Trust指数',
       '訪問先', 'メモ', '重要', '気づき', '次の一手',
       '末見額(個人)', '末見額(営業所)',
@@ -2023,6 +2105,10 @@ async function handleExportAllCsv() {
         e.proposalCollection || 0,
         e.resultConversion || 0,
         e.production || 0,
+        e.faultDiagnosis || 0,
+        e.remainingRepair || 0,
+        e.delivery || 0,
+        e.rediagnosis || 0,
         actions.join('|'),
         e.positiveFeedback || 0,
         e.negativeFeedback || 0,
@@ -2148,6 +2234,14 @@ function _buildPrintHtml({ title, periodText, today, cmpHtml, histHtml }) {
     '.cmp-chart-wrap{margin-top:8px;text-align:center}' +
     /* 非表示要素 */
     '.hist-compare-btn,.report-controls,.hist-controls,.streak-badge,.dash-gauge-wrap{display:none}' +
+    '.activity-rank{border-top:1px solid #ccc;margin-top:12px;padding-top:10px}' +
+    '.activity-rank-title{color:#333;font-size:13px;font-weight:700;margin-bottom:8px}' +
+    '.activity-rank-row{display:grid;grid-template-columns:18px 1fr auto;align-items:center;column-gap:8px;row-gap:4px;padding:3px 0}' +
+    '.activity-rank-no{color:#888;font-size:11px;text-align:right}' +
+    '.activity-rank-label{color:#333;font-size:13px}' +
+    '.activity-rank-count{color:#111;font-size:13px;font-weight:700}' +
+    '.activity-rank-bar{grid-column:2/4;height:5px;border-radius:4px;overflow:hidden;background-color:#e5e7eb}' +
+    '.activity-rank-bar .progress-fill{height:100%;border-radius:4px;background-color:#0088aa}' +
     '</style></head><body>' +
     '<div class="print-header">' +
     '<div class="print-title">' + title + '</div>' +
@@ -2480,6 +2574,13 @@ function buildWeeklyReportText(week, yearMonth) {
       lines.push('  ' + tagTop.map(t => `${t.tag} ${t.count}件`).join(' / '));
     }
   }
+  if (reportSettings.activityRank) {
+    const rank = calcActivityRanking(week.entries);
+    if (rank.length > 0) {
+      lines.push('■ 活動内訳（多い順）');
+      lines.push('  ' + rank.map(r => `${r.label} ${formatNumber(r.count)}${r.unit}`).join(' / '));
+    }
+  }
   if (reportSettings.trustScore) {
     lines.push('■ 信頼関係指数');
     lines.push(`  Trust: ${trust}pt（アクション${allActions.length}件×2 + ポジFB${pos}件×5 - ネガFB${neg}件×3）`);
@@ -2528,6 +2629,13 @@ function buildMonthlyReportText(ym, mEntries, budget) {
     if (tagTop.length > 0) {
       lines.push('■ 行動タグTOP3');
       lines.push('  ' + tagTop.map(t => `${t.tag} ${t.count}件`).join(' / '));
+    }
+  }
+  if (reportSettings.activityRank) {
+    const rank = calcActivityRanking(mEntries);
+    if (rank.length > 0) {
+      lines.push('■ 活動内訳（多い順）');
+      lines.push('  ' + rank.map(r => `${r.label} ${formatNumber(r.count)}${r.unit}`).join(' / '));
     }
   }
   if (reportSettings.trustScore) {
@@ -2587,9 +2695,22 @@ const KGI_FIELDS = [
   { key: 'proposalCollection',    label: '提案回収',         unit: '円', money: true, color: 'cyan' },
   { key: 'resultConversion',      label: '実績化',           unit: '円', money: true, color: 'cyan' },
   { key: 'production',            label: '増産',             unit: '円', money: true, color: 'cyan' },
+  // group:'activity' は「月間目標を持たない活動項目」。日々どの作業に時間を使ったかの
+  // 可視化用で、記録と「活動内訳（多い順）」ランキングにだけ使う。
+  // color:'cyan' を付けてあるので入力・保存・差分計算・履歴集計・CSV・上長報告は自動対応する。
+  // 目標に関わるUI（月次/週次ゲージ・達成率チャート・KGI設定タブ）からは
+  // f.group !== 'activity' で除外すること。除外を忘れると「目標未設定」の行が生える。
+  { key: 'faultDiagnosis',        label: '故障診断',         unit: '件', color: 'cyan', group: 'activity' },
+  { key: 'remainingRepair',       label: '残修理',           unit: '件', color: 'cyan', group: 'activity' },
+  { key: 'delivery',              label: '納品',             unit: '件', color: 'cyan', group: 'activity' },
+  { key: 'rediagnosis',           label: '再診断・再調整',   unit: '件', color: 'cyan', group: 'activity' },
   { key: 'personalPlan',          label: '個人計画額',       unit: '円', money: true, color: 'emerald' },
   { key: 'officePlan',            label: '営業所計画額',     unit: '円', money: true, color: 'amber' },
 ];
+
+// 件数（金額でない）のKPI。活動内訳ランキングと期間比較チャートが同じ定義を使う。
+// 同じ意味のフィルタ式を2箇所に書くと、項目を足したとき片方だけ直して食い違う。
+const COUNT_FIELDS = KGI_FIELDS.filter(f => f.color === 'cyan' && !f.money);
 
 // ------------------------------------------------------------------
 // 行動タグ編集（KGI設定タブ）
@@ -2730,7 +2851,8 @@ function buildKgiFields() {
   container.innerHTML = '';
 
   const groups = [
-    { color: 'cyan',    fields: KGI_FIELDS.filter(f => f.color === 'cyan') },
+    // 活動内訳は月間目標を設定しない決定なので、目標入力欄を出さない
+    { color: 'cyan',    fields: KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity') },
     { color: 'emerald', fields: KGI_FIELDS.filter(f => f.color === 'emerald') },
     { color: 'amber',   fields: KGI_FIELDS.filter(f => f.color === 'amber') },
   ];
