@@ -120,6 +120,12 @@ function parseSalesPlan(workbook) {
     return isNaN(p) ? 0 : p;
   }
 
+  // セルが空かどうか（0との区別のため、値の有無そのものを見る）
+  function _cellEmpty(col, row) {
+    var cell = ws[col + row];
+    return !cell || cell.v === undefined || cell.v === null || String(cell.v).trim() === '';
+  }
+
   var year  = Math.round(_nAddr(SALESPLAN_MAP.singletons.yearMonth_year));
   var month = Math.round(_nAddr(SALESPLAN_MAP.singletons.yearMonth_month));
   var yearMonth = (year > 2000 && month >= 1 && month <= 12)
@@ -160,11 +166,28 @@ function parseSalesPlan(workbook) {
     return obj;
   });
 
+  // KGIタブ9項目のうち、取込元セルが空だった項目を検出（inspectionPlanAmountは元々対応セルが無いため対象外）
+  var missingFields = [];
+  var pRow = r.office.personal, oRow = r.office.other;
+  var renewalUnitsEmpty  = _cellEmpty(cP.renewalPlanUnits,  pRow);
+  var renewalAmountEmpty = _cellEmpty(cP.renewalPlanAmount, pRow);
+  var newUnitsEmpty      = _cellEmpty(cP.newPlanUnits,      pRow);
+  var newAmountEmpty     = _cellEmpty(cP.newPlanAmount,     pRow);
+  if (_cellEmpty(cP.inspectionPlanUnits, pRow)) missingFields.push('inspectionPlanUnits');
+  if (renewalUnitsEmpty)  missingFields.push('renewalPlanUnits');
+  if (renewalAmountEmpty) missingFields.push('renewalPlanAmount');
+  if (newUnitsEmpty)      missingFields.push('newPlanUnits');
+  if (newAmountEmpty)     missingFields.push('newPlanAmount');
+  if (_cellEmpty(cO.totalSalesPlan, oRow)) missingFields.push('totalSalesPlan');
+  if (renewalUnitsEmpty  && newUnitsEmpty)  missingFields.push('maintenancePlanUnits');
+  if (renewalAmountEmpty && newAmountEmpty) missingFields.push('maintenancePlanAmount');
+
   return {
-    yearMonth:  yearMonth,
-    office:     officeData,
-    members:    members,
-    source:     'salesPlan',
-    importedAt: new Date().toISOString()
+    yearMonth:     yearMonth,
+    office:        officeData,
+    members:       members,
+    missingFields: missingFields,
+    source:        'salesPlan',
+    importedAt:    new Date().toISOString()
   };
 }

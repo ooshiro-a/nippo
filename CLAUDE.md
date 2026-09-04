@@ -12,7 +12,7 @@ claude
 
 「Nice Serviceman 日報」— 個人向け営業KPI管理SPA。ビルドツール不要のバニラJS + GitHub Pages + Google Sheetsアーキテクチャ。
 
-- **フロントエンド**: index.html + js/{app.js, api.js, utils.js} + css/style.css
+- **フロントエンド**: index.html + js/{app.js, api.js, utils.js, parseDayReport.js, parserConfig.js} + css/style.css
 - **バックエンド**: Google Apps Script (`gas/Code.gs`) — Google Sheetsをデータストアとして使用
 - **デプロイ**: `git push` → GitHub Pages 自動反映（ビルドステップなし）
 - **AI機能**: Gemini API経由でレポート生成（GAS側で実行）
@@ -41,10 +41,42 @@ claude
 | `dashboardChart` | Chart.jsインスタンス（再描画前に必ず `.destroy()` する） |
 
 ### タブ構成 (app.js)
-1. **入力タブ** — 日次KPI入力フォーム（差分入力）
-2. **進捗タブ** — ダッシュボード + Chart.jsゲージ
-3. **履歴タブ** — 日次/週次/月次/四半期/年次ビュー + レポート出力
-4. **KGI設定タブ** — 月次目標設定
+下部ナビで **personal / office** の2セクションを切り替え、各4タブで計8タブ。
+
+**personal（個人）** — entries / budget シート
+1. **入力タブ** — 日次KPI入力フォーム（差分入力）+ 行動タグ + 振り返り
+2. **進捗タブ** — ダッシュボード + Chart.jsゲージ + AIレポート
+3. **履歴タブ** — 日次/週次/月次/四半期/年次ビュー + 期間比較 + レポート出力
+4. **KGI設定タブ** — 月次目標設定 + 行動タグ編集 + 注力事項
+
+**office（営業所）** — officeDaily / officeSalesPlan シート
+1. **取込タブ** — 日計表Excel（毎日）と売上計画Excel（月初）の取込
+2. **進捗タブ** — 月次/週次トグル + AIレポート
+3. **履歴タブ** — 日次〜年次ビュー + 期間比較 + レポート出力
+4. **KGI設定タブ** — 売上計画の手入力補完
+
+個人と営業所は**別の名前空間**。個人は `KGI_FIELDS`、営業所は `_OFFICE_KPI_DEFS` を使う。
+`inspection` など同名のキーが両方に出てくるが別物なので混同しないこと。
+
+### 金額フィールドの扱い（重要）
+- 金額かどうかは `KGI_FIELDS` の **`money: true` フラグ**で判定する。
+  `f.unit === '円'` のような**文字列比較で判定しない**（単位ラベルを変えた瞬間に壊れる）
+- **金額の単位は「円」**。日報スキル定義には「千円統一」とあるが、
+  アプリの実データは円で入っている（例: 個人末見額 2,334,183）。実態が正
+- 表示は `formatKpiValue(value, field)`（utils.js）に統一。単位は `field.unit` に委譲
+- 金額の入力欄はカンマ区切り表示のため `type="text"`。
+  **読み取りは必ず `parseNumericInput()` を通す**。`Number('3,500')` は NaN → 0 になり、
+  入力が無言で消える
+
+### 行動タグ
+- タグ一覧は `userSettings` シートの `actionTags` キー（カンマ区切り）に保存。
+  未設定なら `RELATIONSHIP_ACTIONS`（既定10個）にフォールバック
+- KGI設定タブの「🏷 行動タグ」カードで追加/編集/削除
+- **タグ名にカンマを含めない**（保存形式が `join(',')` のため）
+- 頻度集計 `calcTagFrequency()` は**マスタではなくエントリ実データ**から数える。
+  一覧から削除したタグも過去期間には正しく出る
+- `buildRelationshipTags()` はマスタに無いタグも描画する。描画しないと
+  その日を再保存したときに履歴からタグが消える
 
 ### GAS (gas/Code.gs) の主要関数
 | 関数 | 役割 |
@@ -53,6 +85,7 @@ claude
 | `doPost(e)` | action=saveEntry/saveBudget/deleteEntry/generateReport |
 | `aggregateByDate()` | 差分行を日付ごとに合計する読み取り集計 |
 | `normalizeEntry()` | snake_case→camelCase変換 |
+| `_ensureSheetColumns_()` | 列定義に足りない物理列とヘッダーを自動確保 |
 | `generateReport(type)` | Gemini APIでweekly/monthlyレポート生成 |
 | `weeklyReportTrigger()` | 金曜18時に自動実行 |
 | `monthlyReportTrigger()` | 月末営業日に自動実行 |
@@ -79,8 +112,31 @@ claude
 - Canvas再利用時は `Chart.getChart(canvas)?.destroy()` を必ず呼ぶ
 
 ### Service Worker キャッシュ
-- バージョンは `sw.js` 内の `CACHE_NAME = 'nippo-v17'`
+- バージョンは `sw.js` 内の `CACHE_NAME`
 - JS/CSS変更後は番号を上げないとブラウザにキャッシュが残る
+
+### Sheetsの列追加（重要）
+- `sheetToObjects()` は**ヘッダー行を読まず列位置決め打ち**で読む
+  （`getRange(2, 1, lastRow-1, cols.length)`）
+- `ENTRIES_COLS` / `BUDGET_COLS` に項目を足すときは**必ず末尾に追加**。
+  途中挿入すると既存の全行がその位置から右にずれて総崩れになる
+- 物理列とヘッダーは `_ensureSheetColumns_()` が自動で確保するので手作業は不要
+- 例外は `officeSalesPlan`。こちらは専用実装でヘッダー名マッピングを使う
+
+### 新しい個人KPI項目を追加する手順
+1. `js/app.js` `KGI_FIELDS` に `{ key, label, unit, money?, color: 'cyan' }` を追加
+2. `js/app.js` `reportSettings` にキーを追加（省略時も既定ONだが整合のため）
+3. `js/app.js` 全データCSV（`handleExportAllCsv`）のヘッダー配列と行配列の**両方**に追加
+4. `gas/Code.gs` `ENTRIES_COLS` / `BUDGET_COLS` の**末尾**に snake_case で追加
+5. `gas/Code.gs` `NUMERIC_ENTRY_KEYS` に追加 ← **必須**。漏れると積み上げ集計されず
+   最新行の値だけになる（エラーは出ない）
+6. `gas/Code.gs` `normalizeEntry` / `normalizeBudget` / `KPI_KEYS` / `KPI_LABELS` /
+   `KPI_UNITS` に追加
+7. `sw.js` の `CACHE_NAME` をバンプ
+8. GASを新バージョンでデプロイ
+
+入力フォーム・ゲージ・履歴5ビュー・出力設定・レポートCSV・上長報告・PDF印刷は
+`KGI_FIELDS` 駆動なので**自動で対応する**。
 
 ## Phase3 実装方針（確定仕様）
 
@@ -92,5 +148,8 @@ claude
 | Step15 | Gemini AIレポート（週次・月次） | 完了 |
 | Step16 | 月末自動判定 | 完了 |
 | Step17 | Gmail通知 | 後回し |
+| Step18 | 金額単位のフラグ化 + カンマ入力 | 完了 |
+| Step19 | 行動タグ編集 + 頻度TOP3集計 | 完了 |
+| Step20 | 不足KPI4項目追加（提案回収・トスアップ金額・実績化・増産） | 完了 |
 
 **大きな実装前は必ずPlan Modeで計画確認。**

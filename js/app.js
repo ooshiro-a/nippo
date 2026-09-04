@@ -116,10 +116,14 @@ function updateHeaderDate() {
 // 日次入力タブ
 // ------------------------------------------------------------------
 
+// 行動タグの初期値。KGI設定タブで編集すると userSettings.actionTags が優先される。
 const RELATIONSHIP_ACTIONS = [
   '挨拶', '雑談', '提案', 'お礼', '訪問',
   '電話', 'メール', 'フォロー', '紹介依頼', 'クレーム対応',
 ];
+
+// 実際に入力タブへ描画するタグ一覧。loadActionTags() でサーバー値に差し替わる。
+let actionTagList = RELATIONSHIP_ACTIONS.slice();
 
 // 日付ごとの前回ロード時の累計値（差分計算用）
 const daySnapshot = {};
@@ -131,11 +135,11 @@ function collectInputFormValues() {
   const data = {};
   KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    data[field.key] = el ? el.value : '';
+    data[field.key] = el ? parseNumericInput(el.value) : 0;
   });
   FORECAST_FIELDS.forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    data[field.key] = el ? el.value : '';
+    data[field.key] = el ? parseNumericInput(el.value) : 0;
   });
   data.relationshipActions = Array.from(document.querySelectorAll('#relationship-tags .tag-btn.selected'))
     .map(b => b.textContent).sort().join(',');
@@ -163,6 +167,7 @@ function initInputTab() {
   document.getElementById('entry-date').value = getTodayJST();
   buildInputKpiFields();
   buildRelationshipTags();
+  loadActionTags();
   initCounterBtns();
 
   document.getElementById('entry-notes-important').addEventListener('change', updateNotesImportant);
@@ -170,6 +175,54 @@ function initInputTab() {
   document.getElementById('entry-save-btn').addEventListener('click', handleSaveEntry);
 
   loadEntry(getTodayJST());
+}
+
+/**
+ * KPI入力欄のHTMLを組み立てる。
+ * 金額フィールド(money)はカンマ区切りを表示するため text 入力にする。
+ * type="number" はカンマを含む値を保持できず、value が空文字になってしまう。
+ * 件数フィールドは type="number" のまま（マイナス入力とスピナーを維持するため）。
+ * @param {Object} field - KGI_FIELDS / FORECAST_FIELDS の要素
+ * @param {string} idPrefix - 'entry-' | 'kgi-'
+ * @param {string} [extraAttr] - 追加属性
+ */
+function buildKpiInputHtml(field, idPrefix, extraAttr) {
+  const id = idPrefix + field.key;
+  if (field.money) {
+    return `<input type="text" inputmode="numeric" class="kgi-field-input is-money" id="${id}" value="0" />`;
+  }
+  return `<input type="number" class="kgi-field-input" id="${id}" value="0" ${extraAttr || ''} />`;
+}
+
+/**
+ * KPI入力欄にフォーカス/ブラー挙動を付ける。
+ * 金額欄は focus でカンマを外して素の数値にし、blur でカンマを付け直す。
+ * @param {Element} container
+ */
+function bindKpiInputs(container) {
+  container.querySelectorAll('.kgi-field-input').forEach(input => {
+    const isMoney = input.classList.contains('is-money');
+    input.addEventListener('focus', () => {
+      if (isMoney) input.value = String(parseNumericInput(input.value));
+      input.select();
+    });
+    if (isMoney) {
+      input.addEventListener('blur', () => {
+        input.value = formatNumber(parseNumericInput(input.value));
+      });
+    }
+  });
+}
+
+/**
+ * KPI入力欄に値をセットする（金額欄はカンマ区切りに整形）
+ * @param {HTMLInputElement|null} el
+ * @param {Object} field
+ * @param {number} value
+ */
+function setKpiInputValue(el, field, value) {
+  if (!el) return;
+  el.value = field.money ? formatNumber(value) : value;
 }
 
 function buildInputKpiFields() {
@@ -180,16 +233,13 @@ function buildInputKpiFields() {
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
-        <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" />
+        ${buildKpiInputHtml(field, 'entry-')}
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
     container.appendChild(row);
   });
-  container.querySelectorAll('.kgi-field-input').forEach(input => {
-    input.addEventListener('focus', () => input.select());
-  });
+  bindKpiInputs(container);
 
   // 末見額カードを KPI実績カードの直後に追加
   const forecastCard = document.createElement('div');
@@ -204,27 +254,61 @@ function buildInputKpiFields() {
     row.innerHTML = `
       <span class="kgi-field-label">${field.label}</span>
       <div class="kgi-field-input-wrap">
-        <input type="number" class="kgi-field-input" id="entry-${field.key}"
-               value="0" />
+        ${buildKpiInputHtml(field, 'entry-')}
         <span class="kgi-field-unit">${field.unit}</span>
       </div>
     `;
     forecastContainer.appendChild(row);
   });
-  forecastContainer.querySelectorAll('.kgi-field-input').forEach(input => {
-    input.addEventListener('focus', () => input.select());
-  });
+  bindKpiInputs(forecastContainer);
 }
 
-function buildRelationshipTags() {
+/**
+ * 行動タグのチップを描画する。
+ * @param {string[]} [selectedTags] - 選択状態にするタグ。省略時は現在の選択を維持する。
+ *
+ * マスタ(actionTagList)に無いタグ（過去に使っていて後から一覧から削除したもの）も
+ * 末尾に描画する。描画しないとボタンが存在せず、保存時の「.selected を集める」処理から
+ * 漏れて、その日を再保存したときに履歴からタグが消えてしまう。
+ */
+function buildRelationshipTags(selectedTags) {
   const container = document.getElementById('relationship-tags');
-  RELATIONSHIP_ACTIONS.forEach(action => {
+  if (!container) return;
+
+  const selected = selectedTags
+    ? selectedTags.slice()
+    : Array.from(container.querySelectorAll('.tag-btn.selected')).map(b => b.textContent);
+  const selectedSet = new Set(selected);
+  const legacy = selected.filter(t => actionTagList.indexOf(t) === -1);
+
+  container.innerHTML = '';
+  actionTagList.concat(legacy).forEach(action => {
     const btn = document.createElement('button');
-    btn.className = 'tag-btn';
+    btn.className = 'tag-btn' + (selectedSet.has(action) ? ' selected' : '');
     btn.textContent = action;
+    if (legacy.indexOf(action) !== -1) {
+      btn.title = 'タグ一覧から削除済み（この日の記録には残っています）';
+      btn.style.opacity = '0.7';
+    }
     btn.addEventListener('click', () => btn.classList.toggle('selected'));
     container.appendChild(btn);
   });
+}
+
+/**
+ * 行動タグ一覧をサーバー(userSettings)から読み込んで再描画する。
+ * 取得に失敗しても既定タグで動き続ける（入力を止めない）。
+ */
+async function loadActionTags() {
+  try {
+    const s = await getUserSettings();
+    const raw = (s && s.actionTags != null) ? String(s.actionTags) : '';
+    const list = raw.split(',').map(t => t.trim()).filter(Boolean);
+    if (list.length) actionTagList = list;
+  } catch (e) {
+    console.warn('[loadActionTags] 取得失敗。既定タグを使用します:', e);
+  }
+  buildRelationshipTags();
 }
 
 function initCounterBtns() {
@@ -255,8 +339,7 @@ async function loadEntry(date) {
     const entry = entries.find(e => e.date === date);
 
     KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
-      const el = document.getElementById(`entry-${field.key}`);
-      if (el) el.value = 0;
+      setKpiInputValue(document.getElementById(`entry-${field.key}`), field, 0);
     });
 
     FORECAST_FIELDS.forEach(field => {
@@ -269,13 +352,11 @@ async function loadEntry(date) {
           .sort((a, b) => b.date.localeCompare(a.date))[0];
         val = recent ? (recent[field.key] || 0) : 0;
       }
-      el.value = val;
+      setKpiInputValue(el, field, val);
     });
 
     const actions = entry ? (entry.relationshipActions || []) : [];
-    document.querySelectorAll('#relationship-tags .tag-btn').forEach(btn => {
-      btn.classList.toggle('selected', actions.includes(btn.textContent));
-    });
+    buildRelationshipTags(actions);
 
     document.getElementById('positive-count').textContent = 0;
     document.getElementById('negative-count').textContent = 0;
@@ -361,13 +442,13 @@ async function handleSaveEntry() {
 
   KGI_FIELDS.filter(f => f.color === 'cyan').forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    const current = el ? Number(el.value) || 0 : 0;
+    const current = el ? parseNumericInput(el.value) : 0;
     data[field.key] = current - (snap[field.key] || 0);
   });
 
   FORECAST_FIELDS.forEach(field => {
     const el = document.getElementById(`entry-${field.key}`);
-    const current = el ? Number(el.value) || 0 : 0;
+    const current = el ? parseNumericInput(el.value) : 0;
     data[field.key] = current - (snap[field.key] || 0);
   });
 
@@ -505,8 +586,7 @@ function renderMonthlyKgiProgress(entries, budget) {
   const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
     const actual = totals[f.key] || 0;
     const plan = budget ? (budget[f.key] || 0) : 0;
-    const isYen = f.unit === '円';
-    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const actualStr = formatKpiValue(actual, f);
 
     if (plan <= 0) {
       if (actual === 0) return '';
@@ -522,13 +602,14 @@ function renderMonthlyKgiProgress(entries, budget) {
     const rate = Math.round(actual / plan * 100);
     const colorClass = getProgressColorClass(rate);
     const color = getAccentColor(colorClass);
-    const planStr = isYen ? formatCurrency(plan) : formatNumber(plan) + f.unit;
+    const planStr = formatKpiValue(plan, f);
 
     const pace = buildPaceInfo({
       itemKey: f.key,
       plan, actual,
       prevActual: prevTotals[f.key] || 0,
       unit: f.unit,
+      isMoney: !!f.money,
       yearMonth,
       asOfDateStr: today,
     });
@@ -562,8 +643,7 @@ function renderWeeklyKgiProgress(entries, budget) {
   const rows = KGI_FIELDS.filter(f => f.color === 'cyan').map(f => {
     const actual = weekTotals[f.key] || 0;
     const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
-    const isYen = f.unit === '円';
-    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const actualStr = formatKpiValue(actual, f);
 
     if (weekTarget === 0) {
       // 予算未設定: 実績が0の項目はスキップ、あれば目標なしで表示
@@ -580,7 +660,7 @@ function renderWeeklyKgiProgress(entries, budget) {
     const rate = Math.round(actual / weekTarget * 100);
     const colorClass = getProgressColorClass(rate);
     const color = getAccentColor(colorClass);
-    const targetStr = isYen ? formatCurrency(weekTarget) : formatNumber(weekTarget) + f.unit;
+    const targetStr = formatKpiValue(weekTarget, f);
     return `<div class="weekly-gauge-row">
       <div class="weekly-gauge-label">
         <span>${f.label}</span>
@@ -1301,6 +1381,44 @@ function sumBudgets(budgets, yearMonths) {
   return result;
 }
 
+/**
+ * エントリ群から行動タグの出現頻度を降順で返す。
+ * 集計はタグマスタではなくエントリの実データから行うので、
+ * 一覧から削除したタグも過去期間の集計には正しく出る。
+ * @param {Object[]} entries
+ * @param {number} [topN] - 省略で全件
+ * @returns {{tag: string, count: number}[]}
+ */
+function calcTagFrequency(entries, topN) {
+  const counts = {};
+  (entries || []).forEach(e => {
+    (e.relationshipActions || []).forEach(tag => {
+      if (!tag) return;
+      counts[tag] = (counts[tag] || 0) + 1;
+    });
+  });
+  const list = Object.keys(counts)
+    .map(tag => ({ tag, count: counts[tag] }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ja'));
+  return topN ? list.slice(0, topN) : list;
+}
+
+/**
+ * 行動タグTOP N のチップ行HTMLを返す。タグが1件も無ければ空文字。
+ * @param {Object[]} entries
+ * @param {number} [topN=3]
+ */
+function buildTagTopRow(entries, topN) {
+  const top = calcTagFrequency(entries, topN || 3);
+  if (top.length === 0) return '';
+  const chips = top.map(t =>
+    `<span class="hist-entry-meta-item">${_escapeHtml(t.tag)} ${t.count}</span>`
+  ).join('');
+  return `<div class="hist-entry-meta" style="margin-top:6px">
+        <span class="hist-entry-meta-item" style="color:var(--text-muted)">行動タグ</span>${chips}
+      </div>`;
+}
+
 // ------ カード描画ヘルパー ------
 
 function buildKgiSummaryRows(totals, budget) {
@@ -1310,9 +1428,8 @@ function buildKgiSummaryRows(totals, budget) {
     const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
     const color = rate !== null ? getAccentColor(getProgressColorClass(rate)) : 'var(--text-secondary)';
     const rateText = rate !== null ? `<span style="color:${color};font-family:var(--font-mono)">${rate}%</span>` : '';
-    const isYen = field.unit === '円';
-    const actualStr = isYen ? formatCurrency(actual) : formatNumber(actual) + field.unit;
-    const planStr = plan > 0 ? (isYen ? ' / ' + formatCurrency(plan) : ' / ' + formatNumber(plan) + field.unit) : '';
+    const actualStr = formatKpiValue(actual, field);
+    const planStr = plan > 0 ? ' / ' + formatKpiValue(plan, field) : '';
     return `<div class="kgi-field-row">
       <span class="kgi-field-label">${field.label}</span>
       <span style="font-family:var(--font-mono);font-size:13px">${actualStr}${planStr}</span>
@@ -1325,10 +1442,9 @@ function buildDailyCard(entry) {
   const kpiRows = KGI_FIELDS.filter(f => f.color === 'cyan').map(field => {
     const val = entry[field.key] || 0;
     if (val === 0) return '';
-    const isYen = field.unit === '円';
     return `<div class="kgi-field-row">
       <span class="kgi-field-label">${field.label}</span>
-      <span style="font-family:var(--font-mono);font-size:13px">${isYen ? formatCurrency(val) : formatNumber(val) + field.unit}</span>
+      <span style="font-family:var(--font-mono);font-size:13px">${formatKpiValue(val, field)}</span>
     </div>`;
   }).filter(Boolean).join('');
 
@@ -1398,6 +1514,7 @@ function renderWeeklyView(entries) {
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
         <span class="hist-entry-meta-item">${week.entries.length}日分のデータ</span>
       </div>
+      ${buildTagTopRow(week.entries)}
     </div>`;
   }).join('');
 }
@@ -1422,6 +1539,7 @@ function renderMonthlyView(entries, budgets) {
         <span class="hist-entry-meta-item">${mEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
+      ${buildTagTopRow(mEntries)}
     </div>`;
   });
   content.innerHTML = cards.length > 0 ? cards.join('') : `<div class="hist-empty">${year}年のデータはありません</div>`;
@@ -1472,6 +1590,7 @@ function renderQuarterlyView(entries, budgets) {
               <span class="hist-entry-meta-item">${mEntries.length}日分のデータ</span>
               <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${mTrust}pt</span>
             </div>
+            ${buildTagTopRow(mEntries)}
           </div>`;
         });
       if (monthCards.length > 0) {
@@ -1486,6 +1605,7 @@ function renderQuarterlyView(entries, budgets) {
         <span class="hist-entry-meta-item">${qEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
+      ${buildTagTopRow(qEntries)}
       ${monthBreakdown}
     </div>`;
   });
@@ -1520,6 +1640,7 @@ function renderYearlyView(entries, budgets) {
         <span class="hist-entry-meta-item">${yEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
       </div>
+      ${buildTagTopRow(yEntries)}
     </div>`;
   }).join('');
 }
@@ -1661,9 +1782,8 @@ function buildComparisonCard(info) {
     if (curr === 0 && prev === 0) return '';
     const diff = curr - prev;
     const rate = prev !== 0 ? Math.round(diff / prev * 100) : null;
-    const isYen = field.unit === '円';
-    const fmt = v => isYen ? formatCurrency(v) : formatNumber(v) + field.unit;
-    const diffStr = (diff >= 0 ? '+' : '') + (isYen ? formatCurrency(diff) : formatNumber(diff) + field.unit);
+    const fmt = v => formatKpiValue(v, field);
+    const diffStr = (diff >= 0 ? '+' : '') + fmt(diff);
     const rateStr = rate !== null ? (rate >= 0 ? '+' : '') + rate + '%' : '--';
     const cls = diff > 0 ? 'cmp-pos' : diff < 0 ? 'cmp-neg' : '';
     return `<tr>
@@ -1730,7 +1850,7 @@ function renderCompareChart(info) {
   const { currentLabel, prevLabel, currentEntries, prevEntries } = info;
   const currTotals = calcMonthlyTotals(currentEntries);
   const prevTotals = calcMonthlyTotals(prevEntries);
-  const countFields = KGI_FIELDS.filter(f => f.color === 'cyan' && f.unit !== '円');
+  const countFields = KGI_FIELDS.filter(f => f.color === 'cyan' && !f.money);
   const labels = countFields.map(f =>
     f.label.replace('保守継続', '保守').replace('エアコン洗浄', 'AC洗浄').replace('フルメンテリース', 'フルメンテ').replace('営業トスアップ', 'トスアップ')
   );
@@ -1810,7 +1930,12 @@ const reportSettings = {
   acCleaning: true,
   fullMaintenance: true,
   tossUp: true,
+  tossUpAmount: true,
+  proposalCollection: true,
+  resultConversion: true,
+  production: true,
   // その他セクション
+  actionTagTop: true,
   trustScore: true,
   importantNotes: true,
   insights: true,
@@ -1820,6 +1945,7 @@ const reportSettings = {
 };
 
 const REPORT_EXTRA_FIELDS = [
+  { key: 'actionTagTop',   label: '行動タグTOP3' },
   { key: 'trustScore',     label: '信頼関係指数' },
   { key: 'importantNotes', label: '重要メモ' },
   { key: 'insights',       label: '気づき' },
@@ -1873,6 +1999,7 @@ async function handleExportAllCsv() {
       '日付', '点検件数', '促進受注額', '促進件数',
       '当月保守継続', '次月保守継続', '次々月保守継続',
       '新規保守', 'AC洗浄', 'フルメンテ', 'トスアップ',
+      'トスアップ金額', '提案回収', '実績化', '増産',
       '信頼関係アクション', 'ポジFB', 'ネガFB', 'Trust指数',
       '訪問先', 'メモ', '重要', '気づき', '次の一手',
       '末見額(個人)', '末見額(営業所)',
@@ -1892,6 +2019,10 @@ async function handleExportAllCsv() {
         e.acCleaning || 0,
         e.fullMaintenance || 0,
         e.tossUp || 0,
+        e.tossUpAmount || 0,
+        e.proposalCollection || 0,
+        e.resultConversion || 0,
+        e.production || 0,
         actions.join('|'),
         e.positiveFeedback || 0,
         e.negativeFeedback || 0,
@@ -2332,7 +2463,7 @@ function buildWeeklyReportText(week, yearMonth) {
 
   const kpiLines = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false).map(f => {
     const val = totals[f.key] || 0;
-    const formatted = f.unit === '円' ? formatCurrency(val) : formatNumber(val) + f.unit;
+    const formatted = formatKpiValue(val, f);
     return `  ${f.label.padEnd(12, '　')}: ${formatted}`;
   });
 
@@ -2342,6 +2473,13 @@ function buildWeeklyReportText(week, yearMonth) {
     '─────────────────────',
   ];
   if (kpiLines.length > 0) { lines.push('■ KPI実績'); lines.push(...kpiLines); }
+  if (reportSettings.actionTagTop) {
+    const tagTop = calcTagFrequency(week.entries, 3);
+    if (tagTop.length > 0) {
+      lines.push('■ 行動タグTOP3');
+      lines.push('  ' + tagTop.map(t => `${t.tag} ${t.count}件`).join(' / '));
+    }
+  }
   if (reportSettings.trustScore) {
     lines.push('■ 信頼関係指数');
     lines.push(`  Trust: ${trust}pt（アクション${allActions.length}件×2 + ポジFB${pos}件×5 - ネガFB${neg}件×3）`);
@@ -2372,9 +2510,9 @@ function buildMonthlyReportText(ym, mEntries, budget) {
   const kpiLines = KGI_FIELDS.filter(f => f.color === 'cyan' && reportSettings[f.key] !== false).map(f => {
     const actual = totals[f.key] || 0;
     const plan = budget ? (budget[f.key] || 0) : 0;
-    const actualStr = f.unit === '円' ? formatCurrency(actual) : formatNumber(actual) + f.unit;
+    const actualStr = formatKpiValue(actual, f);
     const planStr = plan > 0
-      ? (f.unit === '円' ? ` / ${formatCurrency(plan)}（${Math.round(actual / plan * 100)}%）` : ` / ${formatNumber(plan)}${f.unit}（${Math.round(actual / plan * 100)}%）`)
+      ? ` / ${formatKpiValue(plan, f)}（${Math.round(actual / plan * 100)}%）`
       : '';
     return `  ${f.label.padEnd(12, '　')}: ${actualStr}${planStr}`;
   });
@@ -2385,6 +2523,13 @@ function buildMonthlyReportText(ym, mEntries, budget) {
     '─────────────────────',
   ];
   if (kpiLines.length > 0) { lines.push('■ KPI実績'); lines.push(...kpiLines); }
+  if (reportSettings.actionTagTop) {
+    const tagTop = calcTagFrequency(mEntries, 3);
+    if (tagTop.length > 0) {
+      lines.push('■ 行動タグTOP3');
+      lines.push('  ' + tagTop.map(t => `${t.tag} ${t.count}件`).join(' / '));
+    }
+  }
   if (reportSettings.trustScore) {
     lines.push('■ 信頼関係指数');
     lines.push(`  Trust: ${trust}pt（アクション${allActions.length}件×2 + ポジFB${pos}件×5 - ネガFB${neg}件×3）`);
@@ -2420,14 +2565,16 @@ function showCopyFeedback() {
 // KGI設定タブ
 // ------------------------------------------------------------------
 
+// money:true は金額フィールド。表示は千円（3桁区切り）。
+// 判定を unit の文字列比較でやらないこと（単位ラベルを変えた瞬間に壊れる）。
 const FORECAST_FIELDS = [
-  { key: 'personalUnsettled', label: '個人末見額',   unit: '円' },
-  { key: 'officeUnsettled',   label: '営業所末見額', unit: '円' },
+  { key: 'personalUnsettled', label: '個人末見額',   unit: '円', money: true },
+  { key: 'officeUnsettled',   label: '営業所末見額', unit: '円', money: true },
 ];
 
 const KGI_FIELDS = [
   { key: 'inspection',            label: '点検件数',         unit: '件', color: 'cyan' },
-  { key: 'promotionAmount',       label: '促進受注額',       unit: '円', color: 'cyan' },
+  { key: 'promotionAmount',       label: '促進受注額',       unit: '円', money: true, color: 'cyan' },
   { key: 'promotionCount',        label: '促進件数',         unit: '件', color: 'cyan' },
   { key: 'maintenanceThisMonth',  label: '当月保守継続',     unit: '件', color: 'cyan' },
   { key: 'maintenanceNextMonth',  label: '次月保守継続',     unit: '件', color: 'cyan' },
@@ -2436,9 +2583,114 @@ const KGI_FIELDS = [
   { key: 'acCleaning',            label: 'エアコン洗浄',     unit: '件', color: 'cyan' },
   { key: 'fullMaintenance',       label: 'フルメンテリース', unit: '件', color: 'cyan' },
   { key: 'tossUp',                label: '営業トスアップ',   unit: '件', color: 'cyan' },
-  { key: 'personalPlan',          label: '個人計画額',       unit: '円', color: 'emerald' },
-  { key: 'officePlan',            label: '営業所計画額',     unit: '円', color: 'amber' },
+  { key: 'tossUpAmount',          label: 'トスアップ金額',   unit: '円', money: true, color: 'cyan' },
+  { key: 'proposalCollection',    label: '提案回収',         unit: '円', money: true, color: 'cyan' },
+  { key: 'resultConversion',      label: '実績化',           unit: '円', money: true, color: 'cyan' },
+  { key: 'production',            label: '増産',             unit: '円', money: true, color: 'cyan' },
+  { key: 'personalPlan',          label: '個人計画額',       unit: '円', money: true, color: 'emerald' },
+  { key: 'officePlan',            label: '営業所計画額',     unit: '円', money: true, color: 'amber' },
 ];
+
+// ------------------------------------------------------------------
+// 行動タグ編集（KGI設定タブ）
+// ------------------------------------------------------------------
+
+// 編集中のタグ一覧。保存を押すまで actionTagList には反映しない。
+let _tagEditorDraft = [];
+
+function renderActionTagEditor() {
+  const box = document.getElementById('action-tags-editor');
+  if (!box) return;
+  box.innerHTML = _tagEditorDraft.map((tag, i) => `
+    <div class="tag-editor-row">
+      <input type="text" data-tag-index="${i}" value="${_escapeHtml(tag)}" maxlength="20" />
+      <button class="tag-editor-del" data-tag-del="${i}" title="削除">✕</button>
+    </div>`).join('');
+
+  box.querySelectorAll('input[data-tag-index]').forEach(input => {
+    input.addEventListener('input', () => {
+      _tagEditorDraft[Number(input.dataset.tagIndex)] = input.value;
+    });
+  });
+  box.querySelectorAll('button[data-tag-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _tagEditorDraft.splice(Number(btn.dataset.tagDel), 1);
+      renderActionTagEditor();
+    });
+  });
+}
+
+/**
+ * 編集内容を検証して正規化する。
+ * カンマは保存形式（join(',')）を壊すので必ず弾く。
+ * @returns {{ok: true, tags: string[]} | {ok: false, error: string}}
+ */
+function validateActionTags(draft) {
+  const tags = [];
+  for (const raw of draft) {
+    const tag = String(raw).trim();
+    if (!tag) continue;
+    if (tag.indexOf(',') !== -1 || tag.indexOf('、') !== -1) {
+      return { ok: false, error: `「${tag}」: タグ名にカンマ（, ）は使えません` };
+    }
+    if (tags.indexOf(tag) !== -1) {
+      return { ok: false, error: `「${tag}」が重複しています` };
+    }
+    tags.push(tag);
+  }
+  if (tags.length === 0) return { ok: false, error: 'タグを1つ以上残してください' };
+  return { ok: true, tags };
+}
+
+function initActionTagEditor() {
+  const addBtn  = document.getElementById('action-tag-add-btn');
+  const newInput = document.getElementById('action-tag-new');
+  const saveBtn = document.getElementById('save-action-tags-btn');
+  const status  = document.getElementById('action-tags-status');
+  if (!addBtn || !saveBtn) return;
+
+  const addTag = () => {
+    const v = newInput.value.trim();
+    if (!v) return;
+    _tagEditorDraft.push(v);
+    newInput.value = '';
+    renderActionTagEditor();
+  };
+  addBtn.addEventListener('click', addTag);
+  newInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addTag(); }
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const result = validateActionTags(_tagEditorDraft);
+    if (!result.ok) {
+      status.textContent = '✕ ' + result.error;
+      status.style.color = 'var(--accent-red)';
+      return;
+    }
+    status.style.color = 'var(--text-muted)';
+    status.textContent = '保存中...';
+    saveBtn.disabled = true;
+    try {
+      await saveUserSettings({ key: 'actionTags', value: result.tags.join(',') });
+      actionTagList = result.tags.slice();
+      _tagEditorDraft = result.tags.slice();
+      renderActionTagEditor();
+      // 入力タブのチップも即時に差し替える（選択中のタグは維持される）
+      buildRelationshipTags();
+      status.textContent = '✓ 保存しました';
+    } catch (e) {
+      status.textContent = 'エラー: ' + e.message;
+      status.style.color = 'var(--accent-red)';
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  // 現在の一覧を編集欄へ流し込む
+  _tagEditorDraft = actionTagList.slice();
+  renderActionTagEditor();
+}
 
 function initKgiTab() {
   const monthInput = document.getElementById('kgi-month');
@@ -2463,7 +2715,12 @@ function initKgiTab() {
   });
   getUserSettings().then(function(s) {
     if (s && s.focusItems) document.getElementById('focus-items-input').value = s.focusItems;
+    // loadActionTags() の結果が先に届いている場合に備え、編集欄を最新化する
+    _tagEditorDraft = actionTagList.slice();
+    renderActionTagEditor();
   }).catch(function() {});
+
+  initActionTagEditor();
 
   loadBudget(monthInput.value);
 }
@@ -2488,8 +2745,7 @@ function buildKgiFields() {
       row.innerHTML = `
         <span class="kgi-field-label">${field.label}</span>
         <div class="kgi-field-input-wrap">
-          <input type="number" class="kgi-field-input" id="kgi-${field.key}"
-                 value="0" min="0" inputmode="numeric" />
+          ${buildKpiInputHtml(field, 'kgi-', 'min="0" inputmode="numeric"')}
           <span class="kgi-field-unit">${field.unit}</span>
         </div>
       `;
@@ -2499,9 +2755,7 @@ function buildKgiFields() {
     container.appendChild(card);
   });
 
-  container.querySelectorAll('.kgi-field-input').forEach(input => {
-    input.addEventListener('focus', () => input.select());
-  });
+  bindKpiInputs(container);
 }
 
 async function loadBudget(yearMonth) {
@@ -2511,7 +2765,7 @@ async function loadBudget(yearMonth) {
     console.log('[loadBudget]', yearMonth, '->', data);
     KGI_FIELDS.forEach(field => {
       const el = document.getElementById(`kgi-${field.key}`);
-      if (el) el.value = data ? (data[field.key] ?? 0) : 0;
+      setKpiInputValue(el, field, data ? (data[field.key] ?? 0) : 0);
     });
   } catch (e) {
     console.error('[loadBudget] 失敗:', e);
@@ -2529,7 +2783,7 @@ async function handleSaveBudget() {
   const data = { yearMonth };
   KGI_FIELDS.forEach(field => {
     const el = document.getElementById(`kgi-${field.key}`);
-    data[field.key] = el ? Number(el.value) || 0 : 0;
+    data[field.key] = el ? parseNumericInput(el.value) : 0;
   });
 
   try {
@@ -2984,6 +3238,15 @@ function renderOfficePlanFields() {
 
   var html = '';
 
+  // KGIタブ9項目のうち取込元セルが空だった項目があれば警告（取込自体はブロックしない）
+  var missing = (isOffice && _officeSalesPlanParsed) ? (_officeSalesPlanParsed.missingFields || []) : [];
+  if (missing.length) {
+    html += '<div style="color:var(--accent-amber, #d97706);font-size:12px;margin-bottom:8px">' +
+            '⚠ 以下の項目が日計表上で空欄でした（取込はそのまま実行できます。反映後にKGIタブで手入力してください）：' +
+            missing.map(function(k) { return OFFICE_SALES_PLAN_LABELS[k] || k; }).join('、') +
+            '</div>';
+  }
+
   html += '<div class="office-section"><div class="office-section-title">保守</div>' +
           simpleRow('maintenancePlanUnits') +
           simpleRow('maintenancePlanAmount') +
@@ -3064,14 +3327,20 @@ async function saveOfficePlanFromModal() {
     await saveOfficeSalesPlan([officeEntry].concat(memberEntries));
     closeOfficePlanModal();
 
+    var missing = p.missingFields || [];
     var fb = document.getElementById('office-plan-import-feedback');
     if (fb) {
-      fb.textContent = '✓ 取込完了 (' + ym + ')';
-      fb.style.color = 'var(--accent-emerald)';
+      fb.textContent = missing.length
+        ? '✓ 取込完了 (' + ym + ') ※未入力項目あり: ' + missing.map(function(k) { return OFFICE_SALES_PLAN_LABELS[k] || k; }).join('、')
+        : '✓ 取込完了 (' + ym + ')';
+      fb.style.color = missing.length ? 'var(--accent-amber, #d97706)' : 'var(--accent-emerald)';
       fb.style.fontSize = '13px';
       fb.style.marginTop = '8px';
-      setTimeout(function() { if (fb) fb.textContent = ''; }, 3000);
+      setTimeout(function() { if (fb) fb.textContent = ''; }, 5000);
     }
+
+    // KGIタブが読み込み済みならlocation.reload不使用で最新値に反映（進捗タブと同じ「表示時に再読込」パターンも維持）
+    if (document.getElementById('office-kgi-fields')) loadOfficeKgi();
   } catch (err) {
     alert('保存エラー: ' + err.message);
   } finally {
@@ -4215,33 +4484,63 @@ async function loadOfficeKgi() {
   var ym = el ? el.value : getTodayJST().slice(0, 7);
   container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">読み込み中...</div>';
   try {
-    var plan = await getOfficeSalesPlan(ym);
+    var plan = await getOfficeSalesPlan(ym, 'office');
     renderOfficeSalesPlanFields(plan, ym, container);
   } catch (e) {
+    // 取得エラー（_postの集約エラー検出と連動）: 失敗理由を表示
     _renderError(container, '読み込みエラー: ' + e.message);
   }
 }
 
+var OFFICE_KGI_LABELS = {
+  maintenancePlanUnits:  '保守台数 計画',
+  maintenancePlanAmount: '保守額 計画',
+  inspectionPlanUnits:   '点検台数 計画',
+  inspectionPlanAmount:  '点検額 計画',
+  renewalPlanUnits:      '継続台数 計画',
+  renewalPlanAmount:     '継続額 計画',
+  newPlanUnits:          '新規台数 計画',
+  newPlanAmount:         '新規額 計画',
+  totalSalesPlan:        '売上計画 合計'
+};
+
+function _officeKgiFieldBadge(entry, key) {
+  var manual = Array.isArray(entry.manualFields) && entry.manualFields.indexOf(key) !== -1;
+  if (manual) return '<span class="office-field-badge" style="font-size:11px;color:var(--text-muted);margin-left:6px">手入力</span>';
+  if (entry.importedAt) {
+    var d = new Date(entry.importedAt);
+    if (!isNaN(d.getTime())) {
+      return '<span class="office-field-badge" style="font-size:11px;color:var(--text-muted);margin-left:6px">' +
+             (d.getMonth() + 1) + '/' + d.getDate() + '取込</span>';
+    }
+  }
+  return '';
+}
+
 function renderOfficeSalesPlanFields(plan, ym, container) {
-  var entry = (plan && plan.length) ? plan[0] : {};
-  var LABELS = {
-    maintenancePlanUnits:  '保守台数 計画',
-    maintenancePlanAmount: '保守額 計画',
-    inspectionPlanUnits:   '点検台数 計画',
-    inspectionPlanAmount:  '点検額 計画',
-    renewalPlanUnits:      '継続台数 計画',
-    renewalPlanAmount:     '継続額 計画',
-    newPlanUnits:          '新規台数 計画',
-    newPlanAmount:         '新規額 計画',
-    totalSalesPlan:        '売上計画 合計'
-  };
-  var html = '<div class="office-section">';
-  Object.keys(LABELS).forEach(function(key) {
-    var val = (entry[key] !== undefined && entry[key] !== '') ? entry[key] : 0;
+  // scope='office'で取得済みだが、念のためoffice行のみを明示的に選ぶ（plan[0]決め打ちにしない）
+  var entry = (plan || []).find(function(p) { return p.scope === 'office'; }) || null;
+
+  var noticeHtml = '';
+  if (!entry) {
+    // (a) 該当月データなし: 売上計画が未取込。手入力での保存も可能なので空欄フォームは表示する
+    noticeHtml = '<div style="color:var(--accent-amber, #d97706);font-size:12px;margin-bottom:8px">' +
+                 '売上計画が未取込です。取込タブからアップロードしてください（手入力での保存も可能です）' +
+                 '</div>';
+    entry = {};
+  }
+
+  var html = noticeHtml + '<div class="office-section">';
+  Object.keys(OFFICE_KGI_LABELS).forEach(function(key) {
+    var val   = (entry[key] !== undefined && entry[key] !== '') ? entry[key] : 0;
+    var badge = _officeKgiFieldBadge(entry, key);
+    var hint  = (key === 'inspectionPlanAmount')
+      ? '<div class="office-field-hint" style="font-size:11px;color:var(--text-muted)">※取込データに項目が無いため手入力が必要です</div>'
+      : '';
     html += '<div class="office-field-row">' +
-            '<span class="office-field-label">' + LABELS[key] + '</span>' +
+            '<span class="office-field-label">' + OFFICE_KGI_LABELS[key] + badge + '</span>' +
             '<input class="office-field-input" type="number" step="any" data-key="' + key + '" value="' + val + '">' +
-            '</div>';
+            '</div>' + hint;
   });
   html += '</div>';
   html += '<button class="btn btn-primary" id="office-kgi-save-btn" style="margin-top:12px">保存する</button>';
@@ -4259,10 +4558,13 @@ async function saveOfficeKgi(ym) {
     document.querySelectorAll('#office-kgi-fields .office-field-input').forEach(function(f) {
       fields[f.dataset.key] = parseFloat(f.value) || 0;
     });
+    // source を付けない = 手動保存（既存の取込済みフィールドを消さずマージ、更新項目はmanualFieldsに記録される）
     var entry = Object.assign({ yearMonth: ym, scope: 'office', memberId: '', memberName: '' }, fields);
     await saveOfficeSalesPlan([entry]);
-    if (btn) { btn.textContent = '✓ 保存しました'; }
-    setTimeout(function() { if (btn) { btn.disabled = false; btn.textContent = '保存する'; } }, 2000);
+    var savedBtn = document.getElementById('office-kgi-save-btn');
+    if (savedBtn) { savedBtn.textContent = '✓ 保存しました'; }
+    // 手入力バッジを反映するため最新値を再読込
+    setTimeout(function() { loadOfficeKgi(); }, 800);
   } catch (e) {
     alert('保存エラー: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
@@ -4581,6 +4883,9 @@ async function saveOfficeDailyFromModal() {
     await saveOfficeDaily([officeEntry].concat(memberEntries));
     closeOfficeDailyModal();
 
+    // 進捗タブを即時更新
+    refreshManagement();
+
     // 保存フィードバック
     var fbContainer = document.getElementById('office-daily-import-feedback');
     if (fbContainer) {
@@ -4847,10 +5152,19 @@ function restoreSortOrder(tabId) {
     saved = JSON.parse(localStorage.getItem('sortOrder_' + tabId));
   } catch (ex) { return; }
   if (!Array.isArray(saved) || saved.length === 0) return;
+
+  // 保存順に無いカード（アプリ更新で増えたもの）はDOM順のまま末尾に回す。
+  // 保存済みだけを appendChild すると、新規カードが先頭に押し出されてしまう。
+  var current = Array.prototype.slice.call(tab.querySelectorAll(':scope > .sort-item'));
+  var known   = {};
+  saved.forEach(function(id) { known[id] = true; });
+  var unknown = current.filter(function(el) { return !known[el.dataset.sortId]; });
+
   saved.forEach(function(id) {
     var el = tab.querySelector(':scope > [data-sort-id="' + id + '"]');
     if (el) tab.appendChild(el);
   });
+  unknown.forEach(function(el) { tab.appendChild(el); });
 }
 
 // DOMの準備ができたら起動

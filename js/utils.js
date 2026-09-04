@@ -124,6 +124,31 @@ function formatCurrency(amount) {
 }
 
 /**
+ * KPIフィールド定義に従って値を表示文字列にする。
+ * 単位はフィールドの unit 文字列をそのまま使う。
+ * money フラグは「金額かどうか」の意味付けだけを持ち、表示単位は決めない
+ * （'円' ⇄ '千円' の変更を KGI_FIELDS の1文字列だけで済ませるため）。
+ * @param {number} value
+ * @param {{unit: string, money?: boolean}} field
+ * @returns {string} e.g. "3,500千円" / "12件"
+ */
+function formatKpiValue(value, field) {
+  return formatNumber(value) + field.unit;
+}
+
+/**
+ * カンマ区切り入力欄の値を数値に変換する。
+ * Number('3,500') は NaN になるため、読み取りは必ずこの関数を通す。
+ * マイナス値は Phase3 仕様で許容するので符号は残す。
+ * @param {string|number} s
+ * @returns {number}
+ */
+function parseNumericInput(s) {
+  if (s === null || s === undefined) return 0;
+  return Number(String(s).replace(/,/g, '')) || 0;
+}
+
+/**
  * 指定月の月経過率を返す（0〜100）
  * @param {string} yearMonth - "YYYY-MM"
  * @param {string} [asOfDate] - 基準日 "YYYY-MM-DD"、省略時は今日
@@ -269,13 +294,14 @@ function formatMonthDay(dateStr) {
  * @param {number} params.plan - 月間目標値
  * @param {number} params.actual - 実績累計（基準日時点）
  * @param {number|null} [params.prevActual] - 前日時点の実績累計（前日比表示用、無ければnull）
- * @param {string} params.unit - '円' | '件' | '台' など
+ * @param {string} params.unit - '件' | '台' など（表示用の単位ラベル）
+ * @param {boolean} [params.isMoney] - 金額フィールドなら true（千円表示になる）
  * @param {string} params.yearMonth - "YYYY-MM"
  * @param {string} params.asOfDateStr - 基準日 "YYYY-MM-DD"
  * @returns {{ achieved: boolean, overdue: boolean, text: string, colorClass: string }}
  */
 function buildPaceInfo(params) {
-  const { itemKey, plan, actual, prevActual, unit, yearMonth, asOfDateStr } = params;
+  const { itemKey, plan, actual, prevActual, unit, isMoney, yearMonth, asOfDateStr } = params;
 
   const remaining = plan - actual;
   if (remaining <= 0) {
@@ -294,8 +320,9 @@ function buildPaceInfo(params) {
   }
 
   const requiredPaceRaw = remaining / remainingBizDays;
-  const requiredPace = unit === '円' ? Math.floor(requiredPaceRaw) : Math.ceil(requiredPaceRaw);
-  const paceStr = unit === '円' ? formatCurrency(requiredPace) + '/日' : formatNumber(requiredPace) + unit + '/日';
+  // 金額は切り捨て、件数は切り上げ（件数は「あと1件足りない」を潰したいため）
+  const requiredPace = isMoney ? Math.floor(requiredPaceRaw) : Math.ceil(requiredPaceRaw);
+  const paceStr = formatNumber(requiredPace) + unit + '/日';
 
   const monthStart = yearMonth + '-01';
   const elapsedBizDays = countBusinessDays(monthStart, asOfDateStr);

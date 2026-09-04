@@ -3,3 +3,6 @@ Thumbs.db
 *.log
 .env
 node_modules/
+
+# ローカル確認用の一時設定（セッション固有パスを含むためコミットしない）
+.claude/launch.json

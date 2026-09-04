@@ -29,7 +29,11 @@ var BUDGET_COLS = [
   'full_maintenance',
   'toss_up',
   'personal_plan',
-  'office_plan'
+  'office_plan',
+  'proposal_collection',
+  'toss_up_amount',
+  'result_conversion',
+  'production'
 ];
 
 // entries シートの列順（A列から順に）  ← Phase3: id/timestamp を先頭に追加
@@ -56,7 +60,11 @@ var ENTRIES_COLS = [
   'insight',
   'personal_unsettled',
   'office_unsettled',
-  'next_action'
+  'next_action',
+  'proposal_collection',
+  'toss_up_amount',
+  'result_conversion',
+  'production'
 ];
 
 // 積み上げ計算する数値フィールド（camelCase）
@@ -64,6 +72,7 @@ var NUMERIC_ENTRY_KEYS = [
   'inspection', 'promotionAmount', 'promotionCount',
   'maintenanceThisMonth', 'maintenanceNextMonth', 'maintenanceNext2Month',
   'newAcquisition', 'acCleaning', 'fullMaintenance', 'tossUp',
+  'proposalCollection', 'tossUpAmount', 'resultConversion', 'production',
   'positiveFeedback', 'negativeFeedback'
 ];
 
@@ -120,6 +129,9 @@ function doGet(e) {
     } else if (action === 'getLatestReport') {
       result = getLatestReportImpl(e.parameter.type || '');
 
+    } else if (action === 'getOfficeSalesPlan') {
+      result = getOfficeSalesPlanImpl(e.parameter.yearMonth || '', e.parameter.scope || '');
+
     } else {
       result = { status: 'ok', message: 'Nice Serviceman 日報 API', timestamp: new Date().toISOString() };
     }
@@ -169,6 +181,12 @@ function doPost(e) {
 
     } else if (action === 'saveFeedback') {
       result = saveFeedbackImpl(data);
+
+    } else if (action === 'saveOfficeDaily') {
+      result = saveOfficeDailyImpl(data);
+
+    } else if (action === 'saveOfficeSalesPlan') {
+      result = saveOfficeSalesPlanImpl(data);
 
     } else {
       result = { error: '不明なアクション: ' + action };
@@ -299,6 +317,7 @@ function aggregateByDate(entries) {
  */
 function saveEntryImpl(data) {
   var sheet = getSheet(SHEET_ENTRIES);
+  _ensureSheetColumns_(sheet, ENTRIES_COLS);
   var date  = String(data.date || '');
   if (!date) throw new Error('date が指定されていません');
 
@@ -457,7 +476,42 @@ function getSheet(name) {
   return sheet;
 }
 
+// 1回の実行で同じシートを何度も確認しないためのフラグ（GASは実行ごとにリセットされる）
+var _ensuredSheetCols = {};
+
+/**
+ * シートの物理列数が cols.length に満たなければ列を追加し、
+ * ヘッダー行の空きセルに列名を書き込む。
+ *
+ * 列定義に項目を追加したとき、Sheets側で列を足し忘れると
+ * getRange() が範囲外で例外を投げて全APIが落ちるため、ここで吸収する。
+ * 既存行の新列は空欄のままだが Number('') || 0 → 0 になるので移行不要。
+ */
+function _ensureSheetColumns_(sheet, cols) {
+  var name = sheet.getSheetName();
+  if (_ensuredSheetCols[name]) return;
+  _ensuredSheetCols[name] = true;
+
+  var need = cols.length;
+  var max  = sheet.getMaxColumns();
+  if (max < need) sheet.insertColumnsAfter(max, need - max);
+
+  var header  = sheet.getRange(1, 1, 1, need).getValues()[0];
+  var changed = false;
+  for (var i = 0; i < need; i++) {
+    if (header[i] === '' || header[i] === null || header[i] === undefined) {
+      header[i] = cols[i];
+      changed = true;
+    }
+  }
+  if (changed) {
+    sheet.getRange(1, 1, 1, need).setValues([header]).setFontWeight('bold');
+  }
+}
+
 function sheetToObjects(sheet, cols) {
+  _ensureSheetColumns_(sheet, cols);
+
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
@@ -503,6 +557,17 @@ function dateToYMD(d) {
   return s.slice(0, 10);
 }
 
+/**
+ * yearMonth値を "YYYY-MM" に正規化する。
+ * Sheets側で文字列"YYYY-MM"がDate型に自動変換されているケース（例: officeSalesPlanのyearMonth列）を
+ * 吸収するための共通関数。Date型・文字列型のどちらが来ても同じ結果を返す。
+ */
+function normalizeYearMonth(v) {
+  if (!v) return '';
+  if (v instanceof Date) return dateToYMD(v).slice(0, 7);
+  return String(v).trim().slice(0, 7);
+}
+
 function snakeToCamel(str) {
   return str.replace(/_([a-z])/g, function(_, c) { return c.toUpperCase(); });
 }
@@ -537,7 +602,11 @@ function normalizeEntry(row) {
     insight:                String(row.insight || ''),
     personalUnsettled:      Number(row.personal_unsettled) || 0,
     officeUnsettled:        Number(row.office_unsettled) || 0,
-    nextAction:             String(row.next_action || '')
+    nextAction:             String(row.next_action || ''),
+    proposalCollection:     Number(row.proposal_collection) || 0,
+    tossUpAmount:           Number(row.toss_up_amount) || 0,
+    resultConversion:       Number(row.result_conversion) || 0,
+    production:             Number(row.production) || 0
   };
 }
 
@@ -555,7 +624,11 @@ function normalizeBudget(row) {
     fullMaintenance:        Number(row.full_maintenance) || 0,
     tossUp:                 Number(row.toss_up) || 0,
     personalPlan:           Number(row.personal_plan) || 0,
-    officePlan:             Number(row.office_plan) || 0
+    officePlan:             Number(row.office_plan) || 0,
+    proposalCollection:     Number(row.proposal_collection) || 0,
+    tossUpAmount:           Number(row.toss_up_amount) || 0,
+    resultConversion:       Number(row.result_conversion) || 0,
+    production:             Number(row.production) || 0
   };
 }
 
@@ -628,19 +701,34 @@ function generateReportImpl(data) {
 
   var KPI_KEYS   = ['inspection','promotionAmount','promotionCount',
     'maintenanceThisMonth','maintenanceNextMonth','maintenanceNext2Month',
-    'newAcquisition','acCleaning','fullMaintenance','tossUp'];
+    'newAcquisition','acCleaning','fullMaintenance','tossUp',
+    'proposalCollection','tossUpAmount','resultConversion','production'];
   var KPI_LABELS = {
     inspection:'点検件数', promotionAmount:'促進受注額', promotionCount:'促進件数',
     maintenanceThisMonth:'当月保守継続', maintenanceNextMonth:'次月保守継続',
     maintenanceNext2Month:'次々月保守継続', newAcquisition:'新規保守',
-    acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ'
+    acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ',
+    proposalCollection:'提案回収', tossUpAmount:'トスアップ金額',
+    resultConversion:'実績化', production:'増産'
+  };
+  // 単位はフィールド名の決め打ちではなくこのテーブルを参照する。
+  // 「promotionAmountなら円、それ以外は件」という分岐だと、金額項目を
+  // 増やすたびに漏れて「3,500件」のような出力になる。
+  // 金額は円単位（フロントの KGI_FIELDS の unit と一致させること）。
+  var KPI_UNITS  = {
+    inspection:'件', promotionAmount:'円', promotionCount:'件',
+    maintenanceThisMonth:'件', maintenanceNextMonth:'件',
+    maintenanceNext2Month:'件', newAcquisition:'件',
+    acCleaning:'件', fullMaintenance:'件', tossUp:'件',
+    proposalCollection:'円', tossUpAmount:'円',
+    resultConversion:'円', production:'円'
   };
 
   var sum = function(arr, key) {
     return arr.reduce(function(s, e) { return s + (Number(e[key]) || 0); }, 0);
   };
   var fmt = function(key, v) {
-    return key === 'promotionAmount' ? '¥' + v.toLocaleString() : v + '件';
+    return (Number(v) || 0).toLocaleString() + (KPI_UNITS[key] || '件');
   };
 
   var kpiLines = KPI_KEYS.map(function(key) {
@@ -654,6 +742,24 @@ function generateReportImpl(data) {
                   (cur - prev >= 0 ? '+' : '') + (cur - prev);
     return '  - ' + KPI_LABELS[key] + ': 実績' + fmt(key, cur) + ' / 目標' + fmt(key, plan) + rateStr + compStr;
   }).join('\n');
+
+  // 行動タグ頻度TOP3。ES5環境なので flatMap / Object.entries は使わない。
+  var tagCounts = {};
+  curData.forEach(function(e) {
+    var tags = e.relationshipActions || [];
+    tags.forEach(function(t) {
+      if (!t) return;
+      tagCounts[t] = (tagCounts[t] || 0) + 1;
+    });
+  });
+  var tagTop = Object.keys(tagCounts).map(function(t) {
+    return { tag: t, count: tagCounts[t] };
+  }).sort(function(a, b) { return b.count - a.count; }).slice(0, 3);
+  var tagSection = tagTop.length
+    ? '\n【行動タグ頻度 TOP3】\n' + tagTop.map(function(t) {
+        return '  ・' + t.tag + ': ' + t.count + '件';
+      }).join('\n') + '\n'
+    : '';
 
   var insights    = curData.filter(function(e) { return e.insight; })
     .slice(0, 3).map(function(e) { return '  ・' + e.insight; }).join('\n');
@@ -711,13 +817,14 @@ function generateReportImpl(data) {
     '【今' + pKey + 'の気づき・次の一手】\n' +
     (insights    || '  （記録なし）') + '\n' +
     (nextActions || '') + '\n' +
-    focusSection + lagSection + fbSection +
+    tagSection + focusSection + lagSection + fbSection +
     '\n# 出力形式（厳守）\n' +
     '① 良点\n・〇〇\n・〇〇\n\n' +
     '② 改善点\n・〇〇\n・〇〇\n\n' +
     '③ まとめ\n150〜200文字で簡潔に記載\n\n' +
     (focusItems ? '④ 注力事項の進捗コメント\n注力事項それぞれについて1〜2文で現状を評価\n\n' : '') +
     '⑤ ネクストアクション\n' +
+    (tagTop.length ? '・行動タグの偏り（どの行動に時間を使えていて、どれが不足しているか）に1文触れる\n' : '') +
     (lagSection ? '・遅れ指標について：「残◯日で1日あたり◯件/◯円」形式で具体的に記載\n' : '') +
     (focusItems ? '・注力事項を加速させる行動を1〜2点提案\n' : '') +
     '・その他改善に直結する行動提案';
@@ -1137,7 +1244,7 @@ var OFFICE_SALES_PLAN_COLS = [
   'prepaidNew', 'prepaidCont',
   'callPlan', 'repairPlan', 'serPromoPlan',
   'totalSalesPlan', 'unitPrices', 'annualSalesPlan',
-  'source', 'importedAt'
+  'source', 'importedAt', 'manualFields'
 ];
 
 // officeReports 列順
@@ -1308,66 +1415,164 @@ function deleteOfficeDailyImpl(params) {
 // ──────────────────────────────────────────
 // officeSalesPlan 読み書き
 // ──────────────────────────────────────────
+// officeDaily等の共用 sheetToObjects()（列位置決め打ち）とは切り離し、
+// officeSalesPlan専用にヘッダー行の列名を実際に読んでマッピングする。
+// 列の追加・並び替えがあっても壊れないようにするための専用実装。
+// ──────────────────────────────────────────
+
+/**
+ * シートのヘッダー行（1行目）を読み、列名→0始まりの列インデックスのMapを返す
+ */
+function _getOfficeSalesPlanHeaderMap_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return {};
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var map = {};
+  header.forEach(function(name, i) {
+    if (name !== '' && name !== null && name !== undefined) map[String(name).trim()] = i;
+  });
+  return map;
+}
+
+/**
+ * officeSalesPlanシートに指定の列名がなければ末尾に追加する（移行処理）
+ * @returns {Object} 追加後のヘッダーMap
+ */
+function _ensureOfficeSalesPlanColumn_(sheet, colName) {
+  var map = _getOfficeSalesPlanHeaderMap_(sheet);
+  if (Object.prototype.hasOwnProperty.call(map, colName)) return map;
+  var newColIndex = sheet.getLastColumn() + 1;
+  sheet.getRange(1, newColIndex).setValue(colName);
+  map[colName] = newColIndex - 1;
+  return map;
+}
 
 /**
  * officeSalesPlan を取得
  * @param {string} yearMonth - "YYYY-MM"（省略で全件）
+ * @param {string} scope     - "office" | "member"（省略でoffice+member両方）
  */
-function getOfficeSalesPlanImpl(yearMonth) {
-  var sheet = getSheet(SHEET_OFFICE_SALES_PLAN);
-  var rows  = sheetToObjects(sheet, OFFICE_SALES_PLAN_COLS);
+function getOfficeSalesPlanImpl(yearMonth, scope) {
+  var sheet   = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
 
-  if (yearMonth) {
-    rows = rows.filter(function(r) { return String(r.yearMonth).slice(0, 7) === yearMonth; });
-  }
+  var headerMap = _getOfficeSalesPlanHeaderMap_(sheet);
+  var lastCol   = sheet.getLastColumn();
+  var data      = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
 
-  return rows.map(function(r) {
+  var rows = [];
+  data.forEach(function(row) {
+    if (row.every(function(cell) { return cell === '' || cell === null; })) return;
+
     var obj = {};
     OFFICE_SALES_PLAN_COLS.forEach(function(col) {
-      obj[col] = r[col] !== undefined ? r[col] : '';
+      var idx = headerMap[col];
+      var v   = (idx !== undefined) ? row[idx] : undefined;
+      if (col === 'yearMonth') {
+        obj[col] = normalizeYearMonth(v);
+      } else if (col === 'manualFields') {
+        try { obj[col] = v ? JSON.parse(v) : []; } catch (e) { obj[col] = []; }
+      } else {
+        obj[col] = (v !== undefined && v !== null) ? v : '';
+      }
     });
-    return obj;
+    rows.push(obj);
   });
+
+  if (yearMonth) {
+    var ymNorm = normalizeYearMonth(yearMonth);
+    rows = rows.filter(function(r) { return r.yearMonth === ymNorm; });
+  }
+  if (scope) {
+    rows = rows.filter(function(r) { return r.scope === scope; });
+  }
+
+  return rows;
 }
 
 /**
  * officeSalesPlan を保存（upsert: yearMonth+scope+memberId で一意）
+ *
+ * entry.source が指定されている場合（＝取込由来のデータ）は全項目を上書きし、
+ * manualFields はクリアする（再取込は手入力分も含め全項目上書きする仕様）。
+ * entry.source が無い場合（＝KGIタブからの手動保存）は、渡されたキーのみを
+ * 既存行にマージして更新し、更新したキー名を manualFields に記録する
+ * （取込済みの他フィールドを空文字で消してしまわないようにするため）。
+ *
  * @param {Object[]} entries
  */
 function saveOfficeSalesPlanImpl(entries) {
   if (!Array.isArray(entries)) entries = [entries];
-  var sheet   = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var sheet = getSheet(SHEET_OFFICE_SALES_PLAN);
+  var headerMap = _ensureOfficeSalesPlanColumn_(sheet, 'manualFields');
+  var headerNames = Object.keys(headerMap).sort(function(a, b) { return headerMap[a] - headerMap[b]; });
+  var numCols = headerNames.length;
+
+  var META_KEYS = ['yearMonth', 'scope', 'memberId', 'memberName'];
   var lastRow = sheet.getLastRow();
   var saved   = 0;
 
   entries.forEach(function(entry) {
-    var ym       = String(entry.yearMonth || '');
+    var ym       = normalizeYearMonth(entry.yearMonth);
     var scope    = String(entry.scope || '');
     var memberId = String(entry.memberId || '');
+    var isImport = !!entry.source;
 
-    var newRow = OFFICE_SALES_PLAN_COLS.map(function(col) {
-      var v = entry[col];
-      return v !== undefined && v !== null ? v : '';
-    });
-
+    // 既存行を検索
     var matchRow = -1;
+    var existingRowValues = null;
     if (lastRow >= 2) {
-      var ymIdx     = OFFICE_SALES_PLAN_COLS.indexOf('yearMonth') + 1;
-      var scopeIdx  = OFFICE_SALES_PLAN_COLS.indexOf('scope')     + 1;
-      var memberIdx = OFFICE_SALES_PLAN_COLS.indexOf('memberId')  + 1;
-      var keyRange  = sheet.getRange(2, 1, lastRow - 1, OFFICE_SALES_PLAN_COLS.length).getValues();
-      for (var i = 0; i < keyRange.length; i++) {
-        if (dateToYMD(keyRange[i][ymIdx - 1]).slice(0, 7) === ym &&
-            String(keyRange[i][scopeIdx - 1])          === scope &&
-            String(keyRange[i][memberIdx - 1])         === memberId) {
+      var ymIdx     = headerMap['yearMonth'];
+      var scopeIdx  = headerMap['scope'];
+      var memberIdx = headerMap['memberId'];
+      var range     = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+      for (var i = 0; i < range.length; i++) {
+        if (normalizeYearMonth(range[i][ymIdx]) === ym &&
+            String(range[i][scopeIdx])  === scope &&
+            String(range[i][memberIdx]) === memberId) {
           matchRow = i + 2;
+          existingRowValues = range[i];
           break;
         }
       }
     }
 
+    // 既存値をベースに構築（新規行なら全て空）
+    var base = {};
+    headerNames.forEach(function(col) {
+      base[col] = existingRowValues ? existingRowValues[headerMap[col]] : '';
+    });
+
+    var manualFields = [];
+    try { manualFields = base.manualFields ? JSON.parse(base.manualFields) : []; } catch (e) { manualFields = []; }
+
+    if (isImport) {
+      // 取込：渡された値で全項目を上書きし、手入力マークはクリア
+      headerNames.forEach(function(col) {
+        if (col === 'manualFields') return;
+        var v = entry[col];
+        base[col] = (v !== undefined && v !== null) ? v : '';
+      });
+      manualFields = [];
+    } else {
+      // 手動保存：渡されたキーのみ更新（既存の他フィールドは保持）
+      Object.keys(entry).forEach(function(key) {
+        if (key === 'manualFields' || !Object.prototype.hasOwnProperty.call(headerMap, key)) return;
+        base[key] = entry[key];
+        if (META_KEYS.indexOf(key) === -1 && manualFields.indexOf(key) === -1) {
+          manualFields.push(key);
+        }
+      });
+    }
+
+    base.yearMonth     = ym;
+    base.manualFields  = JSON.stringify(manualFields);
+
+    var newRow = headerNames.map(function(col) { return base[col]; });
+
     if (matchRow > 0) {
-      sheet.getRange(matchRow, 1, 1, newRow.length).setValues([newRow]);
+      sheet.getRange(matchRow, 1, 1, numCols).setValues([newRow]);
     } else {
       sheet.appendRow(newRow);
       lastRow++;
@@ -1442,8 +1647,8 @@ function gasDeleteOfficeDaily(paramsJson) {
   return JSON.stringify(deleteOfficeDailyImpl(params));
 }
 
-function gasGetOfficeSalesPlan(yearMonth) {
-  return JSON.stringify(getOfficeSalesPlanImpl(yearMonth || ''));
+function gasGetOfficeSalesPlan(yearMonth, scope) {
+  return JSON.stringify(getOfficeSalesPlanImpl(yearMonth || '', scope || ''));
 }
 
 function gasSaveOfficeSalesPlan(entriesJson) {
