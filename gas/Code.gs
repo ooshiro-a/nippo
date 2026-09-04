@@ -968,8 +968,10 @@ function generateOfficeReportImpl(data) {
     { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検件数' },
     { key: 'salesActual',          planKey: 'salesPlan',           label: '売上実績' },
     { key: 'salesForecast',        planKey: 'salesPlan',           label: '末見通し' },
+    { key: 'newMaintActual',       planKey: 'newMaintPlan',        label: '新規保守' },
+    { key: 'renewalThisActual',    planKey: 'renewalThisPlan',     label: '当月継続' },
     { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop',  label: '次月継続' },
-    { key: 'totalMaintActual',     planKey: 'totalMaintPlan',      label: '総保守台数' },
+    { key: 'renewalNext2Actual',   planKey: 'renewalNext2Plan',    label: '次々月継続' },
   ];
 
   var kpiLines = KPI_DEFS.map(function(def) {
@@ -999,8 +1001,10 @@ function generateOfficeReportImpl(data) {
     var officeLagDefs = [
       { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検件数',   isMoney: false },
       { key: 'salesActual',          planKey: 'salesPlan',           label: '売上実績',   isMoney: true  },
+      { key: 'newMaintActual',       planKey: 'newMaintPlan',        label: '新規保守',   isMoney: false },
+      { key: 'renewalThisActual',    planKey: 'renewalThisPlan',     label: '当月継続',   isMoney: false },
       { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop',  label: '次月継続',   isMoney: false },
-      { key: 'totalMaintActual',     planKey: 'totalMaintPlan',      label: '総保守台数', isMoney: false },
+      { key: 'renewalNext2Actual',   planKey: 'renewalNext2Plan',    label: '次々月継続', isMoney: false },
     ];
     var officeLagLines = officeLagDefs.filter(function(def) {
       var cur  = n(curEntry, def.key);

@@ -1304,7 +1304,7 @@ async function renderHistContent() {
       renderDailyView(filtered);
     } else if (view === 'weekly') {
       const filtered = entries.filter(e => e.date.startsWith(historyState.yearMonth));
-      renderWeeklyView(filtered);
+      renderWeeklyView(filtered, budgets);
     } else if (view === 'monthly') {
       const filtered = entries.filter(e => e.date.startsWith(String(historyState.year)));
       renderMonthlyView(filtered, budgets);
@@ -1492,19 +1492,86 @@ function buildTagTopRow(entries, topN) {
 
 // ------ カード描画ヘルパー ------
 
-function buildKgiSummaryRows(totals, budget) {
+/**
+ * 期間の総合達成率。月間目標が設定されている項目だけを対象にし、
+ * 各項目の達成率を100%で頭打ちにしてから平均する。
+ *
+ * 上限を付けないと、達成しすぎた1項目が全体の遅れを隠してしまう。
+ * 2026年5月の実データでは、エアコン洗浄400%のせいで上限なしだと58%になるが、
+ * 他8項目は25%以下。上限ありの28%のほうが実態に合う。
+ *
+ * @returns {number|null} 目標が1つも無ければ null
+ */
+function calcOverallRate(totals, budget) {
+  if (!budget) return null;
+  const rates = KGI_FIELDS
+    .filter(f => f.color === 'cyan' && (budget[f.key] || 0) > 0)
+    .map(f => Math.min(Math.round((totals[f.key] || 0) / budget[f.key] * 100), 100));
+  if (!rates.length) return null;
+  return Math.round(rates.reduce((s, r) => s + r, 0) / rates.length);
+}
+
+/**
+ * カード見出し（期間ラベル＋ステータスバッジ＋総合達成率）。
+ * 営業所の _buildOfficeSummaryHeader と同じ見た目・同じCSSクラスを使う。
+ * 目標が無い期間（週次で予算未設定など）はラベルだけ返す。
+ */
+function buildHistSummaryHeader(label, totals, budget) {
+  const overall = calcOverallRate(totals, budget);
+  if (overall === null) {
+    return `<div class="card-title">${label}</div>`;
+  }
+  const cl = getAccentColor(getProgressColorClass(overall));
+  const sLabel = overall >= 100 ? '達成' : overall >= 70 ? '順調' : overall >= 40 ? '注意' : '要注意';
+  return `<div class="mgmt-header">
+      <span class="card-title" style="margin-bottom:0">${label}</span>
+      <span class="ohist-status-badge" style="background:${cl}22;color:${cl};border-color:${cl}60">${sLabel}</span>
+    </div>
+    <div class="ohist-summary-bar">
+      <span style="font-size:11px;color:var(--text-secondary)">総合達成率</span>
+      <span class="ohist-overall-rate" style="color:${cl}">${overall}%</span>
+    </div>`;
+}
+
+/**
+ * @param {Object} totals
+ * @param {Object|null} budget
+ * @param {Object|null} [prevTotals] - 前の期間の合計。渡すと前期比Δを出す
+ */
+function buildKgiSummaryRows(totals, budget, prevTotals) {
   return KGI_FIELDS.filter(f => f.color === 'cyan').map(field => {
     const actual = totals[field.key] || 0;
     const plan = budget ? (budget[field.key] || 0) : 0;
     const rate = plan > 0 ? Math.round(actual / plan * 100) : null;
-    const color = rate !== null ? getAccentColor(getProgressColorClass(rate)) : 'var(--text-secondary)';
+    const colorClass = rate !== null ? getProgressColorClass(rate) : 'gray';
+    const color = rate !== null ? getAccentColor(colorClass) : 'var(--text-secondary)';
     const rateText = rate !== null ? `<span style="color:${color};font-family:var(--font-mono)">${rate}%</span>` : '';
     const actualStr = formatKpiValue(actual, field);
     const planStr = plan > 0 ? ' / ' + formatKpiValue(plan, field) : '';
-    return `<div class="kgi-field-row">
-      <span class="kgi-field-label">${field.label}</span>
-      <span style="font-family:var(--font-mono);font-size:13px">${actualStr}${planStr}</span>
-      ${rateText ? `<span style="min-width:40px;text-align:right">${rateText}</span>` : ''}
+
+    // バーは目標がある項目だけ。18項目すべてに付けるとカードの縦が倍になる
+    const bar = rate !== null
+      ? `<div class="progress-bar hist-kpi-bar"><div class="progress-fill ${colorClass}" style="width:${Math.min(rate, 100)}%"></div></div>`
+      : '';
+
+    let delta = '';
+    if (prevTotals) {
+      const d = actual - (prevTotals[field.key] || 0);
+      if (d !== 0) {
+        const cls = d > 0 ? 'ohist-delta-pos' : 'ohist-delta-neg';
+        delta = `<div class="ohist-delta-row">
+          <span class="ohist-delta-label">前期比</span><span class="${cls}">${d > 0 ? 'Δ＋' : 'Δ−'}${formatKpiValue(Math.abs(d), field)}</span>
+        </div>`;
+      }
+    }
+
+    return `<div class="hist-kpi-item">
+      <div class="kgi-field-row">
+        <span class="kgi-field-label">${field.label}</span>
+        <span style="font-family:var(--font-mono);font-size:13px">${actualStr}${planStr}</span>
+        ${rateText ? `<span style="min-width:40px;text-align:right">${rateText}</span>` : ''}
+      </div>
+      ${bar}${delta}
     </div>`;
   }).join('');
 }
@@ -1564,22 +1631,34 @@ function renderDailyView(entries) {
   content.innerHTML = sorted.map(buildDailyCard).join('');
 }
 
-function renderWeeklyView(entries) {
+function renderWeeklyView(entries, budgets) {
   const content = document.getElementById('hist-content');
   if (entries.length === 0) {
     content.innerHTML = `<div class="hist-empty">この月のデータはありません</div>`;
     return;
   }
   const weeks = groupEntriesByWeek(entries, historyState.yearMonth);
-  content.innerHTML = weeks.map(week => {
-    const totals = calcMonthlyTotals(week.entries);
+
+  // 週次の目標は月間目標の1/3。進捗タブの週次ゲージ（renderWeeklyKgiProgress）と同じ扱い
+  const mBudget = (budgets || []).find(b => b.yearMonth.slice(0, 7) === historyState.yearMonth) || null;
+  let weekBudget = null;
+  if (mBudget) {
+    weekBudget = {};
+    KGI_FIELDS.forEach(f => { weekBudget[f.key] = Math.round((mBudget[f.key] || 0) / 3); });
+  }
+
+  const weekTotals = weeks.map(w => calcMonthlyTotals(w.entries));
+
+  content.innerHTML = weeks.map((week, i) => {
+    const totals = weekTotals[i];
+    const prevTotals = i > 0 ? weekTotals[i - 1] : null;
     const allActions = week.entries.flatMap(e => e.relationshipActions || []);
     const pos = week.entries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
     const neg = week.entries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
     const trust = calcTrustIndex(allActions, pos, neg);
     return `<div class="card">
-      <div class="card-title">${week.label}</div>
-      ${buildKgiSummaryRows(totals, null)}
+      ${buildHistSummaryHeader(week.label, totals, weekBudget)}
+      ${buildKgiSummaryRows(totals, weekBudget, prevTotals)}
       <div class="hist-entry-meta" style="margin-top:10px">
         <span class="hist-entry-meta-item">アクション ${allActions.length}件</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
@@ -1600,13 +1679,20 @@ function renderMonthlyView(entries, budgets) {
     const mEntries = monthMap[ym];
     const totals = calcMonthlyTotals(mEntries);
     const budget = budgets.find(b => b.yearMonth.slice(0, 7) === ym) || null;
+
+    // 前期比は暦の前月。同じ年の中だけで比べる（1月は比較対象なし）
+    const idx = months.indexOf(ym);
+    const prevYm = idx > 0 ? months[idx - 1] : null;
+    const prevTotals = (prevYm && monthMap[prevYm] && monthMap[prevYm].length)
+      ? calcMonthlyTotals(monthMap[prevYm]) : null;
+
     const allActions = mEntries.flatMap(e => e.relationshipActions || []);
     const pos = mEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
     const neg = mEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
     const trust = calcTrustIndex(allActions, pos, neg);
     return `<div class="card">
-      <div class="card-title">${formatYearMonth(ym)}</div>
-      ${buildKgiSummaryRows(totals, budget)}
+      ${buildHistSummaryHeader(formatYearMonth(ym), totals, budget)}
+      ${buildKgiSummaryRows(totals, budget, prevTotals)}
       <div class="hist-entry-meta" style="margin-top:10px">
         <span class="hist-entry-meta-item">${mEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
@@ -1636,6 +1722,12 @@ function renderQuarterlyView(entries, budgets) {
     const totals = calcMonthlyTotals(qEntries);
     const yearMonths = q.months.map(m => `${year}-${m}`);
     const budget = sumBudgets(budgets, yearMonths);
+
+    // 前期比は同じ年の1つ前の四半期
+    const qIdx = allQDefs.findIndex(x => x.key === q.key);
+    const prevQ = qIdx > 0 ? allQDefs[qIdx - 1] : null;
+    const prevTotals = (prevQ && quarters[prevQ.key] && quarters[prevQ.key].length)
+      ? calcMonthlyTotals(quarters[prevQ.key]) : null;
     const allActions = qEntries.flatMap(e => e.relationshipActions || []);
     const pos = qEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
     const neg = qEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
@@ -1703,13 +1795,19 @@ function renderYearlyView(entries, budgets) {
     const totals = calcMonthlyTotals(yEntries);
     const yearMonths = Array.from({ length: 12 }, (_, i) => `${yr}-${String(i + 1).padStart(2, '0')}`);
     const budget = sumBudgets(budgets, yearMonths);
+
+    // 前期比は前年
+    const prevYr = String(Number(yr) - 1);
+    const prevTotals = (yearMap[prevYr] && yearMap[prevYr].length)
+      ? calcMonthlyTotals(yearMap[prevYr]) : null;
+
     const allActions = yEntries.flatMap(e => e.relationshipActions || []);
     const pos = yEntries.reduce((s, e) => s + (e.positiveFeedback || 0), 0);
     const neg = yEntries.reduce((s, e) => s + (e.negativeFeedback || 0), 0);
     const trust = calcTrustIndex(allActions, pos, neg);
     return `<div class="card">
-      <div class="card-title">${yr}年</div>
-      ${buildKgiSummaryRows(totals, budget)}
+      ${buildHistSummaryHeader(yr + '年', totals, budget)}
+      ${buildKgiSummaryRows(totals, budget, prevTotals)}
       <div class="hist-entry-meta" style="margin-top:10px">
         <span class="hist-entry-meta-item">${yEntries.length}日分のデータ</span>
         <span class="hist-entry-meta-item" style="color:var(--accent-rose)">Trust ${trust}pt</span>
@@ -2240,8 +2338,24 @@ function _buildPrintHtml({ title, periodText, today, cmpHtml, histHtml }) {
     '.activity-rank-no{color:#888;font-size:11px;text-align:right}' +
     '.activity-rank-label{color:#333;font-size:13px}' +
     '.activity-rank-count{color:#111;font-size:13px;font-weight:700}' +
-    '.activity-rank-bar{grid-column:2/4;height:5px;border-radius:4px;overflow:hidden;background-color:#e5e7eb}' +
-    '.activity-rank-bar .progress-fill{height:100%;border-radius:4px;background-color:#0088aa}' +
+    '.activity-rank-bar{grid-column:2/4}' +
+    /* 総合達成率ヘッダー */
+    '.mgmt-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}' +
+    '.ohist-status-badge{display:inline-block;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;border:1px solid #999;color:#333}' +
+    '.ohist-summary-bar{display:flex;align-items:center;gap:8px;padding:0 0 8px;border-bottom:1px solid #e5e5e5;margin-bottom:8px}' +
+    '.ohist-overall-rate{font-weight:700;font-size:15px}' +
+    '.ohist-delta-row{font-size:11px;color:#555;padding-top:2px;margin-bottom:4px}' +
+    '.ohist-delta-label{color:#999;margin-right:4px}' +
+    '.ohist-delta-pos{color:#167a16;font-weight:700}.ohist-delta-neg{color:#c00;font-weight:700}' +
+    '.hist-kpi-item{padding-bottom:2px}' +
+    '.hist-kpi-bar{height:5px;margin:2px 0 4px}' +
+    /* バーの色。CSS変数が使えないので実色を書く */
+    '.progress-bar{height:5px;border-radius:4px;overflow:hidden;background-color:#e5e7eb}' +
+    '.progress-fill{height:100%;border-radius:4px;background-color:#0088aa}' +
+    '.progress-fill.green{background-color:#167a16}' +
+    '.progress-fill.cyan{background-color:#0088aa}' +
+    '.progress-fill.amber{background-color:#b45309}' +
+    '.progress-fill.red{background-color:#c00}' +
     '</style></head><body>' +
     '<div class="print-header">' +
     '<div class="print-title">' + title + '</div>' +
@@ -2959,8 +3073,6 @@ var OFFICE_DAILY_LABELS = {
   maintActual:          '保守売上 実績',
   maintNew:             '保守 新規',
   maintCont:            '保守 継続',
-  totalMaintPlan:       '総保守台数 計画',
-  totalMaintActual:     '総保守台数 実績',
   newMaintPlan:         '新規保守台数 計画',
   newMaintActual:       '新規保守台数 実績',
   renewalThisPrev:      '当月継続 前受',
@@ -3028,24 +3140,52 @@ async function refreshManagement() {
   try {
     var today = getTodayJST();
     var ym    = today.slice(0, 7);
-    var rows  = await getOfficeDaily({ dateFrom: ym + '-01', dateTo: ym + '-31', scope: 'office' });
+    // scope を指定しないと office 行と member 行の両方が返る（GAS改修は不要）
+    // 取得は当月分だけにすること。営業所の数値は月内累計で月初にリセットされるため、
+    // 週次の起点（週初より前の最終行）は必ず同じ月の中から取る必要がある。
+    // 前月まで広げると前月末の大きい値との差になり、週次の実績がマイナスになる。
+    var rows  = await getOfficeDaily({ dateFrom: ym + '-01', dateTo: ym + '-31' });
 
     var officeRows = (rows || []).filter(function(r) { return r.scope === 'office'; });
+    var memberRows = (rows || []).filter(function(r) { return r.scope === 'member'; });
     if (!officeRows.length) {
       container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0">日次取込からExcelを取り込むとここに表示されます</div>';
+      _clearOfficeSections();
       return;
     }
 
     officeRows.sort(function(a, b) {
       return String(b.date).slice(0, 10).localeCompare(String(a.date).slice(0, 10));
     });
-    renderManagementDashboard(officeRows[0], officeRows);
+    renderManagementDashboard(officeRows[0], officeRows, memberRows);
   } catch (e) {
     _renderError(container, '読み込みエラー: ' + e.message);
+    _clearOfficeSections();
   }
 }
 
-function renderManagementDashboard(entry, officeRows) {
+var _OFFICE_SECTION_IDS = [
+  'office-sec-promo', 'office-sec-inspection', 'office-sec-sales',
+  'office-sec-maint', 'office-sec-renewal', 'office-sec-next', 'office-sec-chart',
+];
+
+/**
+ * 進捗タブのセクションを個別の .sort-item に書き込む。
+ * 中身が空のセクションは枠ごと隠す（並べ替えハンドルだけが残るのを防ぐ）。
+ */
+function _setOfficeSection(id, html) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = html || '';
+  var item = el.closest('.sort-item');
+  if (item) item.style.display = html ? '' : 'none';
+}
+
+function _clearOfficeSections() {
+  _OFFICE_SECTION_IDS.forEach(function(id) { _setOfficeSection(id, ''); });
+}
+
+function renderManagementDashboard(entry, officeRows, memberRows) {
   var container = document.getElementById('management-container');
   if (!container) return;
 
@@ -3095,12 +3235,77 @@ function renderManagementDashboard(entry, officeRows) {
            '</div>';
   }
 
+  // ── 所員別ブロック ──
+  // 最終取込日の member 行を並べる。週次のときは営業所ゲージと同じ扱いで
+  // 目標を1/3、実績はその週に入った増分にする。
+  var members = (memberRows || [])
+    .filter(function(r) { return String(r.date).slice(0, 10) === lastDate; })
+    .sort(function(a, b) { return String(a.memberId).localeCompare(String(b.memberId)); });
+
+  // 所員ごとの週初ベースライン（週初より前の最終行）
+  var memberBaseline = {};
+  (memberRows || []).forEach(function(r) {
+    var d = String(r.date).slice(0, 10);
+    if (d >= weekStart) return;
+    var id = String(r.memberId);
+    if (!memberBaseline[id] || d > String(memberBaseline[id].date).slice(0, 10)) memberBaseline[id] = r;
+  });
+
+  /**
+   * @param {{label:string, planKey:string, actualKey:string}[]} defs
+   *   1件なら 名前/実績/目標/%/バー、複数なら 名前＋各項目「実績/目標」の表
+   */
+  function memberBlock(defs) {
+    if (!members.length) return '';
+    var single = defs.length === 1;
+
+    function mv(m, d) {
+      var base   = memberBaseline[String(m.memberId)] || null;
+      var plan   = Number(m[d.planKey])   || 0;
+      var actual = Number(m[d.actualKey]) || 0;
+      if (isWeekly) {
+        plan   = Math.round(plan / 3);
+        actual = actual - (base ? (Number(base[d.actualKey]) || 0) : 0);
+      }
+      return { plan: plan, actual: actual, rate: rate(plan, actual) };
+    }
+
+    var head = single ? '' :
+      '<div class="office-member-row office-member-head">' +
+      '<span class="office-member-name"></span>' +
+      defs.map(function(d) { return '<span class="office-member-cell">' + d.label + '</span>'; }).join('') +
+      '</div>';
+
+    var body = members.map(function(m) {
+      var name = _escapeHtml(String(m.memberName || m.memberId || ''));
+      if (single) {
+        var v  = mv(m, defs[0]);
+        var cc = getProgressColorClass(v.rate);
+        return '<div class="office-member-block">' +
+               '<div class="office-member-row">' +
+               '<span class="office-member-name">' + name + '</span>' +
+               '<span class="office-member-cell">' + formatNumber(v.actual) + ' / ' + formatNumber(v.plan) + '</span>' +
+               '<span class="office-member-rate" style="color:' + getAccentColor(cc) + '">' + v.rate + '%</span>' +
+               '</div>' +
+               '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + Math.min(v.rate, 100) + '%"></div></div>' +
+               '</div>';
+      }
+      return '<div class="office-member-row">' +
+             '<span class="office-member-name">' + name + '</span>' +
+             defs.map(function(d) {
+               var v = mv(m, d);
+               return '<span class="office-member-cell" style="color:' + getAccentColor(getProgressColorClass(v.rate)) + '">' +
+                      formatNumber(v.actual) + '/' + formatNumber(v.plan) + '</span>';
+             }).join('') +
+             '</div>';
+    }).join('');
+
+    return '<div class="office-member-list">' +
+           '<div class="office-member-title">所員別</div>' + head + body + '</div>';
+  }
+
   var vsPlanVal   = n('vsPlan');
   var vsPlanPct   = Math.floor(vsPlanVal   < 5 ? vsPlanVal   * 100 : vsPlanVal);
-  var rrVal       = n('renewalRate');
-  var rrPct       = Math.floor(rrVal       < 5 ? rrVal       * 100 : rrVal);
-  var rn2RateVal  = n('renewalNext2Rate');
-  var rn2RatePct  = Math.floor(rn2RateVal  < 5 ? rn2RateVal  * 100 : rn2RateVal);
 
   var monthEnd = yearMonth + '-' + String(new Date(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)), 0).getDate()).padStart(2, '0');
   var remainingBizDays = countBusinessDays(lastDate, monthEnd);
@@ -3113,7 +3318,7 @@ function renderManagementDashboard(entry, officeRows) {
              '</div>';
 
   // 促進
-  html += '<div class="office-section">' +
+  var secPromo = '<div class="office-section">' +
           '<div class="office-section-title">促進</div>' +
           fieldRow('総活動件数', formatNumber(n('activityCount'))) +
           fieldRow('新規促進件数', formatNumber(n('promotionCount'))) +
@@ -3121,7 +3326,7 @@ function renderManagementDashboard(entry, officeRows) {
           '</div>';
 
   // 点検
-  html += '<div class="office-section">' +
+  var secInspection = '<div class="office-section">' +
           '<div class="office-section-title">点検</div>' +
           gaugeBlock('点検', n('inspectionPlan'), n('inspectionActual'), 'office_inspection', '件', pn('inspectionActual'), wn('inspectionActual')) +
           '</div>';
@@ -3131,52 +3336,63 @@ function renderManagementDashboard(entry, officeRows) {
   var prevForecastVal = prevEntry ? _officeSalesForecast(prevEntry) : null;
   var weekForecastVal = forecastVal - (baselineEntry ? _officeSalesForecast(baselineEntry) : 0);
   var fRate = rate(n('salesPlan'), forecastVal);
-  html += '<div class="office-section">' +
+  var secSales = '<div class="office-section">' +
           '<div class="office-section-title">売上</div>' +
           gaugeBlock('売上 実績', n('salesPlan'), n('salesActual'), null, null, null, wn('salesActual')) +
           gaugeBlock('末見通し', n('salesPlan'), forecastVal, 'office_forecast', '円', prevForecastVal, weekForecastVal) +
           fieldRow('A案件', formatNumber(n('salesAcase'))) +
+          fieldRow('保守売上 実績', formatNumber(n('maintActual'))) +
           fieldRow('対計画率', '<span style="color:' + getAccentColor(getProgressColorClass(vsPlanPct)) + '">' + vsPlanPct + '%</span>') +
           '</div>';
 
-  // 保守
-  html += '<div class="office-section">' +
+  // 保守 ＝ 新規保守。継続分は「継続」セクションで見るのでここには入れない
+  var secMaint = '<div class="office-section">' +
           '<div class="office-section-title">保守</div>' +
-          gaugeBlock('総保守台数', n('totalMaintPlan'), n('totalMaintActual'), 'office_totalMaint', '台', pn('totalMaintActual'), wn('totalMaintActual')) +
           gaugeBlock('新規保守台数', n('newMaintPlan'), n('newMaintActual'), 'office_newMaint', '台', pn('newMaintActual'), wn('newMaintActual')) +
-          fieldRow('保守売上 実績', formatNumber(n('maintActual'))) +
-          fieldRow('保守 新規', formatNumber(n('maintNew'))) +
-          fieldRow('保守 継続', formatNumber(n('maintCont'))) +
+          memberBlock([{ label: '新規保守', planKey: 'newMaintPlan', actualKey: 'newMaintActual' }]) +
           '</div>';
 
-  // 継続
-  html += '<div class="office-section">' +
+  // 継続 ＝ 保守の更新が必要なもの。当月→次月→次々月の時間順
+  var secRenewal = '<div class="office-section">' +
           '<div class="office-section-title">継続</div>' +
-          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop'), 'office_renewalNext', '件', pn('renewalNextActualTop'), wn('renewalNextActualTop')) +
           gaugeBlock('当月継続', n('renewalThisPlan'), n('renewalThisActual'), 'office_renewalThis', '件', pn('renewalThisActual'), wn('renewalThisActual')) +
-          fieldRow('当月継続 前受', formatNumber(n('renewalThisPrev'))) +
-          fieldRow('当月継続 計画', formatNumber(n('renewalThisPlan'))) +
-          fieldRow('当月継続 実績', formatNumber(n('renewalThisActual'))) +
-          fieldRow('継続率', '<span style="color:' + getAccentColor(getProgressColorClass(rrPct)) + '">' + rrPct + '%</span>') +
+          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop'), 'office_renewalNext', '件', pn('renewalNextActualTop'), wn('renewalNextActualTop')) +
+          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual'), 'office_renewalNext2', '件', pn('renewalNext2Actual'), wn('renewalNext2Actual')) +
+          memberBlock([
+            { label: '当月',   planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual' },
+            { label: '次月',   planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop' },
+            { label: '次々月', planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual' },
+          ]) +
           '</div>';
 
   // 翌月以降
-  html += '<div class="office-section office-section-next">' +
+  var secNext = '<div class="office-section office-section-next">' +
           '<div class="office-section-title">翌月以降</div>' +
           fieldRow('翌月分 受注残', formatNumber(n('nextMonthBacklog'))) +
           fieldRow('翌月案件', formatNumber(n('nextMonthCase'))) +
-          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual'), 'office_renewalNext2', '件', pn('renewalNext2Actual'), wn('renewalNext2Actual')) +
-          fieldRow('次々月継続受注率', '<span style="color:' + getAccentColor(getProgressColorClass(rn2RatePct)) + '">' + rn2RatePct + '%</span>') +
           '</div>';
 
   // KPIチャート
-  html += '<div class="card" style="margin-top:10px">' +
+  var secChart = '<div class="card">' +
           '<div class="card-title">KPI達成率</div>' +
           '<div class="office-kpi-wrap"><canvas id="office-kpi-chart"></canvas></div>' +
           '</div>';
 
   container.innerHTML = html;
   _renderKpiAlerts(entry, container);
+
+  _setOfficeSection('office-sec-promo',      secPromo);
+  _setOfficeSection('office-sec-inspection', secInspection);
+  _setOfficeSection('office-sec-sales',      secSales);
+  _setOfficeSection('office-sec-maint',      secMaint);
+  _setOfficeSection('office-sec-renewal',    secRenewal);
+  _setOfficeSection('office-sec-next',       secNext);
+  _setOfficeSection('office-sec-chart',      secChart);
+
+  // 並べ替えハンドルは既存分をスキップするので毎回呼んでよい
+  var tab = document.getElementById('tab-office-dashboard');
+  if (tab && typeof addSortHandles === 'function') addSortHandles(tab);
+
   renderOfficeKpiChart(entry);
 }
 
@@ -3185,7 +3401,7 @@ function _renderKpiAlerts(entry, container) {
     { planKey: 'inspectionPlan',     actualKey: 'inspectionActual',    label: '点検' },
     { planKey: 'salesPlan',          actualKey: 'salesActual',         label: '売上' },
     { planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop',label: '次月継続' },
-    { planKey: 'totalMaintPlan',     actualKey: 'totalMaintActual',    label: '総保守台数' }
+    { planKey: 'newMaintPlan',       actualKey: 'newMaintActual',      label: '新規保守台数' }
   ];
   var alerts = WATCH.filter(function(w) {
     var plan   = Number(entry[w.planKey])   || 0;
@@ -3214,8 +3430,10 @@ function renderOfficeKpiChart(entry) {
     { label: '点検',      rate: pct(n('inspectionPlan'),      n('inspectionActual')) },
     { label: '売上',      rate: pct(n('salesPlan'),           n('salesActual')) },
     { label: '末見通し',  rate: pct(n('salesPlan'),           _officeSalesForecast(entry)) },
-    { label: '総保守台数', rate: pct(n('totalMaintPlan'),     n('totalMaintActual')) },
-    { label: '次月継続',  rate: pct(n('renewalNextPlanTop'),  n('renewalNextActualTop')) }
+    { label: '新規保守',  rate: pct(n('newMaintPlan'),        n('newMaintActual')) },
+    { label: '当月継続',  rate: pct(n('renewalThisPlan'),     n('renewalThisActual')) },
+    { label: '次月継続',  rate: pct(n('renewalNextPlanTop'),  n('renewalNextActualTop')) },
+    { label: '次々月継続', rate: pct(n('renewalNext2Plan'),   n('renewalNext2Actual')) }
   ].filter(function(item) { return item.rate > 0; });
 
   if (!items.length) return;
@@ -3479,19 +3697,26 @@ function _officeSalesForecast(e) {
   return (Number(e.salesActual) || 0) + (Number(e.salesAcase) || 0);
 }
 
+// 営業所の履歴タブ・出力が使うKPI定義。進捗タブのセクション構成と1対1で対応させる。
+// 「保守」は新規保守のこと（継続は含まない）。総保守台数は所員合計と営業所行が
+// 一致しないため 2026-09-05 に全画面から外した（データ列は残してある）。
 var _OFFICE_KPI_DEFS = [
-  { id: 'inspection', label: '点検',    planKey: 'inspectionPlan',    actualKey: 'inspectionActual',    unit: '件' },
-  { id: 'sales',      label: '売上',    planKey: 'salesPlan',         actualKey: 'salesActual',         unit: '円',
+  { id: 'inspection',   label: '点検',     planKey: 'inspectionPlan',     actualKey: 'inspectionActual',     unit: '件' },
+  { id: 'sales',        label: '売上',     planKey: 'salesPlan',          actualKey: 'salesActual',          unit: '円',
     forecastCalc: _officeSalesForecast, showForecast: true },
-  { id: 'renewal',    label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
-  { id: 'maint',      label: '保全',    planKey: 'totalMaintPlan',    actualKey: 'totalMaintActual',    unit: '件' },
+  { id: 'newMaint',     label: '新規保守', planKey: 'newMaintPlan',       actualKey: 'newMaintActual',       unit: '台' },
+  { id: 'renewalThis',  label: '当月継続', planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '件' },
+  { id: 'renewal',      label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
+  { id: 'renewalNext2', label: '次々月継続', planKey: 'renewalNext2Plan', actualKey: 'renewalNext2Actual',   unit: '件' },
 ];
 
 var officeReportSettings = {
   inspection:   true,
   sales:        true,
+  newMaint:     true,
+  renewalThis:  true,
   renewal:      true,
-  maint:        true,
+  renewalNext2: true,
   showDelta:    true,
   showForecast: true,
 };
@@ -3991,7 +4216,9 @@ function _getOfficePrevPeriodInfo(view) {
     if (!list.length) return null;
     const s = { inspectionPlan:0, inspectionActual:0, salesPlan:0, salesActual:0,
                 salesAcase:0, renewalNextPlanTop:0, renewalNextActualTop:0,
-                totalMaintPlan:0, totalMaintActual:0 };
+                newMaintPlan:0, newMaintActual:0,
+                renewalThisPlan:0, renewalThisActual:0,
+                renewalNext2Plan:0, renewalNext2Actual:0 };
     list.forEach(function(r) {
       Object.keys(s).forEach(function(k) { s[k] += (Number(r[k]) || 0); });
     });
@@ -4081,10 +4308,14 @@ const OFFICE_CMP_METRICS = [
   { key: 'salesPlan',            label: '売上計画',     unit: '万円' },
   { key: 'salesActual',          label: '売上実績',     unit: '万円' },
   { key: 'salesForecast',        label: '末見通し',     unit: '万円' },
+  { key: 'newMaintPlan',         label: '新規保守計画', unit: '台' },
+  { key: 'newMaintActual',       label: '新規保守実績', unit: '台' },
+  { key: 'renewalThisPlan',      label: '当月継続計画', unit: '件' },
+  { key: 'renewalThisActual',    label: '当月継続実績', unit: '件' },
   { key: 'renewalNextPlanTop',   label: '次月継続計画', unit: '件' },
   { key: 'renewalNextActualTop', label: '次月継続実績', unit: '件' },
-  { key: 'totalMaintPlan',       label: '総保守計画',   unit: '件' },
-  { key: 'totalMaintActual',     label: '総保守実績',   unit: '件' },
+  { key: 'renewalNext2Plan',     label: '次々月継続計画', unit: '件' },
+  { key: 'renewalNext2Actual',   label: '次々月継続実績', unit: '件' },
 ];
 
 function _buildOfficeComparisonCard(info) {
@@ -4128,8 +4359,8 @@ function _renderOfficeCompareChart(info) {
   const canvas = document.getElementById('office-cmp-chart');
   if (!canvas) return;
   if (_officeCompareChart) { _officeCompareChart.destroy(); _officeCompareChart = null; }
-  const labels = ['点検計画', '点検実績', '次月継続計画', '次月継続実績', '総保守計画', '総保守実績'];
-  const keys   = ['inspectionPlan', 'inspectionActual', 'renewalNextPlanTop', 'renewalNextActualTop', 'totalMaintPlan', 'totalMaintActual'];
+  const labels = ['点検計画', '点検実績', '新規保守計画', '新規保守実績', '当月継続計画', '当月継続実績', '次月継続計画', '次月継続実績'];
+  const keys   = ['inspectionPlan', 'inspectionActual', 'newMaintPlan', 'newMaintActual', 'renewalThisPlan', 'renewalThisActual', 'renewalNextPlanTop', 'renewalNextActualTop'];
   _officeCompareChart = new Chart(canvas, {
     type: 'bar',
     data: {
@@ -4189,8 +4420,10 @@ async function _handleOfficeHistCsv(evt) {
     const csvColDefs = [
       { key: 'inspection', headers: ['点検計画', '点検実績'], vals: function(e) { return [e.inspectionPlan, e.inspectionActual]; } },
       { key: 'sales',      headers: ['売上計画', '売上実績', '末見通し'], vals: function(e) { return [e.salesPlan, e.salesActual, _officeSalesForecast(e)]; } },
-      { key: 'renewal',    headers: ['次月継続計画', '次月継続実績'], vals: function(e) { return [e.renewalNextPlanTop, e.renewalNextActualTop]; } },
-      { key: 'maint',      headers: ['総保守計画', '総保守実績'], vals: function(e) { return [e.totalMaintPlan, e.totalMaintActual]; } },
+      { key: 'newMaint',     headers: ['新規保守計画', '新規保守実績'], vals: function(e) { return [e.newMaintPlan, e.newMaintActual]; } },
+      { key: 'renewalThis',  headers: ['当月継続計画', '当月継続実績'], vals: function(e) { return [e.renewalThisPlan, e.renewalThisActual]; } },
+      { key: 'renewal',      headers: ['次月継続計画', '次月継続実績'], vals: function(e) { return [e.renewalNextPlanTop, e.renewalNextActualTop]; } },
+      { key: 'renewalNext2', headers: ['次々月継続計画', '次々月継続実績'], vals: function(e) { return [e.renewalNext2Plan, e.renewalNext2Actual]; } },
     ].filter(function(col) { return officeReportSettings[col.key] !== false; });
 
     const header = ['日付'].concat(csvColDefs.flatMap(function(c) { return c.headers; }));
@@ -4892,7 +5125,6 @@ function renderOfficeDailyFields() {
   // ── 保守ブロック ─────────────────────────────
   html += '<div class="office-section">' +
           '<div class="office-section-title">保守</div>' +
-          gaugeRow('総保守台数', 'totalMaintPlan', 'totalMaintActual') +
           gaugeRow('新規保守台数', 'newMaintPlan', 'newMaintActual') +
           simpleRow('maintActual') +
           simpleRow('maintNew') +
