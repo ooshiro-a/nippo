@@ -735,8 +735,8 @@ function generateReportImpl(data) {
   // 金額は円単位（フロントの KGI_FIELDS の unit と一致させること）。
   var KPI_UNITS  = {
     inspection:'件', promotionAmount:'円', promotionCount:'件',
-    maintenanceThisMonth:'件', maintenanceNextMonth:'件',
-    maintenanceNext2Month:'件', newAcquisition:'件',
+    maintenanceThisMonth:'台', maintenanceNextMonth:'台',
+    maintenanceNext2Month:'台', newAcquisition:'台',
     acCleaning:'件', fullMaintenance:'件', tossUp:'件',
     proposalCollection:'円', tossUpAmount:'円',
     resultConversion:'円', production:'円',
@@ -960,8 +960,20 @@ function generateOfficeReportImpl(data) {
   var prevEntry = getLatest(prevRows);
 
   var n = function(e, key) { return Number(e[key]) || 0; };
+  // 単位はキーの決め打ち分岐ではなくこの表を見る。
+  // 「salesActual以外は件」のような分岐だと、項目を足すたびに漏れる。
+  // 点検は回数なので「件」、保守と継続は台数なので「台」（あきぼーの業務定義）。
+  var OFFICE_UNITS = {
+    inspectionActual: '件', inspectionPlan: '件',
+    salesActual: '円', salesForecast: '円', salesPlan: '円',
+    newMaintActual: '台', newMaintPlan: '台',
+    renewalThisActual: '台', renewalThisPlan: '台',
+    renewalNextActualTop: '台', renewalNextPlanTop: '台',
+    renewalNext2Actual: '台', renewalNext2Plan: '台'
+  };
   var fmt = function(key, v) {
-    return (key === 'salesActual' || key === 'salesForecast') ? '¥' + v.toLocaleString() : v + '件';
+    var u = OFFICE_UNITS[key] || '件';
+    return u === '円' ? '¥' + v.toLocaleString() : v.toLocaleString() + u;
   };
 
   var KPI_DEFS = [
@@ -999,12 +1011,12 @@ function generateOfficeReportImpl(data) {
     var idealRate2   = bdStats2.total > 0 ? bdStats2.elapsed / bdStats2.total : 0;
     var remainDays2  = bdStats2.total - bdStats2.elapsed;
     var officeLagDefs = [
-      { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検件数',   isMoney: false },
+      { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検件数',   isMoney: false, unit: '件' },
       { key: 'salesActual',          planKey: 'salesPlan',           label: '売上実績',   isMoney: true  },
-      { key: 'newMaintActual',       planKey: 'newMaintPlan',        label: '新規保守',   isMoney: false },
-      { key: 'renewalThisActual',    planKey: 'renewalThisPlan',     label: '当月継続',   isMoney: false },
-      { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop',  label: '次月継続',   isMoney: false },
-      { key: 'renewalNext2Actual',   planKey: 'renewalNext2Plan',    label: '次々月継続', isMoney: false },
+      { key: 'newMaintActual',       planKey: 'newMaintPlan',        label: '新規保守',   isMoney: false, unit: '台' },
+      { key: 'renewalThisActual',    planKey: 'renewalThisPlan',     label: '当月継続',   isMoney: false, unit: '台' },
+      { key: 'renewalNextActualTop', planKey: 'renewalNextPlanTop',  label: '次月継続',   isMoney: false, unit: '台' },
+      { key: 'renewalNext2Actual',   planKey: 'renewalNext2Plan',    label: '次々月継続', isMoney: false, unit: '台' },
     ];
     var officeLagLines = officeLagDefs.filter(function(def) {
       var cur  = n(curEntry, def.key);
@@ -1015,7 +1027,7 @@ function generateOfficeReportImpl(data) {
       var plan = n(curEntry, def.planKey);
       var remaining = plan - cur;
       var perDay    = remainDays2 > 0 ? Math.ceil(remaining / remainDays2) : remaining;
-      var perDayStr = def.isMoney ? '¥' + perDay.toLocaleString() : perDay + '件';
+      var perDayStr = def.isMoney ? '¥' + perDay.toLocaleString() : perDay + (def.unit || '件');
       return '  - ' + def.label + ': 計画比' + Math.round(cur / plan * 100)
            + '%、残' + remainDays2 + '日で1日あたり' + perDayStr + '必要';
     }).join('\n');
