@@ -10,7 +10,7 @@ claude
 
 ## プロジェクト概要
 
-「Nice Serviceman 日報」— 個人向け営業KPI管理SPA。ビルドツール不要のバニラJS + GitHub Pages + Google Sheetsアーキテクチャ。
+「nippo」（旧称 Nice Serviceman 日報。2026-09-05 に改称）— 個人向け営業KPI管理SPA。ビルドツール不要のバニラJS + GitHub Pages + Google Sheetsアーキテクチャ。
 
 - **フロントエンド**: index.html + js/{app.js, api.js, utils.js, parseDayReport.js, parserConfig.js} + css/style.css
 - **バックエンド**: Google Apps Script (`gas/Code.gs`) — Google Sheetsをデータストアとして使用
