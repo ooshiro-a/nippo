@@ -162,7 +162,9 @@
                 <button class="seg-toggle-btn" data-view="weekly">週次</button>
               </div>
               <span id="kgi-remaining-days" class="kgi-remaining-days"></span>
+              <button class="toolbar-settings-btn" id="progress-settings-btn">表示設定</button>
             </div>
+            <div id="progress-settings" class="report-settings" style="display:none"></div>
             <div id="weekly-gauge-container"><div style="color:var(--text-muted);font-size:13px">読み込み中...</div></div>
           </div>
           </div>
@@ -392,23 +394,32 @@
         <!-- 📊 進捗タブ（営業所） -->
         <section id="tab-office-dashboard" class="tab-pane">
           <div class="sort-item" data-sort-id="sort-office-mgmt">
-          <div class="kgi-progress-toolbar">
-            <div class="seg-toggle" id="office-progress-toggle">
-              <button class="seg-toggle-btn active" data-view="monthly">月次</button>
-              <button class="seg-toggle-btn" data-view="weekly">週次</button>
+          <!-- 営業所 日次管理（個人の「今月の進捗」と同じ作り: 1枚のカードに全項目） -->
+          <div class="card dash-card-amber" id="office-mgmt-card">
+            <div class="dash-weekly-header">
+              <span class="card-title">営業所 日次管理</span>
+              <span class="mgmt-last-date" id="office-last-date"></span>
+            </div>
+            <div class="kgi-progress-toolbar">
+              <div class="seg-toggle" id="office-progress-toggle">
+                <button class="seg-toggle-btn active" data-view="monthly">月次</button>
+                <button class="seg-toggle-btn" data-view="weekly">週次</button>
+              </div>
+              <span id="office-remaining-days" class="kgi-remaining-days"></span>
+              <button class="toolbar-settings-btn" id="office-progress-settings-btn">表示設定</button>
+            </div>
+            <div id="office-progress-settings" class="report-settings" style="display:none"></div>
+            <div id="management-container">
+              <div style="color:var(--text-muted);font-size:13px">読み込み中...</div>
             </div>
           </div>
-          <div id="management-container">
-            <div style="color:var(--text-muted);font-size:13px">読み込み中...</div>
+          </div>
+          <div class="sort-item" data-sort-id="sort-office-kpi-chart">
+          <div class="card">
+            <div class="card-title">KPI達成率</div>
+            <div class="office-kpi-wrap"><canvas id="office-kpi-chart"></canvas></div>
           </div>
           </div>
-          <div class="sort-item" data-sort-id="sort-office-sec-promo"><div id="office-sec-promo"></div></div>
-          <div class="sort-item" data-sort-id="sort-office-sec-inspection"><div id="office-sec-inspection"></div></div>
-          <div class="sort-item" data-sort-id="sort-office-sec-sales"><div id="office-sec-sales"></div></div>
-          <div class="sort-item" data-sort-id="sort-office-sec-maint"><div id="office-sec-maint"></div></div>
-          <div class="sort-item" data-sort-id="sort-office-sec-renewal"><div id="office-sec-renewal"></div></div>
-          <div class="sort-item" data-sort-id="sort-office-sec-next"><div id="office-sec-next"></div></div>
-          <div class="sort-item" data-sort-id="sort-office-sec-chart"><div id="office-sec-chart"></div></div>
           <div class="sort-item" data-sort-id="sort-office-ai-report">
           <div class="card" id="office-dash-ai-report-card">
             <div class="dash-ai-header">
