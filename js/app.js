@@ -3745,7 +3745,11 @@ function _officeSalesForecast(e) {
 var _OFFICE_KPI_DEFS = [
   { id: 'inspection',   label: '点検',     planKey: 'inspectionPlan',     actualKey: 'inspectionActual',     unit: '件' },
   { id: 'sales',        label: '売上',     planKey: 'salesPlan',          actualKey: 'salesActual',          unit: '円',
-    forecastCalc: _officeSalesForecast, showForecast: true },
+    forecastCalc: _officeSalesForecast, showForecast: true,
+    // ゲージ・%・前期比は「末見通し」で出し、実績はサブ行へ（2026-09-05 あきぼー指示）。
+    // label は '売上' のまま。月別内訳と出力設定のチェックボックスが d.label を使うため、
+    // 見出しだけ mainLabel で差し替える
+    mainCalc: _officeSalesForecast, mainLabel: '売上 末見通し', subLabel: '実績' },
   { id: 'newMaint',     label: '新規保守', planKey: 'newMaintPlan',       actualKey: 'newMaintActual',       unit: '台' },
   { id: 'renewalThis',  label: '当月継続', planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '台' },
   { id: 'renewal',      label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '台' },
@@ -4626,7 +4630,7 @@ function _buildOfficeReportSettingsPanel() {
   }).join('');
   var extraCheckboxes = [
     { key: 'showDelta',    label: '前期比' },
-    { key: 'showForecast', label: '末見通し' },
+    { key: 'showForecast', label: '売上の実績・対計画' },
   ].map(function(f) {
     return '<label class="report-chk-label">' +
       '<input type="checkbox" data-key="' + f.key + '" ' + (officeReportSettings[f.key] !== false ? 'checked' : '') + ' />' +
@@ -4744,41 +4748,47 @@ function _calcOfficeKpiRate(entry, kpiDef) {
 function _buildOfficeKpiBlock(kpiDef, entry, prevEntry) {
   var plan     = Number(entry[kpiDef.planKey])   || 0;
   var actual   = Number(entry[kpiDef.actualKey]) || 0;
-  var rate     = _calcOfficeKpiRate(entry, kpiDef);
+  var isYen    = kpiDef.unit === '円';
+  var fmtVal   = function(v) { return isYen ? formatCurrency(v) : formatNumber(v) + kpiDef.unit; };
+  var pct      = function(v) { return plan > 0 ? Math.min(Math.round(v / plan * 100), 999) : null; };
+
+  // mainCalc がある項目（＝売上）は、大きい数字・ゲージ・%・前期比をすべてそれで出す。
+  // 総合達成率と月別内訳は実績のままにするので _calcOfficeKpiRate は変えないこと
+  var main     = kpiDef.mainCalc ? kpiDef.mainCalc(entry) : actual;
+  var rate     = kpiDef.mainCalc ? pct(main) : _calcOfficeKpiRate(entry, kpiDef);
   var cc       = rate !== null ? getProgressColorClass(rate) : 'gray';
   var cl       = rate !== null ? getAccentColor(cc)          : 'var(--text-muted)';
   var rateStr  = rate !== null ? rate + '%' : '—';
   var barWidth = rate !== null ? Math.min(rate, 100) : 0;
-  var isYen    = kpiDef.unit === '円';
-  var fmtVal   = function(v) { return isYen ? formatCurrency(v) : formatNumber(v) + kpiDef.unit; };
 
   var html = '<div class="ohist-kpi-section" data-kpi-id="' + kpiDef.id + '">' +
     '<div class="ohist-kpi-header">' +
-    '<span class="ohist-kpi-title">' + kpiDef.label + '</span>' +
+    '<span class="ohist-kpi-title">' + (kpiDef.mainLabel || kpiDef.label) + '</span>' +
     '<div class="ohist-kpi-vals">' +
-    '<span class="ohist-actual">' + fmtVal(actual) + '</span>' +
+    '<span class="ohist-actual">' + fmtVal(main) + '</span>' +
     '<span class="ohist-plan"> / ' + fmtVal(plan) + '</span>' +
     '<span class="ohist-rate" style="color:' + cl + '">' + rateStr + '</span>' +
     '</div></div>' +
     '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + barWidth + '%"></div></div>';
 
-  if (kpiDef.showForecast && (kpiDef.forecastCalc || kpiDef.forecastKey)) {
-    var forecast = kpiDef.forecastCalc ? kpiDef.forecastCalc(entry) : (Number(entry[kpiDef.forecastKey]) || 0);
-    var fRate    = plan > 0 ? Math.min(Math.round(forecast / plan * 100), 999) : null;
-    var fcl      = fRate !== null ? getAccentColor(getProgressColorClass(fRate)) : 'var(--text-muted)';
-    var diff     = forecast - plan;
+  // サブ行。ゲージが末見通しになったので、ここには実績と対計画を出す
+  if (kpiDef.mainCalc) {
+    var aRate    = pct(actual);
+    var acl      = aRate !== null ? getAccentColor(getProgressColorClass(aRate)) : 'var(--text-muted)';
+    var diff     = main - plan;
     var diffCls  = diff >= 0 ? 'ohist-delta-pos' : 'ohist-delta-neg';
-    var diffStr  = (diff >= 0 ? '＋' : '−') + formatCurrency(Math.abs(diff));
+    var diffStr  = (diff >= 0 ? '＋' : '−') + fmtVal(Math.abs(diff));
     html += '<div class="ohist-forecast-row">' +
-      '<span style="font-weight:700;color:' + fcl + '">末見通し ' + formatCurrency(forecast) +
-      (fRate !== null ? ' (' + fRate + '%)' : '') + '</span>' +
+      '<span style="font-weight:700;color:' + acl + '">' + (kpiDef.subLabel || '実績') + ' ' + fmtVal(actual) +
+      (aRate !== null ? ' (' + aRate + '%)' : '') + '</span>' +
       '<span class="' + diffCls + '">対計画 ' + diffStr + '</span>' +
       '</div>';
   }
 
   if (prevEntry) {
-    var prevActual = Number(prevEntry[kpiDef.actualKey]) || 0;
-    var delta = actual - prevActual;
+    // 前期比は大きい数字と同じもの同士で比べる（売上なら末見通しどうし）
+    var prevActual = kpiDef.mainCalc ? kpiDef.mainCalc(prevEntry) : (Number(prevEntry[kpiDef.actualKey]) || 0);
+    var delta = main - prevActual;
     if (delta !== 0) {
       var deltaCls = delta > 0 ? 'ohist-delta-pos' : 'ohist-delta-neg';
       var deltaStr = (delta > 0 ? 'Δ＋' : 'Δ−') + fmtVal(Math.abs(delta));
