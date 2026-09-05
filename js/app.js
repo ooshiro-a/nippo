@@ -531,7 +531,8 @@ function _buildProgressSettingsPanel(panelId, scope, items, onChange) {
 
 function buildProgressSettingsPanel() {
   _buildProgressSettingsPanel('progress-settings', 'personal',
-    KGI_FIELDS.filter(f => f.color === 'cyan').map(f => ({ key: f.key, label: f.label })),
+    KGI_FIELDS.filter(f => f.color === 'cyan').map(f => ({ key: f.key, label: f.label }))
+      .concat(FORECAST_GAUGE_ITEMS.map(d => ({ key: d.key, label: d.label }))),
     refreshDashboard);
 }
 
@@ -578,57 +579,13 @@ async function refreshDashboard() {
     const budget  = allData ? (allData.budgets.find(b => String(b.yearMonth || '').slice(0, 7) === yearMonth) || null) : null;
     renderTrustScore(entries);
     const totals = calcMonthlyTotals(entries);
-    const promotionActual = totals.promotionAmount || 0;
-    renderPlanCard(
-      promotionActual,
-      budget ? (budget.promotionAmount || 0) : 0,
-      { actual: 'personal-plan-actual', budget: 'personal-plan-budget', rate: 'personal-plan-rate', bar: 'personal-plan-bar', shortage: 'personal-plan-shortage' }
-    );
     renderKpiChart(totals, budget);
 
-    const sortedEntries = [...entries].sort((a, b) => b.date.localeCompare(a.date));
-    const personalUnsettled = (sortedEntries.find(e => e.personalUnsettled > 0) || {}).personalUnsettled || 0;
-    const officeUnsettled   = (sortedEntries.find(e => e.officeUnsettled   > 0) || {}).officeUnsettled   || 0;
-    renderPlanCard(
-      personalUnsettled,
-      budget ? (budget.personalPlan || 0) : 0,
-      { actual: 'personal-unsettled-actual', budget: 'personal-unsettled-budget',
-        rate: 'personal-unsettled-rate', bar: 'personal-unsettled-bar', shortage: 'personal-unsettled-shortage' }
-    );
-    renderPlanCard(
-      officeUnsettled,
-      budget ? (budget.officePlan || 0) : 0,
-      { actual: 'office-unsettled-actual', budget: 'office-unsettled-budget',
-        rate: 'office-unsettled-rate', bar: 'office-unsettled-bar', shortage: 'office-unsettled-shortage' }
-    );
+    // 促進受注額・個人末見額・営業所末見額の達成率カードは廃止し、
+    // 「今月の進捗」の行に寄せた。末見額の2行はここで数字を用意しておく
+    _forecastRows = await _loadForecastRows(yearMonth, entries, budget);
+
     renderKgiProgressCard(entries, budget);
-
-    const today = getTodayJST();
-    const yesterday = addCalendarDays(today, -1);
-    const prevEntries = entries.filter(e => e.date <= yesterday);
-    const prevSortedEntries = [...prevEntries].sort((a, b) => b.date.localeCompare(a.date));
-
-    renderPaceLine('personal-plan-pace', {
-      itemKey: 'promotionAmount',
-      plan: budget ? (budget.promotionAmount || 0) : 0,
-      actual: promotionActual,
-      prevActual: calcMonthlyTotals(prevEntries).promotionAmount || 0,
-      unit: '円', yearMonth, asOfDateStr: today,
-    });
-    renderPaceLine('personal-unsettled-pace', {
-      itemKey: 'personalUnsettled',
-      plan: budget ? (budget.personalPlan || 0) : 0,
-      actual: personalUnsettled,
-      prevActual: (prevSortedEntries.find(e => e.personalUnsettled > 0) || {}).personalUnsettled || 0,
-      unit: '円', yearMonth, asOfDateStr: today,
-    });
-    renderPaceLine('office-unsettled-pace', {
-      itemKey: 'officeUnsettled',
-      plan: budget ? (budget.officePlan || 0) : 0,
-      actual: officeUnsettled,
-      prevActual: (prevSortedEntries.find(e => e.officeUnsettled > 0) || {}).officeUnsettled || 0,
-      unit: '円', yearMonth, asOfDateStr: today,
-    });
     renderStreakBadge(allEntries);
   } catch (e) {
     console.warn('ダッシュボードロード失敗:', e);
@@ -645,6 +602,112 @@ function renderKgiProgressCard(entries, budget) {
   } else {
     renderMonthlyKgiProgress(entries, budget);
   }
+}
+
+// ------------------------------------------------------------------
+// 進捗タブの末見額2行
+// ------------------------------------------------------------------
+// 数字は営業所タブと同じ officeDaily（日計表の取込）から拾う。
+// 個人分は日計表「一枚目 」の29行目＝所員eの売上行にあり、
+// J列(salesForecast)として既に取り込んでいる。取込側の改修は不要。
+// 手入力の「末見額」カードとほぼ同値（差は端数のみ）だが、取込なら毎日自動で入る。
+var _forecastRows = null;
+
+// 自分の行は名前で探す。memberId の決め打ちだと所員の増減で行がずれたとき
+// 黙って他の人の数字が出る。名前→id→手入力値の3段構えにする。
+var MY_MEMBER_NAME = '大城章裕';
+var MY_MEMBER_ID   = 'e';
+
+async function _loadForecastRows(yearMonth, entries, budget) {
+  // 取込が無い日でも行が消えないよう、手入力値を最後の逃げ道に残す
+  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+  const fallback = {
+    personal: { actual: (sorted.find(e => e.personalUnsettled > 0) || {}).personalUnsettled || 0,
+                plan: budget ? (budget.personalPlan || 0) : 0, prevActual: 0 },
+    office:   { actual: (sorted.find(e => e.officeUnsettled > 0) || {}).officeUnsettled || 0,
+                plan: budget ? (budget.officePlan || 0) : 0, prevActual: 0 },
+  };
+  try {
+    // 当月だけ取る。営業所の数値は月内累計で月初にリセットされるため
+    const rows = await getOfficeDaily({ dateFrom: yearMonth + '-01', dateTo: yearMonth + '-31' });
+    const byDate = {};
+    (rows || []).forEach(r => {
+      const d = String(r.date).slice(0, 10);
+      (byDate[d] = byDate[d] || []).push(r);
+    });
+    const dates = Object.keys(byDate).sort();
+    if (!dates.length) return fallback;
+    const cur  = byDate[dates[dates.length - 1]];
+    const prev = dates.length > 1 ? byDate[dates[dates.length - 2]] : [];
+
+    const me  = list => (list || []).find(r => r.scope === 'member' && r.memberName === MY_MEMBER_NAME)
+                     || (list || []).find(r => r.scope === 'member' && r.memberId === MY_MEMBER_ID);
+    const off = list => (list || []).find(r => r.scope === 'office');
+    // 末見通しは営業所タブと同じ式で出す。保存値をそのまま読むと、
+    // 片方だけ計算を変えたときに2つのタブで数字が食い違う
+    const fc  = r => (r ? _officeSalesForecast(r) : 0);
+    const pl  = r => (r ? (Number(r.salesPlan) || 0) : 0);
+
+    const meCur = me(cur), offCur = off(cur);
+    return {
+      personal: meCur  ? { actual: fc(meCur),  plan: pl(meCur),  prevActual: fc(me(prev))  } : fallback.personal,
+      office:   offCur ? { actual: fc(offCur), plan: pl(offCur), prevActual: fc(off(prev)) } : fallback.office,
+    };
+  } catch (e) {
+    console.warn('[末見額] 営業所データを取得できず、手入力値で表示します:', e);
+    return fallback;
+  }
+}
+
+const FORECAST_GAUGE_ITEMS = [
+  { key: 'personalUnsettled', label: '個人末見',   src: 'personal' },
+  { key: 'officeUnsettled',   label: '営業所末見', src: 'office' },
+];
+
+// 月次・週次のどちらでも同じ値を出す。末見額は「月末にいくらになりそうか」の
+// 見込みなので、週で割っても意味が無い（あきぼー判断）。
+function _buildForecastGaugeRows(yearMonth, today) {
+  if (!_forecastRows) return '';
+  return FORECAST_GAUGE_ITEMS.filter(d => !isProgressHidden('personal', d.key)).map(d => {
+    const src = _forecastRows[d.src];
+    const f = { key: d.key, label: d.label, unit: '円', money: true };
+    const actual = src.actual, plan = src.plan;
+    const actualStr = formatKpiValue(actual, f);
+
+    if (plan <= 0) {
+      return `<div class="weekly-gauge-row sort-item" data-sort-id="kpi-${d.key}">
+        <div class="weekly-gauge-label">
+          <span>${d.label}</span>
+          <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr}</span>
+        </div>
+      </div>`;
+    }
+
+    const rate = Math.round(actual / plan * 100);
+    const colorClass = getProgressColorClass(rate);
+    const color = getAccentColor(colorClass);
+    const pace = buildPaceInfo({
+      itemKey: d.key, plan, actual, prevActual: src.prevActual,
+      unit: '円', isMoney: true, yearMonth, asOfDateStr: today,
+    });
+    const paceColor = getAccentColor(pace.colorClass);
+    // 元の達成率カードにあった不足額はペース行に併記して引き継ぐ
+    const gap = plan - actual;
+    const gapStr = gap > 0 ? `不足 ${formatKpiValue(gap, f)} ／ `
+                 : gap < 0 ? `超過 ${formatKpiValue(-gap, f)} ／ ` : '';
+
+    return `<div class="weekly-gauge-row sort-item" data-sort-id="kpi-${d.key}">
+      <div class="weekly-gauge-label">
+        <span>${d.label}</span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)">${actualStr} / ${formatKpiValue(plan, f)}</span>
+        <span style="font-family:var(--font-mono);font-weight:700;color:${color}">${rate}%</span>
+      </div>
+      <div class="progress-bar" style="margin-top:4px">
+        <div class="progress-fill ${colorClass}" style="width:${Math.min(rate, 100)}%"></div>
+      </div>
+      <div class="kgi-pace-line" style="color:${paceColor}">${gapStr}${pace.text}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderMonthlyKgiProgress(entries, budget) {
@@ -704,7 +767,8 @@ function renderMonthlyKgiProgress(entries, budget) {
   }).filter(Boolean).join('');
 
   const gc = document.getElementById('weekly-gauge-container');
-  gc.innerHTML = rows || '<div style="color:var(--text-muted);font-size:13px">表示設定ですべての項目が非表示になっています</div>';
+  const html = rows + _buildForecastGaugeRows(yearMonth, today);
+  gc.innerHTML = html || '<div style="color:var(--text-muted);font-size:13px">表示設定ですべての項目が非表示になっています</div>';
   // 行は描画のたびに作り直すので、並び順の復元とつまみの付与を毎回やる
   restoreSortOrder('weekly-gauge-container');
   addSortHandles(gc, 'sort-handle-row');
@@ -751,7 +815,10 @@ function renderWeeklyKgiProgress(entries, budget) {
   }).filter(Boolean).join('');
 
   const gc = document.getElementById('weekly-gauge-container');
-  gc.innerHTML = rows || '<div style="color:var(--text-muted);font-size:13px">表示設定ですべての項目が非表示になっています</div>';
+  // 末見額は月末見込みなので週割りせず、月次と同じ値を出す
+  const today = getTodayJST();
+  const html = rows + _buildForecastGaugeRows(today.slice(0, 7), today);
+  gc.innerHTML = html || '<div style="color:var(--text-muted);font-size:13px">表示設定ですべての項目が非表示になっています</div>';
   // 月次と同じコンテナid・行idなので並び順が共有される
   restoreSortOrder('weekly-gauge-container');
   addSortHandles(gc, 'sort-handle-row');
@@ -1029,44 +1096,8 @@ function renderTrustScore(entries) {
   document.getElementById('trust-neg-count').textContent = negTotal;
 }
 
-function renderPlanCard(actual, plan, ids) {
-  const rate = plan > 0 ? Math.round(actual / plan * 100) : 0;
-  const shortage = plan - actual;
-  const colorClass = getProgressColorClass(rate);
-
-  document.getElementById(ids.actual).textContent = formatCurrency(actual);
-  document.getElementById(ids.budget).textContent = formatCurrency(plan);
-  document.getElementById(ids.rate).textContent = rate + '%';
-  document.getElementById(ids.rate).style.color = getAccentColor(colorClass);
-
-  const shortageEl = document.getElementById(ids.shortage);
-  if (shortage < 0) {
-    shortageEl.textContent = formatCurrency(-shortage) + '（超過）';
-    shortageEl.style.color = 'var(--accent-cyan)';
-  } else {
-    shortageEl.textContent = formatCurrency(shortage);
-    shortageEl.style.color = '';
-  }
-
-  const bar = document.getElementById(ids.bar);
-  bar.style.width = Math.max(0, Math.min(rate, 100)) + '%';
-  bar.className = `progress-fill ${colorClass}`;
-}
-
 function getAccentColor(colorClass) {
   return { green: '#4ade80', cyan: '#22d3ee', amber: '#fbbf24', red: '#f87171' }[colorClass] || '#94a3b8';
-}
-
-function renderPaceLine(elId, params) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  if (!params.plan || params.plan <= 0) {
-    el.innerHTML = '';
-    return;
-  }
-  const pace = buildPaceInfo(params);
-  el.innerHTML = pace.text;
-  el.style.color = getAccentColor(pace.colorClass);
 }
 
 function renderKpiChart(totals, budget) {
