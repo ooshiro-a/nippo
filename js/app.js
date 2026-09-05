@@ -3238,14 +3238,14 @@ var _OFFICE_PROGRESS_ITEMS = [
   { id: 'off-sales',        label: '売上 実績',    planKey: 'salesPlan',          actualKey: 'salesActual',          unit: '円' },
   { id: 'off-forecast',     label: '末見通し',     planKey: 'salesPlan',          calc: _officeSalesForecast,        unit: '円', paceKey: 'office_forecast' },
   { id: 'off-newMaint',     label: '新規保守台数', planKey: 'newMaintPlan',       actualKey: 'newMaintActual',       unit: '台', paceKey: 'office_newMaint',
-    members: [{ label: '新規保守', planKey: 'newMaintPlan', actualKey: 'newMaintActual' }] },
+    members: [{ label: '新規保守', planKey: 'newMaintPlan', actualKey: 'newMaintActual', unit: '台' }] },
   { id: 'off-renewalThis',  label: '当月継続',     planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '件', paceKey: 'office_renewalThis' },
   { id: 'off-renewalNext',  label: '次月継続',     planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件', paceKey: 'office_renewalNext' },
   { id: 'off-renewalNext2', label: '次々月継続',   planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual',   unit: '件', paceKey: 'office_renewalNext2',
     members: [
-      { label: '当月',   planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual' },
-      { label: '次月',   planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop' },
-      { label: '次々月', planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual' },
+      { label: '当月',   planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '件' },
+      { label: '次月',   planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
+      { label: '次々月', planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual',   unit: '件' },
     ] },
   { id: 'off-activityCount',  label: '総活動件数',   valueKey: 'activityCount',   unit: '件' },
   { id: 'off-promotionCount', label: '新規促進件数', valueKey: 'promotionCount',  unit: '件' },
@@ -3369,7 +3369,7 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
         return '<div class="office-member-block">' +
                '<div class="office-member-row">' +
                '<span class="office-member-name">' + name + '</span>' +
-               '<span class="office-member-cell">' + formatNumber(v.actual) + ' / ' + formatNumber(v.plan) + '</span>' +
+               '<span class="office-member-cell">' + formatNumber(v.actual) + ' / ' + formatNumber(v.plan) + (defs[0].unit || '') + '</span>' +
                '<span class="office-member-rate" style="color:' + getAccentColor(cc) + '">' + v.rate + '%</span>' +
                '</div>' +
                '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + Math.min(v.rate, 100) + '%"></div></div>' +
@@ -3379,13 +3379,15 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
              '<span class="office-member-name">' + name + '</span>' +
              defs.map(function(d) {
                var v = mv(m, d);
-               return '<span class="office-member-cell" style="color:' + getAccentColor(getProgressColorClass(v.rate)) + '">' +
-                      formatNumber(v.actual) + '/' + formatNumber(v.plan) + '</span>';
+               return '<span class="office-member-cell">' +
+                      formatNumber(v.actual) + '/' + formatNumber(v.plan) + (d.unit || '') +
+                      ' <span class="office-member-cell-rate" style="color:' + getAccentColor(getProgressColorClass(v.rate)) + '">' +
+                      v.rate + '%</span></span>';
              }).join('') +
              '</div>';
     }).join('');
 
-    return '<div class="office-member-list">' +
+    return '<div class="office-member-list' + (single ? '' : ' office-member-multi') + '">' +
            '<div class="office-member-title">所員別</div>' + head + body + '</div>';
   }
 
