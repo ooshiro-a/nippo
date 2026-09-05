@@ -1,7 +1,7 @@
 {
   "id": "/nippo/",
-  "name": "Nice Serviceman 日報",
-  "short_name": "NS日報",
+  "name": "nippo",
+  "short_name": "nippo",
   "description": "ホシザキ沖縄 サービス技術職 日次記録ツール",
   "start_url": "/nippo/",
   "display": "standalone",
