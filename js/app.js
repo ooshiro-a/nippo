@@ -2860,10 +2860,10 @@ const KGI_FIELDS = [
   { key: 'inspection',            label: '点検件数',         unit: '件', color: 'cyan' },
   { key: 'promotionAmount',       label: '促進受注額',       unit: '円', money: true, color: 'cyan' },
   { key: 'promotionCount',        label: '促進件数',         unit: '件', color: 'cyan' },
-  { key: 'maintenanceThisMonth',  label: '当月保守継続',     unit: '件', color: 'cyan' },
-  { key: 'maintenanceNextMonth',  label: '次月保守継続',     unit: '件', color: 'cyan' },
-  { key: 'maintenanceNext2Month', label: '次々月保守継続',   unit: '件', color: 'cyan' },
-  { key: 'newAcquisition',        label: '新規保守',         unit: '件', color: 'cyan' },
+  { key: 'maintenanceThisMonth',  label: '当月保守継続',     unit: '台', color: 'cyan' },
+  { key: 'maintenanceNextMonth',  label: '次月保守継続',     unit: '台', color: 'cyan' },
+  { key: 'maintenanceNext2Month', label: '次々月保守継続',   unit: '台', color: 'cyan' },
+  { key: 'newAcquisition',        label: '新規保守',         unit: '台', color: 'cyan' },
   { key: 'acCleaning',            label: 'エアコン洗浄',     unit: '件', color: 'cyan' },
   { key: 'fullMaintenance',       label: 'フルメンテリース', unit: '件', color: 'cyan' },
   { key: 'tossUp',                label: '営業トスアップ',   unit: '件', color: 'cyan' },
@@ -3239,13 +3239,13 @@ var _OFFICE_PROGRESS_ITEMS = [
   { id: 'off-forecast',     label: '末見通し',     planKey: 'salesPlan',          calc: _officeSalesForecast,        unit: '円', paceKey: 'office_forecast' },
   { id: 'off-newMaint',     label: '新規保守台数', planKey: 'newMaintPlan',       actualKey: 'newMaintActual',       unit: '台', paceKey: 'office_newMaint',
     members: [{ label: '新規保守', planKey: 'newMaintPlan', actualKey: 'newMaintActual', unit: '台' }] },
-  { id: 'off-renewalThis',  label: '当月継続',     planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '件', paceKey: 'office_renewalThis' },
-  { id: 'off-renewalNext',  label: '次月継続',     planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件', paceKey: 'office_renewalNext' },
-  { id: 'off-renewalNext2', label: '次々月継続',   planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual',   unit: '件', paceKey: 'office_renewalNext2',
+  { id: 'off-renewalThis',  label: '当月継続',     planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '台', paceKey: 'office_renewalThis' },
+  { id: 'off-renewalNext',  label: '次月継続',     planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '台', paceKey: 'office_renewalNext' },
+  { id: 'off-renewalNext2', label: '次々月継続',   planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual',   unit: '台', paceKey: 'office_renewalNext2',
     members: [
-      { label: '当月',   planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '件' },
-      { label: '次月',   planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
-      { label: '次々月', planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual',   unit: '件' },
+      { label: '当月',   planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '台' },
+      { label: '次月',   planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '台' },
+      { label: '次々月', planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual',   unit: '台' },
     ] },
   { id: 'off-activityCount',  label: '総活動件数',   valueKey: 'activityCount',   unit: '件' },
   { id: 'off-promotionCount', label: '新規促進件数', valueKey: 'promotionCount',  unit: '件' },
@@ -3747,9 +3747,9 @@ var _OFFICE_KPI_DEFS = [
   { id: 'sales',        label: '売上',     planKey: 'salesPlan',          actualKey: 'salesActual',          unit: '円',
     forecastCalc: _officeSalesForecast, showForecast: true },
   { id: 'newMaint',     label: '新規保守', planKey: 'newMaintPlan',       actualKey: 'newMaintActual',       unit: '台' },
-  { id: 'renewalThis',  label: '当月継続', planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '件' },
-  { id: 'renewal',      label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件' },
-  { id: 'renewalNext2', label: '次々月継続', planKey: 'renewalNext2Plan', actualKey: 'renewalNext2Actual',   unit: '件' },
+  { id: 'renewalThis',  label: '当月継続', planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '台' },
+  { id: 'renewal',      label: '次月継続', planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '台' },
+  { id: 'renewalNext2', label: '次々月継続', planKey: 'renewalNext2Plan', actualKey: 'renewalNext2Actual',   unit: '台' },
 ];
 
 var officeReportSettings = {
@@ -4352,12 +4352,12 @@ const OFFICE_CMP_METRICS = [
   { key: 'salesForecast',        label: '末見通し',     unit: '万円' },
   { key: 'newMaintPlan',         label: '新規保守計画', unit: '台' },
   { key: 'newMaintActual',       label: '新規保守実績', unit: '台' },
-  { key: 'renewalThisPlan',      label: '当月継続計画', unit: '件' },
-  { key: 'renewalThisActual',    label: '当月継続実績', unit: '件' },
-  { key: 'renewalNextPlanTop',   label: '次月継続計画', unit: '件' },
-  { key: 'renewalNextActualTop', label: '次月継続実績', unit: '件' },
-  { key: 'renewalNext2Plan',     label: '次々月継続計画', unit: '件' },
-  { key: 'renewalNext2Actual',   label: '次々月継続実績', unit: '件' },
+  { key: 'renewalThisPlan',      label: '当月継続計画', unit: '台' },
+  { key: 'renewalThisActual',    label: '当月継続実績', unit: '台' },
+  { key: 'renewalNextPlanTop',   label: '次月継続計画', unit: '台' },
+  { key: 'renewalNextActualTop', label: '次月継続実績', unit: '台' },
+  { key: 'renewalNext2Plan',     label: '次々月継続計画', unit: '台' },
+  { key: 'renewalNext2Actual',   label: '次々月継続実績', unit: '台' },
 ];
 
 function _buildOfficeComparisonCard(info) {
@@ -4676,7 +4676,7 @@ function _buildOfficeReportText(rows, view) {
       '  点検: ' + fmt(e.inspectionActual) + '/' + fmt(e.inspectionPlan) + '件',
       '  売上: ¥' + fmt(e.salesActual) + '/¥' + fmt(e.salesPlan),
       '  末見通し: ¥' + fmt(_officeSalesForecast(e)),
-      '  次月継続: ' + fmt(e.renewalNextActualTop) + '/' + fmt(e.renewalNextPlanTop) + '件',
+      '  次月継続: ' + fmt(e.renewalNextActualTop) + '/' + fmt(e.renewalNextPlanTop) + '台',
     ].join('\n');
   };
   if (view === 'daily') {
