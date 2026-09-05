@@ -494,8 +494,67 @@ let dashboardChart = null;
 let _dashboardRefreshing = false;
 let _kgiProgressView = 'monthly';
 
+// ------ 進捗タブの表示設定 ------
+
+function isProgressHidden(scope, key) {
+  var list = uiGet('progressHidden.' + scope, []);
+  return Array.isArray(list) && list.indexOf(key) !== -1;
+}
+
+/**
+ * 出力設定（buildReportSettingsPanel）と同じ見た目のチェックボックス一覧。
+ * 外したキーを uiSettings.progressHidden.<scope> に入れる。既定は全部ON。
+ */
+function _buildProgressSettingsPanel(panelId, scope, items, onChange) {
+  var panel = document.getElementById(panelId);
+  if (!panel) return;
+  panel.innerHTML =
+    '<div class="report-settings-section-title">表示する項目</div>' +
+    '<div class="report-settings-grid">' +
+    items.map(function(it) {
+      return '<label class="report-chk-label">' +
+        '<input type="checkbox" data-key="' + it.key + '" ' + (isProgressHidden(scope, it.key) ? '' : 'checked') + ' />' +
+        it.label + '</label>';
+    }).join('') +
+    '</div>';
+  panel.querySelectorAll('input[type="checkbox"]').forEach(function(chk) {
+    chk.addEventListener('change', function() {
+      var hidden = uiGet('progressHidden.' + scope, []).slice();
+      var idx = hidden.indexOf(chk.dataset.key);
+      if (chk.checked && idx !== -1) hidden.splice(idx, 1);
+      if (!chk.checked && idx === -1) hidden.push(chk.dataset.key);
+      uiSet('progressHidden.' + scope, hidden);
+      onChange();
+    });
+  });
+}
+
+function buildProgressSettingsPanel() {
+  _buildProgressSettingsPanel('progress-settings', 'personal',
+    KGI_FIELDS.filter(f => f.color === 'cyan').map(f => ({ key: f.key, label: f.label })),
+    refreshDashboard);
+}
+
+function buildOfficeProgressSettingsPanel() {
+  _buildProgressSettingsPanel('office-progress-settings', 'office',
+    _OFFICE_PROGRESS_ITEMS.map(function(it) { return { key: it.id, label: it.label }; }),
+    rerenderManagement);
+}
+
+function _toggleSettingsPanel(panelId, btnId) {
+  var panel = document.getElementById(panelId);
+  var btn   = document.getElementById(btnId);
+  if (!panel || !btn) return;
+  var show = panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  btn.classList.toggle('toolbar-settings-btn-active', show);
+}
+
 function initDashboardTab() {
   document.querySelector('[data-tab="tab-dashboard"]').addEventListener('click', refreshDashboard);
+  var pBtn = document.getElementById('progress-settings-btn');
+  if (pBtn) pBtn.addEventListener('click', function() { _toggleSettingsPanel('progress-settings', 'progress-settings-btn'); });
+  buildProgressSettingsPanel();
   document.querySelectorAll('#kgi-progress-toggle .seg-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (_kgiProgressView === btn.dataset.view) return;
@@ -594,25 +653,23 @@ function renderMonthlyKgiProgress(entries, budget) {
   const [y, m] = yearMonth.split('-').map(Number);
   const monthEnd = `${yearMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
   const remainingEl = document.getElementById('kgi-remaining-days');
-  if (remainingEl) remainingEl.textContent = `残${countBusinessDays(today, monthEnd)}営業日（月末まで）`;
+  if (remainingEl) remainingEl.textContent = `残${countBusinessDays(today, monthEnd)}営業日`;
 
   const totals = calcMonthlyTotals(entries);
   const yesterday = addCalendarDays(today, -1);
   const prevTotals = calcMonthlyTotals(entries.filter(e => e.date <= yesterday));
 
-  // 活動内訳は目標を持たないので進捗バーが出せない。除外しないと「目標未設定」の行が並ぶ
-  const rows = KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity').map(f => {
+  // 表示設定で外した項目だけ除く。目標が無い項目は数値のみで出す（活動内訳もここに含まれる）
+  const rows = KGI_FIELDS.filter(f => f.color === 'cyan' && !isProgressHidden('personal', f.key)).map(f => {
     const actual = totals[f.key] || 0;
     const plan = budget ? (budget[f.key] || 0) : 0;
     const actualStr = formatKpiValue(actual, f);
 
     if (plan <= 0) {
-      if (actual === 0) return '';
-      return `<div class="weekly-gauge-row">
+      return `<div class="weekly-gauge-row sort-item" data-sort-id="kpi-${f.key}">
         <div class="weekly-gauge-label">
           <span>${f.label}</span>
           <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr}</span>
-          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">目標未設定</span>
         </div>
       </div>`;
     }
@@ -633,7 +690,7 @@ function renderMonthlyKgiProgress(entries, budget) {
     });
     const paceColor = getAccentColor(pace.colorClass);
 
-    return `<div class="weekly-gauge-row">
+    return `<div class="weekly-gauge-row sort-item" data-sort-id="kpi-${f.key}">
       <div class="weekly-gauge-label">
         <span>${f.label}</span>
         <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr} / ${planStr}</span>
@@ -646,32 +703,33 @@ function renderMonthlyKgiProgress(entries, budget) {
     </div>`;
   }).filter(Boolean).join('');
 
-  document.getElementById('weekly-gauge-container').innerHTML =
-    rows || '<div style="color:var(--text-muted);font-size:13px">KGI設定タブで計画を入力してください</div>';
+  const gc = document.getElementById('weekly-gauge-container');
+  gc.innerHTML = rows || '<div style="color:var(--text-muted);font-size:13px">表示設定ですべての項目が非表示になっています</div>';
+  // 行は描画のたびに作り直すので、並び順の復元とつまみの付与を毎回やる
+  restoreSortOrder('weekly-gauge-container');
+  addSortHandles(gc, 'sort-handle-row');
 }
 
 function renderWeeklyKgiProgress(entries, budget) {
   const weekStart = getWeekStartJST();
   const weekEntries = entries.filter(e => e.date >= weekStart);
+  const shown = KGI_FIELDS.filter(f => f.color === 'cyan' && !isProgressHidden('personal', f.key));
   const weekTotals = {};
-  KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity').forEach(f => {
+  shown.forEach(f => {
     weekTotals[f.key] = weekEntries.reduce((s, e) => s + (e[f.key] || 0), 0);
   });
 
-  // 活動内訳は目標を持たないので除外（月次ゲージと同じ理由）
-  const rows = KGI_FIELDS.filter(f => f.color === 'cyan' && f.group !== 'activity').map(f => {
+  const rows = shown.map(f => {
     const actual = weekTotals[f.key] || 0;
     const weekTarget = budget ? Math.round((budget[f.key] || 0) / 3) : 0;
     const actualStr = formatKpiValue(actual, f);
 
     if (weekTarget === 0) {
-      // 予算未設定: 実績が0の項目はスキップ、あれば目標なしで表示
-      if (actual === 0) return '';
-      return `<div class="weekly-gauge-row">
+      // 目標が無い項目は数値のみ（その週の合計）
+      return `<div class="weekly-gauge-row sort-item" data-sort-id="kpi-${f.key}">
         <div class="weekly-gauge-label">
           <span>${f.label}</span>
           <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr}</span>
-          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">目標未設定</span>
         </div>
       </div>`;
     }
@@ -680,7 +738,7 @@ function renderWeeklyKgiProgress(entries, budget) {
     const colorClass = getProgressColorClass(rate);
     const color = getAccentColor(colorClass);
     const targetStr = formatKpiValue(weekTarget, f);
-    return `<div class="weekly-gauge-row">
+    return `<div class="weekly-gauge-row sort-item" data-sort-id="kpi-${f.key}">
       <div class="weekly-gauge-label">
         <span>${f.label}</span>
         <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${actualStr} / ${targetStr}</span>
@@ -692,8 +750,11 @@ function renderWeeklyKgiProgress(entries, budget) {
     </div>`;
   }).filter(Boolean).join('');
 
-  document.getElementById('weekly-gauge-container').innerHTML =
-    rows || '<div style="color:var(--text-muted);font-size:13px">KGI設定タブで計画を入力してください</div>';
+  const gc = document.getElementById('weekly-gauge-container');
+  gc.innerHTML = rows || '<div style="color:var(--text-muted);font-size:13px">表示設定ですべての項目が非表示になっています</div>';
+  // 月次と同じコンテナid・行idなので並び順が共有される
+  restoreSortOrder('weekly-gauge-container');
+  addSortHandles(gc, 'sort-handle-row');
 }
 
 function renderStreakBadge(entries) {
@@ -2268,6 +2329,7 @@ function buildReportSettingsPanel() {
   panel.querySelectorAll('input[type="checkbox"]').forEach(chk => {
     chk.addEventListener('change', () => {
       reportSettings[chk.dataset.key] = chk.checked;
+      uiSet('reportSettings.personal', Object.assign({}, reportSettings));
     });
   });
 }
@@ -2810,10 +2872,12 @@ const KGI_FIELDS = [
   { key: 'resultConversion',      label: '実績化',           unit: '円', money: true, color: 'cyan' },
   { key: 'production',            label: '増産',             unit: '円', money: true, color: 'cyan' },
   // group:'activity' は「月間目標を持たない活動項目」。日々どの作業に時間を使ったかの
-  // 可視化用で、記録と「活動内訳（多い順）」ランキングにだけ使う。
+  // 可視化用で、記録と「活動内訳（多い順）」ランキングに使う。
   // color:'cyan' を付けてあるので入力・保存・差分計算・履歴集計・CSV・上長報告は自動対応する。
-  // 目標に関わるUI（月次/週次ゲージ・達成率チャート・KGI設定タブ）からは
-  // f.group !== 'activity' で除外すること。除外を忘れると「目標未設定」の行が生える。
+  // 目標に関わるUI（達成率チャート・KGI設定タブ・履歴の実績行）からは
+  // f.group !== 'activity' で除外すること。
+  // 進捗タブのゲージは 2026-09-05 から表示設定で個別にON/OFFできるので除外しない
+  // （目標が無い項目は数値のみで出る）。
   { key: 'faultDiagnosis',        label: '故障診断',         unit: '件', color: 'cyan', group: 'activity' },
   { key: 'remainingRepair',       label: '残修理',           unit: '件', color: 'cyan', group: 'activity' },
   { key: 'delivery',              label: '納品',             unit: '件', color: 'cyan', group: 'activity' },
@@ -3120,6 +3184,9 @@ var _officeChart = null;
 var _officeProgressView = 'monthly';
 
 function initOfficeDashboardTab() {
+  var sBtn = document.getElementById('office-progress-settings-btn');
+  if (sBtn) sBtn.addEventListener('click', function() { _toggleSettingsPanel('office-progress-settings', 'office-progress-settings-btn'); });
+  buildOfficeProgressSettingsPanel();
   document.querySelectorAll('#office-progress-toggle .seg-toggle-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
       if (_officeProgressView === btn.dataset.view) return;
@@ -3150,7 +3217,6 @@ async function refreshManagement() {
     var memberRows = (rows || []).filter(function(r) { return r.scope === 'member'; });
     if (!officeRows.length) {
       container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0">日次取込からExcelを取り込むとここに表示されます</div>';
-      _clearOfficeSections();
       return;
     }
 
@@ -3160,32 +3226,49 @@ async function refreshManagement() {
     renderManagementDashboard(officeRows[0], officeRows, memberRows);
   } catch (e) {
     _renderError(container, '読み込みエラー: ' + e.message);
-    _clearOfficeSections();
   }
 }
 
-var _OFFICE_SECTION_IDS = [
-  'office-sec-promo', 'office-sec-inspection', 'office-sec-sales',
-  'office-sec-maint', 'office-sec-renewal', 'office-sec-next', 'office-sec-chart',
+// 進捗タブに出す項目の定義。表示設定のチェックボックスと行の並べ替えidもここから作る。
+// planKey がある項目はゲージ（バー付き）、無い項目は数値のみ。
+// members を持つ項目は、そのゲージ行の中に所員別ブロックがぶら下がる。
+// 「保守」は新規保守のみ、「継続」は当月/次月/次々月の3項目（CLAUDE.md 参照）。
+var _OFFICE_PROGRESS_ITEMS = [
+  { id: 'off-inspection',   label: '点検',         planKey: 'inspectionPlan',     actualKey: 'inspectionActual',     unit: '件', paceKey: 'office_inspection' },
+  { id: 'off-sales',        label: '売上 実績',    planKey: 'salesPlan',          actualKey: 'salesActual',          unit: '円' },
+  { id: 'off-forecast',     label: '末見通し',     planKey: 'salesPlan',          calc: _officeSalesForecast,        unit: '円', paceKey: 'office_forecast' },
+  { id: 'off-newMaint',     label: '新規保守台数', planKey: 'newMaintPlan',       actualKey: 'newMaintActual',       unit: '台', paceKey: 'office_newMaint',
+    members: [{ label: '新規保守', planKey: 'newMaintPlan', actualKey: 'newMaintActual' }] },
+  { id: 'off-renewalThis',  label: '当月継続',     planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual',    unit: '件', paceKey: 'office_renewalThis' },
+  { id: 'off-renewalNext',  label: '次月継続',     planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop', unit: '件', paceKey: 'office_renewalNext' },
+  { id: 'off-renewalNext2', label: '次々月継続',   planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual',   unit: '件', paceKey: 'office_renewalNext2',
+    members: [
+      { label: '当月',   planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual' },
+      { label: '次月',   planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop' },
+      { label: '次々月', planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual' },
+    ] },
+  { id: 'off-activityCount',  label: '総活動件数',   valueKey: 'activityCount',   unit: '件' },
+  { id: 'off-promotionCount', label: '新規促進件数', valueKey: 'promotionCount',  unit: '件' },
+  { id: 'off-promotionAcase', label: '促進A案件',    valueKey: 'promotionAcase',  unit: '件' },
+  { id: 'off-salesAcase',     label: 'A案件',        valueKey: 'salesAcase',      unit: '円' },
+  { id: 'off-maintActual',    label: '保守売上 実績', valueKey: 'maintActual',    unit: '円' },
+  { id: 'off-nextBacklog',    label: '翌月分 受注残', valueKey: 'nextMonthBacklog', unit: '円' },
+  { id: 'off-nextCase',       label: '翌月案件',     valueKey: 'nextMonthCase',   unit: '円' },
 ];
 
-/**
- * 進捗タブのセクションを個別の .sort-item に書き込む。
- * 中身が空のセクションは枠ごと隠す（並べ替えハンドルだけが残るのを防ぐ）。
- */
-function _setOfficeSection(id, html) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el.innerHTML = html || '';
-  var item = el.closest('.sort-item');
-  if (item) item.style.display = html ? '' : 'none';
-}
+// 表示設定を切り替えたときに、GASを叩き直さずに描き直すためのキャッシュ
+var _officeMgmtCache = null;
 
-function _clearOfficeSections() {
-  _OFFICE_SECTION_IDS.forEach(function(id) { _setOfficeSection(id, ''); });
+function rerenderManagement() {
+  if (_officeMgmtCache) {
+    renderManagementDashboard(_officeMgmtCache.entry, _officeMgmtCache.officeRows, _officeMgmtCache.memberRows);
+  } else {
+    refreshManagement();
+  }
 }
 
 function renderManagementDashboard(entry, officeRows, memberRows) {
+  _officeMgmtCache = { entry: entry, officeRows: officeRows, memberRows: memberRows };
   var container = document.getElementById('management-container');
   if (!container) return;
 
@@ -3204,19 +3287,21 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
   function rate(plan, actual) {
     return (plan && plan > 0) ? Math.min(Math.round(actual / plan * 100), 999) : 0;
   }
+  // 個人の renderMonthlyKgiProgress と同じマークアップ。外枠 .weekly-gauge-row は itemRow が付ける
   function gaugeBlock(label, plan, actual, itemKey, unit, prevActual, weekActual) {
     var displayPlan   = isWeekly ? Math.round(plan / 3) : plan;
     var displayActual = isWeekly ? weekActual : actual;
     var r  = rate(displayPlan, displayActual);
     var cc = getProgressColorClass(r);
     var cl = getAccentColor(cc);
-    var html = '<div class="office-gauge-block">' +
-           '<div class="office-gauge-row">' +
-           '<span class="office-gauge-label">' + label + '</span>' +
-           '<span class="office-gauge-vals">' + formatNumber(displayActual) + ' / ' + formatNumber(displayPlan) + '</span>' +
-           '<span class="import-rate" style="color:' + cl + '">' + r + '%</span>' +
+    var u  = unit || '';
+    var html = '<div class="weekly-gauge-label">' +
+           '<span>' + label + '</span>' +
+           '<span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">' +
+             formatNumber(displayActual) + u + ' / ' + formatNumber(displayPlan) + u + '</span>' +
+           '<span style="font-family:var(--font-mono);font-weight:700;color:' + cl + '">' + r + '%</span>' +
            '</div>' +
-           '<div class="progress-bar"><div class="progress-fill ' + cc + '" style="width:' + Math.min(r,100) + '%"></div></div>';
+           '<div class="progress-bar" style="margin-top:4px"><div class="progress-fill ' + cc + '" style="width:' + Math.min(r,100) + '%"></div></div>';
     if (!isWeekly && itemKey && plan > 0) {
       var pace = buildPaceInfo({
         itemKey: itemKey, plan: plan, actual: actual,
@@ -3225,13 +3310,13 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
       });
       html += '<div class="kgi-pace-line" style="color:' + getAccentColor(pace.colorClass) + '">' + pace.text + '</div>';
     }
-    html += '</div>';
     return html;
   }
-  function fieldRow(label, val) {
-    return '<div class="office-field-row">' +
-           '<span class="office-field-label">' + label + '</span>' +
-           '<span class="office-field-val">' + val + '</span>' +
+  // 目標を持たない項目。数値だけ出す（週次のときはその週の増分）
+  function valueBlock(label, val, unit) {
+    return '<div class="weekly-gauge-label">' +
+           '<span>' + label + '</span>' +
+           '<span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">' + formatNumber(val) + (unit || '') + '</span>' +
            '</div>';
   }
 
@@ -3304,94 +3389,49 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
            '<div class="office-member-title">所員別</div>' + head + body + '</div>';
   }
 
-  var vsPlanVal   = n('vsPlan');
-  var vsPlanPct   = Math.floor(vsPlanVal   < 5 ? vsPlanVal   * 100 : vsPlanVal);
-
+  // ヘッダー（残営業日・最終取込）はカードの固定部分に書く
   var monthEnd = yearMonth + '-' + String(new Date(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)), 0).getDate()).padStart(2, '0');
   var remainingBizDays = countBusinessDays(lastDate, monthEnd);
-  var remainingDaysText = isWeekly ? '' : '残' + remainingBizDays + '営業日（月末まで）';
+  var remEl  = document.getElementById('office-remaining-days');
+  var lastEl = document.getElementById('office-last-date');
+  if (remEl)  remEl.textContent  = isWeekly ? '' : '残' + remainingBizDays + '営業日';
+  if (lastEl) lastEl.textContent = '最終取込: ' + lastDate;
 
-  var html = '<div class="mgmt-header">' +
-             '<span class="card-title" style="font-size:14px">営業所 日次管理</span>' +
-             '<span class="kgi-remaining-days">' + remainingDaysText + '</span>' +
-             '<span class="mgmt-last-date">最終取込: ' + lastDate + '</span>' +
-             '</div>';
+  // 1項目 = 1行。planKey があればゲージ、無ければ数値のみ。members があれば所員別を中に入れる
+  function itemRow(item) {
+    var inner;
+    if (item.planKey) {
+      var plan = n(item.planKey);
+      var actual, prevActual, weekActual;
+      if (item.calc) {
+        actual     = item.calc(entry);
+        prevActual = prevEntry ? item.calc(prevEntry) : null;
+        weekActual = actual - (baselineEntry ? item.calc(baselineEntry) : 0);
+      } else {
+        actual     = n(item.actualKey);
+        prevActual = pn(item.actualKey);
+        weekActual = wn(item.actualKey);
+      }
+      inner = gaugeBlock(item.label, plan, actual, item.paceKey || null, item.unit, prevActual, weekActual);
+    } else {
+      inner = valueBlock(item.label, isWeekly ? wn(item.valueKey) : n(item.valueKey), item.unit);
+    }
+    var members = item.members ? memberBlock(item.members) : '';
+    return '<div class="weekly-gauge-row sort-item" data-sort-id="' + item.id + '">' + inner + members + '</div>';
+  }
 
-  // 促進
-  var secPromo = '<div class="office-section">' +
-          '<div class="office-section-title">促進</div>' +
-          fieldRow('総活動件数', formatNumber(n('activityCount'))) +
-          fieldRow('新規促進件数', formatNumber(n('promotionCount'))) +
-          fieldRow('促進A案件', formatNumber(n('promotionAcase'))) +
-          '</div>';
+  var rows = _OFFICE_PROGRESS_ITEMS
+    .filter(function(item) { return !isProgressHidden('office', item.id); })
+    .map(itemRow)
+    .join('');
 
-  // 点検
-  var secInspection = '<div class="office-section">' +
-          '<div class="office-section-title">点検</div>' +
-          gaugeBlock('点検', n('inspectionPlan'), n('inspectionActual'), 'office_inspection', '件', pn('inspectionActual'), wn('inspectionActual')) +
-          '</div>';
-
-  // 売上
-  var forecastVal = _officeSalesForecast(entry);
-  var prevForecastVal = prevEntry ? _officeSalesForecast(prevEntry) : null;
-  var weekForecastVal = forecastVal - (baselineEntry ? _officeSalesForecast(baselineEntry) : 0);
-  var fRate = rate(n('salesPlan'), forecastVal);
-  var secSales = '<div class="office-section">' +
-          '<div class="office-section-title">売上</div>' +
-          gaugeBlock('売上 実績', n('salesPlan'), n('salesActual'), null, null, null, wn('salesActual')) +
-          gaugeBlock('末見通し', n('salesPlan'), forecastVal, 'office_forecast', '円', prevForecastVal, weekForecastVal) +
-          fieldRow('A案件', formatNumber(n('salesAcase'))) +
-          fieldRow('保守売上 実績', formatNumber(n('maintActual'))) +
-          fieldRow('対計画率', '<span style="color:' + getAccentColor(getProgressColorClass(vsPlanPct)) + '">' + vsPlanPct + '%</span>') +
-          '</div>';
-
-  // 保守 ＝ 新規保守。継続分は「継続」セクションで見るのでここには入れない
-  var secMaint = '<div class="office-section">' +
-          '<div class="office-section-title">保守</div>' +
-          gaugeBlock('新規保守台数', n('newMaintPlan'), n('newMaintActual'), 'office_newMaint', '台', pn('newMaintActual'), wn('newMaintActual')) +
-          memberBlock([{ label: '新規保守', planKey: 'newMaintPlan', actualKey: 'newMaintActual' }]) +
-          '</div>';
-
-  // 継続 ＝ 保守の更新が必要なもの。当月→次月→次々月の時間順
-  var secRenewal = '<div class="office-section">' +
-          '<div class="office-section-title">継続</div>' +
-          gaugeBlock('当月継続', n('renewalThisPlan'), n('renewalThisActual'), 'office_renewalThis', '件', pn('renewalThisActual'), wn('renewalThisActual')) +
-          gaugeBlock('次月継続', n('renewalNextPlanTop'), n('renewalNextActualTop'), 'office_renewalNext', '件', pn('renewalNextActualTop'), wn('renewalNextActualTop')) +
-          gaugeBlock('次々月継続', n('renewalNext2Plan'), n('renewalNext2Actual'), 'office_renewalNext2', '件', pn('renewalNext2Actual'), wn('renewalNext2Actual')) +
-          memberBlock([
-            { label: '当月',   planKey: 'renewalThisPlan',    actualKey: 'renewalThisActual' },
-            { label: '次月',   planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop' },
-            { label: '次々月', planKey: 'renewalNext2Plan',   actualKey: 'renewalNext2Actual' },
-          ]) +
-          '</div>';
-
-  // 翌月以降
-  var secNext = '<div class="office-section office-section-next">' +
-          '<div class="office-section-title">翌月以降</div>' +
-          fieldRow('翌月分 受注残', formatNumber(n('nextMonthBacklog'))) +
-          fieldRow('翌月案件', formatNumber(n('nextMonthCase'))) +
-          '</div>';
-
-  // KPIチャート
-  var secChart = '<div class="card">' +
-          '<div class="card-title">KPI達成率</div>' +
-          '<div class="office-kpi-wrap"><canvas id="office-kpi-chart"></canvas></div>' +
-          '</div>';
-
-  container.innerHTML = html;
+  container.innerHTML = rows ||
+    '<div style="color:var(--text-muted);font-size:13px">表示設定ですべての項目が非表示になっています</div>';
   _renderKpiAlerts(entry, container);
 
-  _setOfficeSection('office-sec-promo',      secPromo);
-  _setOfficeSection('office-sec-inspection', secInspection);
-  _setOfficeSection('office-sec-sales',      secSales);
-  _setOfficeSection('office-sec-maint',      secMaint);
-  _setOfficeSection('office-sec-renewal',    secRenewal);
-  _setOfficeSection('office-sec-next',       secNext);
-  _setOfficeSection('office-sec-chart',      secChart);
-
-  // 並べ替えハンドルは既存分をスキップするので毎回呼んでよい
-  var tab = document.getElementById('tab-office-dashboard');
-  if (tab && typeof addSortHandles === 'function') addSortHandles(tab);
+  // 行は描画のたびに作り直すので、並び順の復元とつまみの付与を毎回やる
+  restoreSortOrder('management-container');
+  addSortHandles(container, 'sort-handle-row');
 
   renderOfficeKpiChart(entry);
 }
@@ -4598,6 +4638,7 @@ function _buildOfficeReportSettingsPanel() {
   panel.querySelectorAll('input[type="checkbox"]').forEach(function(chk) {
     chk.addEventListener('change', function() {
       officeReportSettings[chk.dataset.key] = chk.checked;
+      uiSet('reportSettings.office', Object.assign({}, officeReportSettings));
     });
   });
 }
@@ -5262,6 +5303,7 @@ async function saveOfficeDailyFromModal() {
 // ------------------------------------------------------------------
 
 function initApp() {
+  loadUiSettingsFromCache();   // 描画前に並び順・出力設定のキャッシュを当てる
   initNavigation();
   updateHeaderDate();
   initInputTab();
@@ -5280,6 +5322,7 @@ function initApp() {
   initScrollIntoViewOnFocus();
   initSortable();
   initHeaderReload();
+  loadUiSettingsFromServer();  // サーバー値が届いたら上書きして作り直す
   console.log('Nice Serviceman 日報 - 初期化完了');
 }
 
@@ -5355,6 +5398,134 @@ function initScrollIntoViewOnFocus() {
 }
 
 // ============================================================
+// UI設定（表示/非表示・並び順・出力設定）の保存
+// ============================================================
+// userSettings シートの uiSettings キー1本にJSONで入れる。
+// saveUserSettings は1キーずつの保存なので、まとめると通信が1回で済む。
+// localStorage はキャッシュ。サーバー応答を待つ間のちらつき防止と、
+// 電波が無い現場でも見た目が保たれるようにするため。
+//
+// uiSettings = {
+//   sortOrder:      { <コンテナid>: [sortId, …] }   … カードも行も同じ表
+//   progressHidden: { personal: [key, …], office: [id, …] }
+//   reportSettings: { personal: {…}, office: {…} }
+// }
+var _uiSettings   = {};
+var _uiSaveTimer  = null;
+var UI_SETTINGS_LS_KEY = 'uiSettings';
+
+function uiGet(path, dflt) {
+  var cur = _uiSettings;
+  var parts = path.split('.');
+  for (var i = 0; i < parts.length; i++) {
+    if (cur === null || typeof cur !== 'object') return dflt;
+    cur = cur[parts[i]];
+  }
+  return cur === undefined ? dflt : cur;
+}
+
+function uiSet(path, value) {
+  var parts = path.split('.');
+  var cur = _uiSettings;
+  for (var i = 0; i < parts.length - 1; i++) {
+    if (cur[parts[i]] === null || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+  saveUiSettings();
+}
+
+/** localStorage に即書き、サーバーへは800msまとめて1回だけ送る */
+function saveUiSettings() {
+  // 起動時にサーバー値と比べるため、変更のたびに時刻を刻む
+  _uiSettings.updatedAt = Date.now();
+  try { localStorage.setItem(UI_SETTINGS_LS_KEY, JSON.stringify(_uiSettings)); } catch (e) {}
+  clearTimeout(_uiSaveTimer);
+  _uiSaveTimer = setTimeout(function() {
+    saveUserSettings({ key: 'uiSettings', value: JSON.stringify(_uiSettings) })
+      .catch(function(e) { console.warn('[uiSettings] 保存失敗。次の変更時に再送します:', e); });
+  }, 800);
+}
+
+/** 古い sortOrder_<tabId>（端末ごと保存）を1回だけ取り込む。古いキーは消さない */
+function _migrateLegacySortOrder() {
+  var so = _uiSettings.sortOrder || {};
+  if (Object.keys(so).length) return;
+  var found = {};
+  _SORT_TABS.forEach(function(tabId) {
+    try {
+      var v = JSON.parse(localStorage.getItem('sortOrder_' + tabId));
+      if (Array.isArray(v) && v.length) found[tabId] = v;
+    } catch (e) {}
+  });
+  if (Object.keys(found).length) _uiSettings.sortOrder = found;
+}
+
+/** メモリ上の設定オブジェクトへ反映（reportSettings は既存コードが直接参照している） */
+function _applyUiSettingsToState() {
+  var rs = _uiSettings.reportSettings || {};
+  if (rs.personal) Object.assign(reportSettings, rs.personal);
+  if (rs.office)   Object.assign(officeReportSettings, rs.office);
+}
+
+/** 起動時: キャッシュを同期的に適用する（描画前に呼ぶ） */
+function loadUiSettingsFromCache() {
+  try {
+    var raw = localStorage.getItem(UI_SETTINGS_LS_KEY);
+    _uiSettings = raw ? (JSON.parse(raw) || {}) : {};
+  } catch (e) { _uiSettings = {}; }
+  _migrateLegacySortOrder();
+  _applyUiSettingsToState();
+}
+
+/**
+ * 起動後: サーバー値と手元のキャッシュを突き合わせる。
+ *
+ * 無条件にサーバーを採ると、電波が無いときに変えた設定（保存が届いていない）が
+ * 次の起動で消える。updatedAt が新しい方を残し、手元が新しければ送り直す。
+ */
+async function loadUiSettingsFromServer() {
+  try {
+    var s = await getUserSettings();
+    var server = null;
+    if (s && s.uiSettings) {
+      try { server = JSON.parse(String(s.uiSettings)); } catch (e) { server = null; }
+    }
+    if (!server || typeof server !== 'object') {
+      // サーバーに無い（初回 or 移行直後）→ 手元の内容を送っておく
+      if (Object.keys(_uiSettings).length) saveUiSettings();
+      return;
+    }
+    var localAt  = Number(_uiSettings.updatedAt) || 0;
+    var serverAt = Number(server.updatedAt) || 0;
+    if (localAt > serverAt) {
+      saveUiSettings();   // 手元が新しい（前回オフラインで変えた等）→ 送り直す
+      return;
+    }
+    _uiSettings = server;
+    try { localStorage.setItem(UI_SETTINGS_LS_KEY, JSON.stringify(_uiSettings)); } catch (e) {}
+    _applyUiSettingsToState();
+    _onUiSettingsLoaded();
+  } catch (e) {
+    console.warn('[uiSettings] サーバーから取得できず。キャッシュで続行します:', e);
+  }
+}
+
+/** サーバー値が届いたあとに、並び順・パネル・進捗の表示を作り直す */
+function _onUiSettingsLoaded() {
+  _SORT_TABS.forEach(function(id) { restoreSortOrder(id); });
+  if (typeof buildReportSettingsPanel === 'function') buildReportSettingsPanel();
+  if (typeof _buildOfficeReportSettingsPanel === 'function') _buildOfficeReportSettingsPanel();
+  if (typeof buildProgressSettingsPanel === 'function') buildProgressSettingsPanel();
+  if (typeof buildOfficeProgressSettingsPanel === 'function') buildOfficeProgressSettingsPanel();
+  // 進捗タブがすでに描かれていれば作り直す（データの再取得はしない）
+  var dash = document.getElementById('tab-dashboard');
+  if (dash && dash.classList.contains('active') && typeof refreshDashboard === 'function') refreshDashboard();
+  var odash = document.getElementById('tab-office-dashboard');
+  if (odash && odash.classList.contains('active') && typeof refreshManagement === 'function') refreshManagement();
+}
+
+// ============================================================
 // ブロック並び替え（ドラッグ＆ドロップ）
 // ============================================================
 var _sortState = {
@@ -5385,12 +5556,16 @@ function initSortable() {
   document.addEventListener('pointercancel', _onSortPointerUp);
 }
 
-function addSortHandles(tabEl) {
+/**
+ * @param {Element} tabEl - 直下の .sort-item に手を付ける
+ * @param {string} [handleClass] - 'sort-handle-row' を渡すと行用の小さいつまみになる
+ */
+function addSortHandles(tabEl, handleClass) {
   tabEl.querySelectorAll(':scope > .sort-item').forEach(function(item) {
-    if (item.querySelector('.sort-handle')) return;
+    if (item.querySelector(':scope > .sort-handle')) return;
     var handle = document.createElement('div');
-    handle.className = 'sort-handle';
-    handle.textContent = '· · ·';
+    handle.className = 'sort-handle' + (handleClass ? ' ' + handleClass : '');
+    handle.textContent = handleClass ? '≡' : '· · ·';
     handle.setAttribute('title', 'ドラッグして並び替え');
     item.insertBefore(handle, item.firstChild);
     handle.addEventListener('pointerdown', _onSortPointerDown);
@@ -5438,9 +5613,14 @@ function _onSortPointerMove(e) {
   _clearSortHighlight();
 
   if (!elBelow) return;
+  // 行も .sort-item なので、closest は一番内側（行）を拾う。
+  // ドラッグ中のコンテナ直下の要素になるまで親をたどらないと、
+  // カードをドラッグ中に行の上を通った瞬間ドロップ先を見失う。
   var target = elBelow.closest('.sort-item');
+  while (target && target.parentElement !== _sortState.tabEl) {
+    target = target.parentElement ? target.parentElement.closest('.sort-item') : null;
+  }
   if (!target || target === _sortState.dragging) return;
-  if (target.parentElement !== _sortState.tabEl) return;
 
   var rect = target.getBoundingClientRect();
   var mid = rect.top + rect.height / 2;
@@ -5493,18 +5673,13 @@ function _saveSortOrder(tabId) {
   tab.querySelectorAll(':scope > .sort-item').forEach(function(item) {
     order.push(item.dataset.sortId);
   });
-  try {
-    localStorage.setItem('sortOrder_' + tabId, JSON.stringify(order));
-  } catch (ex) {}
+  uiSet('sortOrder.' + tabId, order);
 }
 
 function restoreSortOrder(tabId) {
   var tab = document.getElementById(tabId);
   if (!tab) return;
-  var saved;
-  try {
-    saved = JSON.parse(localStorage.getItem('sortOrder_' + tabId));
-  } catch (ex) { return; }
+  var saved = uiGet('sortOrder.' + tabId, null);
   if (!Array.isArray(saved) || saved.length === 0) return;
 
   // 保存順に無いカード（アプリ更新で増えたもの）はDOM順のまま末尾に回す。

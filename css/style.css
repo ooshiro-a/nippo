@@ -1183,6 +1183,7 @@ input.kgi-field-input {
 .kgi-remaining-days {
   font-size: 11px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* KGI項目別 必要ペース表示 */
@@ -1994,6 +1995,41 @@ input.kgi-field-input {
   opacity: 0.9;
   color: var(--accent-cyan);
 }
+/* 行用の小さいつまみ（進捗タブの各項目）。カード用の横一杯のバーとは別物 */
+.sort-handle.sort-handle-row {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 13px;
+  letter-spacing: 0;
+  opacity: 0.3;
+}
+.weekly-gauge-row.sort-item { padding-left: 18px; }
+.weekly-gauge-row.sort-item.sort-over-top    { border-top: 2px solid var(--accent-cyan); }
+.weekly-gauge-row.sort-item.sort-over-bottom { border-bottom: 2px solid var(--accent-cyan); }
+
+/* 進捗タブのツールバー右端の「表示設定」ボタン */
+.kgi-progress-toolbar { gap: 8px; }
+.kgi-progress-toolbar .kgi-remaining-days { flex: 1; text-align: right; }
+.toolbar-settings-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toolbar-settings-btn.toolbar-settings-btn-active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
 .sort-item.sort-dragging {
   opacity: 0.35;
 }
