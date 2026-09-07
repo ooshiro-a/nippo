@@ -339,6 +339,17 @@
 
         <!-- 📊 進捗タブ（営業所） -->
         <section id="tab-office-dashboard" class="tab-pane">
+          <!-- 出力コントロール。あえて .sort-item にしていない。
+               restoreSortOrder() は保存順に無い新規カードを末尾に回すので、
+               sort-item にするとボタンがタブの一番下に出てしまう -->
+          <div id="office-dash-report-controls" class="report-controls">
+            <div class="report-btn-row">
+              <button class="btn btn-secondary report-btn" id="office-dash-print-btn">印刷/PDF</button>
+              <button class="btn btn-secondary report-btn" id="office-dash-settings-btn">出力設定</button>
+            </div>
+            <div id="office-dash-report-settings" class="report-settings" style="display:none"></div>
+          </div>
+
           <div class="sort-item" data-sort-id="sort-office-mgmt">
           <!-- 営業所 日次管理（個人の「今月の進捗」と同じ作り: 1枚のカードに全項目） -->
           <div class="card dash-card-amber" id="office-mgmt-card">
@@ -361,7 +372,7 @@
           </div>
           </div>
           <div class="sort-item" data-sort-id="sort-office-kpi-chart">
-          <div class="card">
+          <div class="card" id="office-kpi-chart-card">
             <div class="card-title">KPI達成率</div>
             <div class="office-kpi-wrap"><canvas id="office-kpi-chart"></canvas></div>
           </div>
