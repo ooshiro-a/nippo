@@ -720,7 +720,7 @@ function generateReportImpl(data) {
     'proposalCollection','tossUpAmount','resultConversion','production',
     'faultDiagnosis','remainingRepair','delivery','rediagnosis'];
   var KPI_LABELS = {
-    inspection:'点検件数', promotionAmount:'促進受注額', promotionCount:'促進件数',
+    inspection:'点検台数', promotionAmount:'促進受注額', promotionCount:'促進件数',
     maintenanceThisMonth:'当月保守継続', maintenanceNextMonth:'次月保守継続',
     maintenanceNext2Month:'次々月保守継続', newAcquisition:'新規保守',
     acCleaning:'エアコン洗浄', fullMaintenance:'フルメンテリース', tossUp:'営業トスアップ',
@@ -734,7 +734,7 @@ function generateReportImpl(data) {
   // 増やすたびに漏れて「3,500件」のような出力になる。
   // 金額は円単位（フロントの KGI_FIELDS の unit と一致させること）。
   var KPI_UNITS  = {
-    inspection:'件', promotionAmount:'円', promotionCount:'件',
+    inspection:'台', promotionAmount:'円', promotionCount:'件',
     maintenanceThisMonth:'台', maintenanceNextMonth:'台',
     maintenanceNext2Month:'台', newAcquisition:'台',
     acCleaning:'件', fullMaintenance:'件', tossUp:'件',
@@ -951,6 +951,33 @@ function generateOfficeReportImpl(data) {
   var curRows  = getOfficeDailyImpl({ dateFrom: dateFrom, dateTo: dateTo, scope: 'office' });
   var prevRows = getOfficeDailyImpl({ dateFrom: prevFrom, dateTo: prevTo, scope: 'office' });
 
+  /**
+   * 手入力の点検実行数を月内で前方向に埋める（app.js の _fillOfficeManualForward と同じ考え方）。
+   * 手入力はその月の最新行に書く。あとで日計表を取り込むと新しい行ができ、その行の
+   * inspectionManual は空になる。埋めないと「最新行を見る」getLatest が 0 を拾う。
+   */
+  function fillManualForward(rows) {
+    var byMonth = {};
+    rows.forEach(function(r) {
+      var ym = String(dateToYMD(r.date)).slice(0, 7);
+      (byMonth[ym] || (byMonth[ym] = [])).push(r);
+    });
+    Object.keys(byMonth).forEach(function(ym) {
+      byMonth[ym].sort(function(a, b) {
+        return String(dateToYMD(a.date)).localeCompare(String(dateToYMD(b.date)));
+      });
+      var last = 0;
+      byMonth[ym].forEach(function(r) {
+        var v = r.inspectionManual;
+        if (v === '' || v === null || v === undefined) r.inspectionManual = last;
+        else last = Number(v) || 0;
+      });
+    });
+    return rows;
+  }
+  fillManualForward(curRows);
+  fillManualForward(prevRows);
+
   function getLatest(rows) {
     if (!rows.length) return {};
     var e = rows.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, rows[0]);
@@ -970,7 +997,7 @@ function generateOfficeReportImpl(data) {
    * daily / weekly / monthly は単月内なので getLatest で正しい。
    */
   var OFFICE_SUM_KEYS = [
-    'inspectionPlan', 'inspectionActual',
+    'inspectionPlan', 'inspectionActual', 'inspectionManual',
     'salesPlan', 'salesActual', 'salesAcase',
     'newMaintPlan', 'newMaintActual',
     'renewalThisPlan', 'renewalThisActual',
@@ -1002,7 +1029,7 @@ function generateOfficeReportImpl(data) {
   // 「salesActual以外は件」のような分岐だと、項目を足すたびに漏れる。
   // 点検は回数なので「件」、保守と継続は台数なので「台」（あきぼーの業務定義）。
   var OFFICE_UNITS = {
-    inspectionActual: '件', inspectionPlan: '件',
+    inspectionActual: '台', inspectionPlan: '台', inspectionManual: '台',
     salesActual: '円', salesForecast: '円', salesPlan: '円',
     newMaintActual: '台', newMaintPlan: '台',
     renewalThisActual: '台', renewalThisPlan: '台',
@@ -1015,7 +1042,8 @@ function generateOfficeReportImpl(data) {
   };
 
   var KPI_DEFS = [
-    { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検件数' },
+    { key: 'inspectionManual',     planKey: 'inspectionPlan',      label: '点検実行数' },
+    { key: 'inspectionActual',     planKey: 'inspectionPlan',      label: '点検 日計表実績' },
     { key: 'salesActual',          planKey: 'salesPlan',           label: '売上実績' },
     { key: 'salesForecast',        planKey: 'salesPlan',           label: '末見通し' },
     { key: 'newMaintActual',       planKey: 'newMaintPlan',        label: '新規保守' },
@@ -1318,7 +1346,11 @@ var OFFICE_DAILY_COLS = [
   'nextMonthBacklog', 'nextMonthCase',
   'renewalNext2Plan', 'renewalNext2Actual', 'renewalNext2Rate',
   'renewalRate', 'shortfall',
-  'source', 'importedAt', 'rawText'
+  'source', 'importedAt', 'rawText',
+  // 点検実行数（手入力）。日計表の inspectionActual は反映が遅れるため、
+  // 実台数をアプリ側から入れる別フィールド。取込は inspectionActual をこれまでどおり更新する。
+  // 列は必ず末尾に足すこと（途中挿入すると既存全行がずれる）
+  'inspectionManual'
 ];
 
 // officeSalesPlan 列順
@@ -1427,6 +1459,9 @@ function saveOfficeDailyImpl(entries) {
   if (!Array.isArray(entries)) entries = [entries];
   _ensureOfficeSheets();  // シートが存在しない場合は自動作成
   var sheet   = getSheet(SHEET_OFFICE_DAILY);
+  // 列が足りないと setValues が範囲外で落ちる。_ensuredSheetCols は1実行内のキャッシュなので、
+  // 読み取りを挟まないPOSTだけの実行では確保されていない
+  _ensureSheetColumns_(sheet, OFFICE_DAILY_COLS);
   var lastRow = sheet.getLastRow();
   var saved   = 0;
 

@@ -324,6 +324,27 @@
           </div>
           </div>
 
+          <div class="sort-item" data-sort-id="sort-office-inspection">
+          <!-- 点検実行数の手入力。日計表の点検実績は反映が遅れる（当月は0のまま）ので、
+               実台数をここで入れる。入力忘れを防ぐため取込タブに置いている -->
+          <div class="card" style="margin-top:12px">
+            <div class="card-title">🔧 点検実行数</div>
+            <p class="import-desc">日計表は反映が遅れるため、実台数をここで入力します（毎日）</p>
+            <div class="insp-manual-row">
+              <span class="insp-manual-label">対象月</span>
+              <span class="insp-manual-month" id="insp-manual-month">-</span>
+            </div>
+            <div class="insp-manual-row">
+              <span class="insp-manual-label">実行数</span>
+              <input type="number" id="insp-manual-input" step="1" placeholder="0" />
+              <span class="insp-manual-unit">台</span>
+              <span class="insp-manual-plan" id="insp-manual-plan"></span>
+            </div>
+            <button id="insp-manual-save-btn" class="btn btn-primary">保存する</button>
+            <div id="insp-manual-feedback" class="insp-manual-feedback"></div>
+          </div>
+          </div>
+
           <div class="sort-item" data-sort-id="sort-office-plan">
           <!-- 売上計画取込エリア（セパレータ） -->
           <div class="card" style="margin-top:12px">

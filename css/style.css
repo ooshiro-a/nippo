@@ -1195,6 +1195,54 @@ input.kgi-field-input {
   margin-top: 2px;
 }
 
+/* メインを別の数字にした項目（点検＝実行数）の、元の実績を併記する行 */
+.kgi-sub-line {
+  font-size: 11px;
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* 取込タブ 点検実行数の手入力 */
+.insp-manual-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.insp-manual-label {
+  color: var(--text-secondary);
+  min-width: 52px;
+}
+.insp-manual-month {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.insp-manual-row input[type="number"] {
+  width: 100px;
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.insp-manual-unit {
+  color: var(--text-secondary);
+}
+.insp-manual-plan {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.insp-manual-feedback {
+  font-size: 12px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  min-height: 1em;
+}
+.insp-manual-feedback.is-error { color: var(--accent-red); }
+.insp-manual-feedback.is-ok    { color: var(--accent-emerald); }
+
 /* AI レポートカード */
 .dash-ai-header {
   display: flex;

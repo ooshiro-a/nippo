@@ -2267,7 +2267,7 @@ async function handleExportAllCsv() {
     const { entries } = historyState.allData;
     const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
     const header = [
-      '日付', '点検件数', '促進受注額', '促進件数',
+      '日付', '点検台数', '促進受注額', '促進件数',
       '当月保守継続', '次月保守継続', '次々月保守継続',
       '新規保守', 'AC洗浄', 'フルメンテ', 'トスアップ',
       'トスアップ金額', '提案回収', '実績化', '増産',
@@ -2890,7 +2890,7 @@ const FORECAST_FIELDS = [
 ];
 
 const KGI_FIELDS = [
-  { key: 'inspection',            label: '点検件数',         unit: '件', color: 'cyan' },
+  { key: 'inspection',            label: '点検台数',         unit: '台', color: 'cyan' },
   { key: 'promotionAmount',       label: '促進受注額',       unit: '円', money: true, color: 'cyan' },
   { key: 'promotionCount',        label: '促進件数',         unit: '件', color: 'cyan' },
   { key: 'maintenanceThisMonth',  label: '当月保守継続',     unit: '台', color: 'cyan' },
@@ -3331,6 +3331,7 @@ function _buildOfficeDashPrintHtml(opts) {
     '.progress-fill.amber{background-color:#fbbf24}' +
     '.progress-fill.red{background-color:#f87171}' +
     '.kgi-pace-line{font-size:11px;margin-top:2px}' +
+    '.kgi-sub-line{font-size:11px;margin-top:3px;color:#555;font-family:var(--font-mono)}' +
     '.kpi-alert-banner{background:#fff3f3;border:1px solid #c00;border-radius:6px;padding:6px 10px;' +
       'margin-bottom:10px;font-size:12px;color:#c00}' +
     '.office-member-list{margin-top:10px;padding-top:8px;border-top:1px dashed #ddd}' +
@@ -3427,6 +3428,9 @@ async function refreshManagement() {
     // 週次の起点（週初より前の最終行）は必ず同じ月の中から取る必要がある。
     // 前月まで広げると前月末の大きい値との差になり、週次の実績がマイナスになる。
     var rows  = await getOfficeDaily({ dateFrom: ym + '-01', dateTo: ym + '-31' });
+    // 手入力の点検実行数を月内で埋める。埋めないと、手入力のあとに取込した日が
+    // 最新行になった時点で入れた値が消える
+    _fillOfficeManualForward(rows || []);
 
     var officeRows = (rows || []).filter(function(r) { return r.scope === 'office'; });
     var memberRows = (rows || []).filter(function(r) { return r.scope === 'member'; });
@@ -3449,7 +3453,10 @@ async function refreshManagement() {
 // members を持つ項目は、そのゲージ行の中に所員別ブロックがぶら下がる。
 // 「保守」は新規保守のみ、「継続」は当月/次月/次々月の3項目（CLAUDE.md 参照）。
 var _OFFICE_PROGRESS_ITEMS = [
-  { id: 'off-inspection',   label: '点検',         planKey: 'inspectionPlan',     actualKey: 'inspectionActual',     unit: '件', paceKey: 'office_inspection' },
+  // 点検はメインを「実行数（手入力）」にし、日計表の実績はサブ行に回す。
+  // 日計表の実績は反映が遅れるので、月の途中では進捗として使えない
+  { id: 'off-inspection',   label: '点検 実行数',  planKey: 'inspectionPlan',     calc: _officeInspectionManual,     unit: '台', paceKey: 'office_inspection',
+    subKey: 'inspectionActual', subLabel: '日計表 実績' },
   { id: 'off-sales',        label: '売上 実績',    planKey: 'salesPlan',          actualKey: 'salesActual',          unit: '円' },
   { id: 'off-forecast',     label: '末見通し',     planKey: 'salesPlan',          calc: _officeSalesForecast,        unit: '円', paceKey: 'office_forecast' },
   { id: 'off-newMaint',     label: '新規保守台数', planKey: 'newMaintPlan',       actualKey: 'newMaintActual',       unit: '台', paceKey: 'office_newMaint',
@@ -3503,7 +3510,7 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
     return (plan && plan > 0) ? Math.min(Math.round(actual / plan * 100), 999) : 0;
   }
   // 個人の renderMonthlyKgiProgress と同じマークアップ。外枠 .weekly-gauge-row は itemRow が付ける
-  function gaugeBlock(label, plan, actual, itemKey, unit, prevActual, weekActual) {
+  function gaugeBlock(label, plan, actual, itemKey, unit, prevActual, weekActual, sub) {
     var displayPlan   = isWeekly ? Math.round(plan / 3) : plan;
     var displayActual = isWeekly ? weekActual : actual;
     var r  = rate(displayPlan, displayActual);
@@ -3517,6 +3524,13 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
            '<span style="font-family:var(--font-mono);font-weight:700;color:' + cl + '">' + r + '%</span>' +
            '</div>' +
            '<div class="progress-bar" style="margin-top:4px"><div class="progress-fill ' + cc + '" style="width:' + Math.min(r,100) + '%"></div></div>';
+    // サブ行。メインを別の数字にした項目（点検＝実行数）の、元の実績を併記する
+    if (sub) {
+      var sRate = rate(displayPlan, sub.value);
+      html += '<div class="kgi-sub-line">' + sub.label + ' ' +
+              formatNumber(sub.value) + u +
+              (displayPlan > 0 ? ' (' + sRate + '%)' : '') + '</div>';
+    }
     if (!isWeekly && itemKey && plan > 0) {
       var pace = buildPaceInfo({
         itemKey: itemKey, plan: plan, actual: actual,
@@ -3629,7 +3643,11 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
         prevActual = pn(item.actualKey);
         weekActual = wn(item.actualKey);
       }
-      inner = gaugeBlock(item.label, plan, actual, item.paceKey || null, item.unit, prevActual, weekActual);
+      // subKey がある項目は、メインと同じ期間の取り方でサブ行の値も出す
+      var sub = item.subKey
+        ? { label: item.subLabel || '実績', value: isWeekly ? wn(item.subKey) : n(item.subKey) }
+        : null;
+      inner = gaugeBlock(item.label, plan, actual, item.paceKey || null, item.unit, prevActual, weekActual, sub);
     } else {
       inner = valueBlock(item.label, isWeekly ? wn(item.valueKey) : n(item.valueKey), item.unit);
     }
@@ -3654,15 +3672,17 @@ function renderManagementDashboard(entry, officeRows, memberRows) {
 }
 
 function _renderKpiAlerts(entry, container) {
+  // 点検は実行数（手入力）で見る。日計表の実績は反映が遅れて当月ずっと0のままなので、
+  // そちらで判定すると毎月かならず「点検が40%未満」と鳴って警告として機能しない
   var WATCH = [
-    { planKey: 'inspectionPlan',     actualKey: 'inspectionActual',    label: '点検' },
+    { planKey: 'inspectionPlan',     calc: _officeInspectionManual,    label: '点検' },
     { planKey: 'salesPlan',          actualKey: 'salesActual',         label: '売上' },
     { planKey: 'renewalNextPlanTop', actualKey: 'renewalNextActualTop',label: '次月継続' },
     { planKey: 'newMaintPlan',       actualKey: 'newMaintActual',      label: '新規保守台数' }
   ];
   var alerts = WATCH.filter(function(w) {
-    var plan   = Number(entry[w.planKey])   || 0;
-    var actual = Number(entry[w.actualKey]) || 0;
+    var plan   = Number(entry[w.planKey]) || 0;
+    var actual = w.calc ? w.calc(entry) : (Number(entry[w.actualKey]) || 0);
     return plan > 0 && (actual / plan * 100) < 40;
   }).map(function(w) { return w.label; });
 
@@ -3965,13 +3985,49 @@ function _officeSalesForecast(e) {
 // 計画（*Plan）も月ごとの定数なので、実績とまったく同じルールで足してよい。
 
 var OFFICE_SUM_KEYS = [
-  'inspectionPlan', 'inspectionActual',
+  'inspectionPlan', 'inspectionActual', 'inspectionManual',
   'salesPlan', 'salesActual', 'salesAcase',
   'newMaintPlan', 'newMaintActual',
   'renewalThisPlan', 'renewalThisActual',
   'renewalNextPlanTop', 'renewalNextActualTop',
   'renewalNext2Plan', 'renewalNext2Actual',
 ];
+
+/** 点検実行数（手入力）を読む。取込の inspectionActual とは別物 */
+function _officeInspectionManual(e) {
+  return Number(e.inspectionManual) || 0;
+}
+
+/**
+ * 手入力の点検実行数を月内で前方向に埋める（破壊的。取得直後に1回だけ呼ぶ）。
+ *
+ * 手入力は「その月の最新の取込行」に書き込む。そのあと日計表を取り込むと
+ * 新しい日付の行ができ、その行の inspectionManual は空になる。
+ * 営業所の集計は「その月の最新行を見る」作りが多いので、
+ * ここで埋めておかないと入れた値が画面から消える。
+ *
+ * 埋める単位は scope + memberId + 年月。月初リセットをまたがせないこと。
+ */
+function _fillOfficeManualForward(rows) {
+  if (!Array.isArray(rows)) return rows;
+  var groups = {};
+  rows.forEach(function(r) {
+    var key = String(r.scope || '') + '|' + String(r.memberId || '') + '|' + String(r.date).slice(0, 7);
+    (groups[key] || (groups[key] = [])).push(r);
+  });
+  Object.keys(groups).forEach(function(key) {
+    var list = groups[key].slice().sort(function(a, b) {
+      return String(a.date).localeCompare(String(b.date));
+    });
+    var last = 0;
+    list.forEach(function(r) {
+      var v = r.inspectionManual;
+      if (v === '' || v === null || v === undefined) r.inspectionManual = last;
+      else last = Number(v) || 0;
+    });
+  });
+  return rows;
+}
 
 /** 月ごとの最終行。同じ日に複数行あっても最後の1行に収束する */
 function _officeMonthLatest(rows) {
@@ -4098,7 +4154,12 @@ function _officeWeekDelta(rows, ym, weekIndex) {
 // 「保守」は新規保守のこと（継続は含まない）。総保守台数は所員合計と営業所行が
 // 一致しないため 2026-09-05 に全画面から外した（データ列は残してある）。
 var _OFFICE_KPI_DEFS = [
-  { id: 'inspection',   label: '点検',     planKey: 'inspectionPlan',     actualKey: 'inspectionActual',     unit: '件' },
+  // 点検はゲージ・%・前期比を「実行数（手入力）」で出し、日計表の実績はサブ行へ。
+  // 日計表の実績は反映が遅れるため（2026-09 は全日0のまま）。売上の末見通しと同じ手口で、
+  // 仕組み（mainCalc / mainLabel / subLabel）は Step24 で入れたものをそのまま使う。
+  // label は '点検' のまま残す。月別内訳と出力設定のチェックボックスが d.label を使うため
+  { id: 'inspection',   label: '点検',     planKey: 'inspectionPlan',     actualKey: 'inspectionActual',     unit: '台',
+    mainCalc: _officeInspectionManual, mainLabel: '点検 実行数', subLabel: '日計表 実績' },
   { id: 'sales',        label: '売上',     planKey: 'salesPlan',          actualKey: 'salesActual',          unit: '円',
     forecastCalc: _officeSalesForecast, showForecast: true,
     // ゲージ・%・前期比は「末見通し」で出し、実績はサブ行へ（2026-09-05 あきぼー指示）。
@@ -4174,6 +4235,13 @@ function _onOfficeHistPeriodChange() {
     const wEl = document.getElementById('office-hist-week-select');
     if (mEl) officeHistState.yearMonth = mEl.value || getCurrentYearMonthJST();
     if (wEl) officeHistState.weekIndex = Number(wEl.value) || 1;
+  } else if (view === 'monthly' && officeHistState.compareMode) {
+    // 比較ONの月次は単月を選ぶ
+    const mEl = document.getElementById('office-hist-month-input');
+    if (mEl) {
+      officeHistState.yearMonth = mEl.value || getCurrentYearMonthJST();
+      officeHistState.year = Number(officeHistState.yearMonth.slice(0, 4));
+    }
   } else if (view === 'quarterly') {
     const yearEl = document.getElementById('office-hist-year-input');
     const qEl   = document.getElementById('office-hist-quarter-select');
@@ -4196,7 +4264,10 @@ function _onOfficeHistCmpPeriodChange() {
     const wEl = document.getElementById('office-hist-cmp-week-select');
     if (mEl) cp.weekYearMonth = mEl.value || officeHistState.yearMonth;
     if (wEl) cp.weekIndex = Number(wEl.value) || 1;
-  } else if (view === 'monthly' || view === 'yearly') {
+  } else if (view === 'monthly') {
+    const el = document.getElementById('office-hist-cmp-month-input');
+    if (el) cp.yearMonth = el.value || _officePrevYearMonth(officeHistState.yearMonth);
+  } else if (view === 'yearly') {
     const el = document.getElementById('office-hist-cmp-year-input');
     if (el) cp.year = Number(el.value) || (officeHistState.year - 1);
   } else if (view === 'quarterly') {
@@ -4206,6 +4277,12 @@ function _onOfficeHistCmpPeriodChange() {
     if (qEl) cp.quarter = qEl.value;
   }
   renderOfficeHistContent();
+}
+
+/** 'YYYY-MM' の前年同月を返す */
+function _officePrevYearMonth(ym) {
+  var y = Number(String(ym).slice(0, 4)) - 1;
+  return y + '-' + String(ym).slice(5, 7);
 }
 
 function _renderOfficeHistPeriodControl() {
@@ -4234,7 +4311,9 @@ function _renderOfficeHistPeriodControl() {
         return '<input type="month" id="office-hist-month-input" value="' + officeHistState.yearMonth + '" style="flex:1" />' +
                '<select id="office-hist-week-select" style="flex:1">' + _weekOpts(officeHistState.weekIndex) + '</select>';
       } else if (view === 'monthly') {
-        return '<input type="number" id="office-hist-year-input" value="' + officeHistState.year + '" min="2020" max="2040" />';
+        // 比較ONのときだけ単月を選ばせる（対前年同月を出すため）。
+        // 比較OFFは今までどおり年を選んで全月カードを並べる
+        return '<input type="month" id="office-hist-month-input" value="' + officeHistState.yearMonth + '" />';
       } else if (view === 'quarterly') {
         return '<input type="number" id="office-hist-year-input" value="' + officeHistState.year + '" min="2020" max="2040" style="flex:1" />' +
                '<select id="office-hist-quarter-select" style="flex:1">' + _qOpts(officeHistState.quarter) + '</select>';
@@ -4264,7 +4343,10 @@ function _renderOfficeHistPeriodControl() {
       var vw = cp.weekIndex || 1;
       return '<input type="month" id="office-hist-cmp-month-input" value="' + vm + '" style="flex:1" />' +
              '<select id="office-hist-cmp-week-select" style="flex:1">' + _weekOpts(vw) + '</select>';
-    } else if (view === 'monthly' || view === 'yearly') {
+    } else if (view === 'monthly') {
+      return '<input type="month" id="office-hist-cmp-month-input" value="' +
+             (cp.yearMonth || _officePrevYearMonth(officeHistState.yearMonth)) + '" />';
+    } else if (view === 'yearly') {
       var v2 = cp.year || (officeHistState.year - 1);
       return '<input type="number" id="office-hist-cmp-year-input" value="' + v2 + '" min="2020" max="2040" />';
     } else if (view === 'quarterly') {
@@ -4316,7 +4398,8 @@ function _renderOfficeHistPeriodControl() {
 async function ensureOfficeHistData() {
   if (!officeHistState.allData) {
     const rows = await getAllOfficeData();
-    officeHistState.allData = (rows || []);
+    // 手入力の点検実行数を月内で埋めてから配る。以降の集計は素の行として扱える
+    officeHistState.allData = _fillOfficeManualForward(rows || []);
   }
 }
 
@@ -4335,7 +4418,11 @@ async function renderOfficeHistContent() {
       const filtered = rows.filter(function(r) { return String(r.date).startsWith(officeHistState.yearMonth); });
       _renderOfficeWeeklyView(filtered, container);
     } else if (view === 'monthly') {
-      const filtered = rows.filter(function(r) { return String(r.date).startsWith(String(officeHistState.year)); });
+      // 比較ONなら当期の1ヶ月だけ。OFFならその年の全月を並べる（従来どおり）
+      const scopeKey = officeHistState.compareMode
+        ? (officeHistState.yearMonth || getCurrentYearMonthJST())
+        : String(officeHistState.year);
+      const filtered = rows.filter(function(r) { return String(r.date).startsWith(scopeKey); });
       _renderOfficeMonthlyView(filtered, container);
     } else if (view === 'quarterly') {
       const filtered = rows.filter(function(r) { return String(r.date).startsWith(String(officeHistState.year)); });
@@ -4593,7 +4680,11 @@ function _onOfficeHistCompareModeToggle() {
       const pd = new Date(Date.UTC(parts[0], parts[1] - 2, 1));
       cp.weekYearMonth = pd.toISOString().slice(0, 7);
       cp.weekIndex = officeHistState.weekIndex;
-    } else if (view === 'monthly' || view === 'yearly') {
+    } else if (view === 'monthly') {
+      // 既定は前年同月
+      if (!officeHistState.yearMonth) officeHistState.yearMonth = getCurrentYearMonthJST();
+      cp.yearMonth = _officePrevYearMonth(officeHistState.yearMonth);
+    } else if (view === 'yearly') {
       cp.year = officeHistState.year - 1;
     } else if (view === 'quarterly') {
       if (officeHistState.quarter === 'all') {
@@ -4652,12 +4743,14 @@ function _getOfficePrevPeriodInfo(view) {
     prev = _officeWeekDelta(rows, cmpYM, cmpWI);
     basisNote = '各週の増分で比較（週末の累計 − 週初直前の累計）。計画は月間計画÷3';
   } else if (view === 'monthly') {
-    const cmpYear = cp.year || year - 1;
-    currLabel = year + '年';
-    prevLabel = cmpYear + '年';
-    currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
-    prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(cmpYear)); });
-    monthSum = true;
+    // 単月 vs 単月。どちらも1ヶ月なので月数そろえは要らない
+    var currYM2 = yearMonth || getCurrentYearMonthJST();
+    var cmpYM2  = cp.yearMonth || _officePrevYearMonth(currYM2);
+    currLabel = formatYearMonth(currYM2);
+    prevLabel = formatYearMonth(cmpYM2);
+    curr = _sumOfficeByMonth(rows.filter(function(r) { return String(r.date).startsWith(currYM2); }));
+    prev = _sumOfficeByMonth(rows.filter(function(r) { return String(r.date).startsWith(cmpYM2); }));
+    basisNote = 'その月の月末値どうしを比較';
   } else if (view === 'quarterly') {
     const qMap = { Q1:[1,2,3], Q2:[4,5,6], Q3:[7,8,9], Q4:[10,11,12], all:null };
     const qOrder = ['Q1','Q2','Q3','Q4'];
@@ -4717,8 +4810,9 @@ function _getOfficePrevPeriodInfo(view) {
 }
 
 const OFFICE_CMP_METRICS = [
-  { key: 'inspectionPlan',       label: '点検計画',     unit: '件' },
-  { key: 'inspectionActual',     label: '点検実績',     unit: '件' },
+  { key: 'inspectionPlan',       label: '点検計画',     unit: '台' },
+  { key: 'inspectionManual',     label: '点検実行数',   unit: '台' },
+  { key: 'inspectionActual',     label: '点検実績',     unit: '台' },
   { key: 'salesPlan',            label: '売上計画',     unit: '万円' },
   { key: 'salesActual',          label: '売上実績',     unit: '万円' },
   { key: 'salesForecast',        label: '末見通し',     unit: '万円' },
@@ -4859,7 +4953,9 @@ function _getOfficePeriodLabel(view) {
   var base = '営業所 ' + (viewLabels[view] || '') + 'レポート';
   if (view === 'daily')     return base + '（' + formatDate(officeHistState.date || getTodayJST()) + '）';
   if (view === 'weekly')    return base + '（' + formatYearMonth(officeHistState.yearMonth) + ' 第' + (officeHistState.weekIndex || 1) + '週）';
-  if (view === 'monthly')   return base + '（' + officeHistState.year + '年）';
+  if (view === 'monthly')   return base + '（' + (officeHistState.compareMode
+                              ? formatYearMonth(officeHistState.yearMonth || getCurrentYearMonthJST())
+                              : officeHistState.year + '年') + '）';
   if (view === 'quarterly') return base + '（' + officeHistState.year + '年 ' + (officeHistState.quarter === 'all' ? '全四半期' : officeHistState.quarter) + '）';
   if (view === 'yearly')    return base + '（' + officeHistState.year + '年）';
   return base;
@@ -5006,7 +5102,7 @@ function _buildOfficeReportSettingsPanel() {
   }).join('');
   var extraCheckboxes = [
     { key: 'showDelta',    label: '前期比' },
-    { key: 'showForecast', label: '売上の実績・対計画' },
+    { key: 'showForecast', label: 'サブ行（実績・対計画）' },
   ].map(function(f) {
     return '<label class="report-chk-label">' +
       '<input type="checkbox" data-key="' + f.key + '" ' + (officeReportSettings[f.key] !== false ? 'checked' : '') + ' />' +
@@ -5053,7 +5149,8 @@ function _buildOfficeReportText(rows, view) {
   const fmt = function(v) { return (Number(v) || 0).toLocaleString(); };
   const entry2lines = function(e) {
     return [
-      '  点検: ' + fmt(e.inspectionActual) + '/' + fmt(e.inspectionPlan) + '件',
+      '  点検 実行数: ' + fmt(_officeInspectionManual(e)) + '/' + fmt(e.inspectionPlan) + '台',
+      '  点検 日計表実績: ' + fmt(e.inspectionActual) + '台',
       '  売上: ¥' + fmt(e.salesActual) + '/¥' + fmt(e.salesPlan),
       '  末見通し: ¥' + fmt(_officeSalesForecast(e)),
       '  次月継続: ' + fmt(e.renewalNextActualTop) + '/' + fmt(e.renewalNextPlanTop) + '台',
@@ -5385,6 +5482,106 @@ function initSetupTriggersBtn() {
 // 営業所 日次取込
 // ------------------------------------------------------------------
 
+// ── 点検実行数の手入力 ─────────────────────────────────────
+//
+// 日計表の点検実績（inspectionActual）は反映が遅れる。2026年9月は全日0のまま。
+// なので実台数をここで入れて、進捗・履歴のメイン数値として使う。
+// inspectionActual は日計表の値のまま残す（月末には確定するため、突き合わせに使える）。
+//
+// 入れる数字は「その月の累計台数」。営業所DBが月内累計なので、これで週次の増分も
+// 履歴の集計もそのまま乗る。
+
+var _inspManualRow = null;   // 保存対象＝その月の最新の office 行
+
+async function initInspectionManual() {
+  var btn = document.getElementById('insp-manual-save-btn');
+  if (!btn) return;
+  btn.addEventListener('click', saveInspectionManual);
+  document.querySelector('[data-tab="tab-office-import"]')
+    .addEventListener('click', loadInspectionManual);
+  await loadInspectionManual();
+}
+
+async function loadInspectionManual() {
+  var monthEl = document.getElementById('insp-manual-month');
+  var inputEl = document.getElementById('insp-manual-input');
+  var planEl  = document.getElementById('insp-manual-plan');
+  var btn     = document.getElementById('insp-manual-save-btn');
+  var fb      = document.getElementById('insp-manual-feedback');
+  if (!monthEl) return;
+
+  var ym = getCurrentYearMonthJST();
+  monthEl.textContent = formatYearMonth(ym);
+  fb.className = 'insp-manual-feedback';
+  fb.textContent = '';
+
+  try {
+    var rows = await getOfficeDaily({ dateFrom: ym + '-01', dateTo: ym + '-31', scope: 'office' });
+    _fillOfficeManualForward(rows || []);
+    var officeRows = (rows || []).slice().sort(function(a, b) {
+      return String(b.date).localeCompare(String(a.date));
+    });
+    _inspManualRow = officeRows[0] || null;
+
+    if (!_inspManualRow) {
+      // 取込行が無いと保存先の行が無い。新しい行を作ると進捗タブが
+      // 「最新1行」としてそれを掴み、売上・保守が全部ゼロで表示される
+      inputEl.value = '';
+      inputEl.disabled = true;
+      btn.disabled = true;
+      planEl.textContent = '';
+      fb.textContent = '今月の日計表がまだ取り込まれていません。先に取込してください';
+      return;
+    }
+
+    inputEl.disabled = false;
+    btn.disabled = false;
+    inputEl.value = _officeInspectionManual(_inspManualRow) || '';
+    planEl.textContent = '／ 計画 ' + formatNumber(Number(_inspManualRow.inspectionPlan) || 0) + '台';
+    fb.textContent = '最終取込 ' + String(_inspManualRow.date).slice(0, 10);
+  } catch (e) {
+    fb.className = 'insp-manual-feedback is-error';
+    fb.textContent = '読み込みエラー: ' + e.message;
+  }
+}
+
+async function saveInspectionManual() {
+  var inputEl = document.getElementById('insp-manual-input');
+  var btn     = document.getElementById('insp-manual-save-btn');
+  var fb      = document.getElementById('insp-manual-feedback');
+  if (!_inspManualRow) return;
+
+  var val = parseNumericInput(inputEl.value);
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+  fb.className = 'insp-manual-feedback';
+  fb.textContent = '';
+  try {
+    // 新しい行は作らず、その月の最新行を丸ごと送り直して1項目だけ差し替える。
+    // saveOfficeDailyImpl は date+scope+memberId で行を丸ごと置き換えるので全列必要
+    var payload = Object.assign({}, _inspManualRow, {
+      date: String(_inspManualRow.date).slice(0, 10),
+      inspectionManual: val,
+    });
+    await saveOfficeDaily([payload]);
+    _inspManualRow.inspectionManual = val;
+
+    // 進捗・履歴が古い値を持ったままにならないよう作り直す
+    _officeMgmtCache = null;
+    officeHistState.allData = null;
+    if (typeof refreshManagement === 'function') refreshManagement();
+
+    fb.className = 'insp-manual-feedback is-ok';
+    fb.textContent = '✓ 保存しました（' + formatNumber(val) + '台）';
+  } catch (e) {
+    fb.className = 'insp-manual-feedback is-error';
+    fb.textContent = '保存に失敗しました: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '保存する';
+  }
+}
+
 function initOfficeDailyImport() {
   var btn  = document.getElementById('btn-office-daily-import');
   var file = document.getElementById('office-daily-file');
@@ -5705,6 +5902,7 @@ function initApp() {
   initAiReportCard();
   initOfficeAiReportCard();
   initOfficeDailyImport();
+  initInspectionManual();
   initOfficeImportTab();
   initOfficeHistoryTab();
   initOfficeKgiTab();
