@@ -2419,7 +2419,9 @@ function _buildPrintHtml({ title, periodText, today, cmpHtml, histHtml }) {
     '.cmp-table td{padding:6px;border-top:1px solid #eee;vertical-align:middle}' +
     '.cmp-label{font-size:12px;color:#333;white-space:nowrap}' +
     '.cmp-val{font-size:12px;text-align:right;white-space:nowrap;color:#111}' +
-    '.cmp-base{color:#666}' +
+    '.cmp-base{color:#555;text-align:right}' +
+    '.cmp-table th.cmp-base,.cmp-table td.cmp-base{background-color:#f2f2f2}' +
+    '.cmp-basis-note{font-size:11px;color:#666;margin:6px 0 2px}' +
     '.cmp-pos{color:#167a16;font-weight:700}' +
     '.cmp-neg{color:#c00;font-weight:700}' +
     '.cmp-chart-wrap{margin-top:8px;text-align:center}' +
@@ -3228,6 +3230,188 @@ function initOfficeDashboardTab() {
       refreshManagement();
     });
   });
+
+  var pBtn = document.getElementById('office-dash-print-btn');
+  if (pBtn) pBtn.addEventListener('click', _handleOfficeDashPrint);
+  var oBtn = document.getElementById('office-dash-settings-btn');
+  if (oBtn) oBtn.addEventListener('click', function() {
+    var panel = document.getElementById('office-dash-report-settings');
+    var isVisible = panel.style.display !== 'none';
+    panel.style.display = isVisible ? 'none' : 'block';
+    oBtn.classList.toggle('report-settings-btn-active', !isVisible);
+  });
+  _buildOfficeDashReportSettingsPanel();
+}
+
+// ── 営業所 進捗タブの印刷 ────────────────────────────────────
+//
+// 「表示設定」は画面に出す項目を選ぶもの、「出力設定」は印刷に載せるカードを選ぶもの。
+// 項目（点検・売上など）の取捨は表示設定に従う＝画面に出ているものがそのまま刷られる。
+// 設定が2箇所に散らばると、どちらを直せばいいのか分からなくなるため。
+
+var officeDashReportSettings = {
+  cardMgmt:    true,   // 営業所 日次管理
+  cardChart:   true,   // KPI達成率（グラフ）
+  cardAi:      true,   // AIレポート
+  showPace:    true,   // ペース行
+  showMembers: true,   // 所員別
+  showAlert:   true,   // 達成率40%未満の警告バナー
+};
+
+var _OFFICE_DASH_PRINT_CARDS = [
+  { key: 'cardMgmt',  label: '営業所 日次管理', id: 'office-mgmt-card' },
+  { key: 'cardChart', label: 'KPI達成率',       id: 'office-kpi-chart-card' },
+  { key: 'cardAi',    label: 'AIレポート',      id: 'office-dash-ai-report-card' },
+];
+
+var _OFFICE_DASH_PRINT_OPTS = [
+  { key: 'showPace',    label: 'ペース行',   selector: '.kgi-pace-line' },
+  { key: 'showMembers', label: '所員別',     selector: '.office-member-list' },
+  { key: 'showAlert',   label: '警告バナー', selector: '.kpi-alert-banner' },
+];
+
+function _buildOfficeDashReportSettingsPanel() {
+  var panel = document.getElementById('office-dash-report-settings');
+  if (!panel) return;
+  function chk(f) {
+    return '<label class="report-chk-label">' +
+      '<input type="checkbox" data-key="' + f.key + '" ' +
+      (officeDashReportSettings[f.key] !== false ? 'checked' : '') + ' />' + f.label + '</label>';
+  }
+  panel.innerHTML =
+    '<div class="report-settings-section-title">印刷するカード</div>' +
+    '<div class="report-settings-grid">' + _OFFICE_DASH_PRINT_CARDS.map(chk).join('') + '</div>' +
+    '<div class="report-settings-section-title">表示オプション</div>' +
+    '<div class="report-settings-grid">' + _OFFICE_DASH_PRINT_OPTS.map(chk).join('') + '</div>';
+  panel.querySelectorAll('input[type="checkbox"]').forEach(function(c) {
+    c.addEventListener('change', function() {
+      officeDashReportSettings[c.dataset.key] = c.checked;
+      uiSet('reportSettings.officeDash', Object.assign({}, officeDashReportSettings));
+    });
+  });
+}
+
+/**
+ * 印刷ウィンドウは style.css を読まないので、インラインの var(--...) が全部未定義になる。
+ * 進捗タブのマークアップは color / font-family をインラインで持っているため、
+ * クラスごとに色を直書きするより :root に変数をまとめて定義するほうが漏れない。
+ * バーの色だけは実色も直書きして二重に担保する（CLAUDE.md「印刷（PDF）のCSS」）。
+ */
+function _buildOfficeDashPrintHtml(opts) {
+  var hideCss = _OFFICE_DASH_PRINT_OPTS.filter(function(o) {
+    return officeDashReportSettings[o.key] === false;
+  }).map(function(o) { return o.selector + '{display:none}'; }).join('');
+
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>' + opts.title + '</title><style>' +
+    ':root{' +
+      '--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;' +
+      '--text-primary:#111;--text-secondary:#555;--text-muted:#888;' +
+      '--border:#ddd;--bg-input:#e9e9e9;--bg-secondary:#f7f7f7;' +
+      '--accent-cyan:#0e7490;--accent-emerald:#167a16;--accent-amber:#b45309;' +
+      '--accent-red:#c00;--accent-rose:#c2185b;--accent-violet:#6d28d9;}' +
+    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;padding:20px 24px;max-width:800px;' +
+      'margin:0 auto;color:#111;font-size:13px;line-height:1.6;background:#fff}' +
+    '.print-header{margin-bottom:18px;border-bottom:2px solid #333;padding-bottom:10px}' +
+    '.print-title{font-size:18px;font-weight:700;margin-bottom:4px}' +
+    '.print-period{font-size:13px;color:#333;font-weight:600;margin-bottom:2px}' +
+    '.print-date{font-size:11px;color:#888}' +
+    '.card{border:1px solid #ccc;padding:12px 14px;margin-bottom:12px;page-break-inside:avoid;background:#fff;border-radius:0}' +
+    '.card-title{font-size:15px;font-weight:700;color:#333;margin-bottom:10px}' +
+    '.dash-weekly-header,.dash-ai-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}' +
+    '.dash-weekly-header .card-title,.dash-ai-header .card-title{margin-bottom:0}' +
+    '.mgmt-last-date{font-size:11px;color:#888}' +
+    '.weekly-gauge-row{margin-bottom:10px;page-break-inside:avoid}' +
+    '.weekly-gauge-label{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;font-size:12px}' +
+    '.weekly-gauge-label>span:first-child{flex:1}' +
+    '.progress-bar{height:8px;background-color:#e9e9e9;border-radius:4px;overflow:hidden;margin-top:4px}' +
+    '.progress-fill{height:100%;border-radius:4px}' +
+    '.progress-fill.green{background-color:#4ade80}' +
+    '.progress-fill.cyan{background-color:#22d3ee}' +
+    '.progress-fill.amber{background-color:#fbbf24}' +
+    '.progress-fill.red{background-color:#f87171}' +
+    '.kgi-pace-line{font-size:11px;margin-top:2px}' +
+    '.kpi-alert-banner{background:#fff3f3;border:1px solid #c00;border-radius:6px;padding:6px 10px;' +
+      'margin-bottom:10px;font-size:12px;color:#c00}' +
+    '.office-member-list{margin-top:10px;padding-top:8px;border-top:1px dashed #ddd}' +
+    '.office-member-title{font-size:11px;color:#888;margin-bottom:6px}' +
+    '.office-member-block{margin-bottom:6px}' +
+    '.office-member-row{display:flex;align-items:center;gap:6px;font-size:12px}' +
+    '.office-member-name{flex:1}' +
+    '.office-member-cell{font-family:var(--font-mono);font-size:11px}' +
+    '.office-member-rate{font-family:var(--font-mono);font-weight:700}' +
+    '.office-kpi-wrap img{width:100%;max-height:260px;object-fit:contain}' +
+    /* AI本文は改行が <br> なので pre-wrap は付けない（行間が二重になる） */
+    '.ai-report-label{font-size:11px;color:#888;margin-bottom:6px}' +
+    '.ai-report-body{font-size:12px;line-height:1.7;color:#111}' +
+    '.ai-section-marker{font-weight:700;color:#0e7490}' +
+    /* 操作用パーツは印刷しない */
+    '.kgi-progress-toolbar,.toolbar-settings-btn,.seg-toggle,.report-controls,.report-settings,' +
+    '.ai-btn-group,.ai-feedback-area,.sort-handle,.sort-handle-row,.kgi-remaining-days{display:none}' +
+    hideCss +
+    '</style></head><body>' +
+    '<div class="print-header">' +
+      '<div class="print-title">' + opts.title + '</div>' +
+      (opts.periodText ? '<div class="print-period">' + opts.periodText + '</div>' : '') +
+      '<div class="print-date">出力日：' + opts.today + '</div>' +
+    '</div>' +
+    opts.bodyHtml +
+    '</body></html>';
+}
+
+async function _handleOfficeDashPrint() {
+  var btn = document.getElementById('office-dash-print-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+  try {
+    if (!_officeMgmtCache) await refreshManagement();
+
+    var parts = [];
+    _OFFICE_DASH_PRINT_CARDS.forEach(function(c) {
+      if (officeDashReportSettings[c.key] === false) return;
+      var el = document.getElementById(c.id);
+      if (!el) return;
+      var html = el.outerHTML;
+      if (c.key === 'cardChart') {
+        // Canvas はそのままでは印刷ウィンドウに写らない。画像に焼いて差し替える
+        var canvas = document.getElementById('office-kpi-chart');
+        if (!canvas) return;
+        // タブを開いた直後に押すとアニメーション途中の空のフレームを掴む。
+        // update('none') は次のフレームに描画を積むだけなので効かない。
+        // stop() でアニメーションを止めて draw() で同期的に描き切ること
+        var chart = (typeof Chart !== 'undefined') ? Chart.getChart(canvas) : null;
+        if (chart) { chart.stop(); chart.update('none'); chart.draw(); }
+        html = html.replace(/<canvas[\s\S]*?<\/canvas>/,
+          '<img src="' + canvas.toDataURL('image/png') + '" />');
+      }
+      parts.push(html);
+    });
+
+    if (!parts.length) {
+      alert('出力設定でカードがすべて外れています。');
+      return;
+    }
+
+    var viewLabel = _officeProgressView === 'weekly' ? '週次' : '月次';
+    var lastDate  = _officeMgmtCache ? String(_officeMgmtCache.entry.date).slice(0, 10) : getTodayJST();
+    var html = _buildOfficeDashPrintHtml({
+      title:      '営業所 進捗レポート',
+      periodText: viewLabel + '　／　' + formatYearMonth(lastDate.slice(0, 7)) + '（最終取込 ' + lastDate + '）',
+      today:      getTodayJST(),
+      bodyHtml:   parts.join(''),
+    });
+
+    var win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(function() { win.print(); }, 400);
+    } else {
+      window.print();
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '印刷/PDF'; }
+  }
 }
 
 async function refreshManagement() {
@@ -3770,6 +3954,146 @@ function _officeSalesForecast(e) {
   return (Number(e.salesActual) || 0) + (Number(e.salesAcase) || 0);
 }
 
+// ── 営業所の期間集計（重要） ───────────────────────────────
+//
+// 営業所の数値は「月内累計で月初にリセットされる」（CLAUDE.md「営業所の週次表示」）。
+// なので期間の合計は **各月の最終行だけ取って月をまたいで足す** のが唯一正しい。
+// 日次行をそのまま足すと取り込み回数だけ膨らむ。
+// 実際 2026年の点検実績は 2186件 なのに 4910件（2.2倍）と表示されていた。
+// 2025年は月末1行しか無いので足しても正しく見えていた。行が増えるほど悪化する。
+//
+// 計画（*Plan）も月ごとの定数なので、実績とまったく同じルールで足してよい。
+
+var OFFICE_SUM_KEYS = [
+  'inspectionPlan', 'inspectionActual',
+  'salesPlan', 'salesActual', 'salesAcase',
+  'newMaintPlan', 'newMaintActual',
+  'renewalThisPlan', 'renewalThisActual',
+  'renewalNextPlanTop', 'renewalNextActualTop',
+  'renewalNext2Plan', 'renewalNext2Actual',
+];
+
+/** 月ごとの最終行。同じ日に複数行あっても最後の1行に収束する */
+function _officeMonthLatest(rows) {
+  var map = {};
+  (rows || []).forEach(function(r) {
+    var ym = String(r.date).slice(0, 7);
+    if (!map[ym] || String(r.date) >= String(map[ym].date)) map[ym] = r;
+  });
+  return map;
+}
+
+/** 日ごとの最終行。日次ビューの重複行対策 */
+function _officeDayLatest(rows, date) {
+  var hit = null;
+  (rows || []).forEach(function(r) {
+    if (String(r.date).slice(0, 10) !== date) return;
+    if (!hit || String(r.date) >= String(hit.date)) hit = r;
+  });
+  return hit;
+}
+
+/**
+ * 各月の最終行を合計した合成エントリを返す。
+ * 既存エントリと同じキー構成なので _buildOfficeHistoryCard / _calcOfficeKpiRate に
+ * そのまま渡せる。データが1行も無ければ null。
+ * @returns {Object|null} 合計値 + _months（使った 'YYYY-MM' の昇順配列）
+ */
+function _sumOfficeByMonth(rows) {
+  var map = _officeMonthLatest(rows);
+  var yms = Object.keys(map).sort();
+  if (!yms.length) return null;
+  var s = {};
+  OFFICE_SUM_KEYS.forEach(function(k) { s[k] = 0; });
+  yms.forEach(function(ym) {
+    OFFICE_SUM_KEYS.forEach(function(k) { s[k] += Number(map[ym][k]) || 0; });
+  });
+  // 末見通しは合計後に計算し直す。保存値をそのまま足さないこと（CLAUDE.md）
+  s.salesForecast = _officeSalesForecast(s);
+  s._months = yms;
+  return s;
+}
+
+/**
+ * 当期と比較期で月数が違うときに、共通する「月番号」だけ残す。
+ * 2026は1〜9月・2025は1〜12月 のような比較で、月数の差が増減率に化けるのを防ぐ。
+ * 当期・比較期のどちらが長くても対称に効く。
+ * @returns {{curr:Array, prev:Array, months:number[]}} months は昇順の月番号(1..12)
+ */
+function _alignOfficeMonths(currRows, prevRows) {
+  function monthNos(rows) {
+    var set = {};
+    Object.keys(_officeMonthLatest(rows)).forEach(function(ym) { set[Number(ym.slice(5, 7))] = true; });
+    return set;
+  }
+  var a = monthNos(currRows);
+  var b = monthNos(prevRows);
+  var common = Object.keys(a).map(Number).filter(function(m) { return b[m]; }).sort(function(x, y) { return x - y; });
+  if (!common.length) return { curr: currRows, prev: prevRows, months: [] };
+  var keep = {};
+  common.forEach(function(m) { keep[m] = true; });
+  function filt(rows) {
+    return (rows || []).filter(function(r) { return keep[Number(String(r.date).slice(5, 7))]; });
+  }
+  return { curr: filt(currRows), prev: filt(prevRows), months: common };
+}
+
+/** [1,2,3,7,8] → "1〜3月・7〜8月" */
+function _formatMonthRange(months) {
+  if (!months || !months.length) return '';
+  var parts = [];
+  var start = months[0], prev = months[0];
+  for (var i = 1; i <= months.length; i++) {
+    var m = months[i];
+    if (m !== prev + 1) {
+      parts.push(start === prev ? start + '月' : start + '〜' + prev + '月');
+      start = m;
+    }
+    prev = m;
+  }
+  return parts.join('・');
+}
+
+/**
+ * その週の増分を返す。週末の累計 − 週初直前の同月内最終行。
+ * 起点は必ず同じ月の中から取ること。前月まで広げると前月末の大きい値との差になり
+ * 実績がマイナスになる（CLAUDE.md「営業所の週次表示」）。
+ * 第1週は起点が月内に無いので「週末の累計＝その月の実績」になるが、
+ * 月が始まったのがその週なので実態と合っている。
+ * 計画は月間計画÷3（進捗タブの週次ゲージと同じ扱い）。
+ * @param {string} ym 'YYYY-MM'
+ * @param {number} weekIndex 1..5（第N週 = ceil(日/7)。期間コントロールの選択肢に合わせる）
+ */
+function _officeWeekDelta(rows, ym, weekIndex) {
+  var monthRows = (rows || []).filter(function(r) { return String(r.date).startsWith(ym); });
+  if (!monthRows.length) return null;
+  var startDay = (weekIndex - 1) * 7 + 1;
+
+  var last = null, base = null;
+  monthRows.forEach(function(r) {
+    var day = Number(String(r.date).slice(8, 10));
+    if (Math.ceil(day / 7) === weekIndex) {
+      if (!last || String(r.date) >= String(last.date)) last = r;
+    }
+    if (day < startDay) {
+      if (!base || String(r.date) >= String(base.date)) base = r;
+    }
+  });
+  if (!last) return null;
+
+  var s = {};
+  OFFICE_SUM_KEYS.forEach(function(k) {
+    var v = Number(last[k]) || 0;
+    if (/Plan(Top)?$/.test(k)) {
+      s[k] = Math.round(v / 3);           // 計画は月間計画の1/3
+    } else {
+      s[k] = v - (base ? (Number(base[k]) || 0) : 0);
+    }
+  });
+  s.salesForecast = _officeSalesForecast(s);
+  return s;
+}
+
 // 営業所の履歴タブ・出力が使うKPI定義。進捗タブのセクション構成と1対1で対応させる。
 // 「保守」は新規保守のこと（継続は含まない）。総保守台数は所員合計と営業所行が
 // 一致しないため 2026-09-05 に全画面から外した（データ列は残してある）。
@@ -4082,7 +4406,9 @@ function _renderOfficeQuarterlyView(entries, container) {
   qDefs.forEach(function(qDef) {
     var qEntries = quarters[qDef.key];
     if (!qEntries.length) return;
-    var latest = qEntries.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, qEntries[0]);
+    // 四半期の実績＝各月の月末値の合計。最終行だけ取ると最後の月の数字しか出ない
+    var totals = _sumOfficeByMonth(qEntries);
+    if (!totals) return;
 
     // 月別内訳（折りたたみ）
     var monthMap = _groupOfficeByMonth(qEntries).reverse();
@@ -4110,7 +4436,10 @@ function _renderOfficeQuarterlyView(entries, container) {
       monthBreakdown = '<details style="margin-top:8px"><summary style="font-size:11px;color:var(--text-muted);cursor:pointer">月別内訳を見る</summary>' +
         '<div style="padding:4px 0">' + rows + '</div></details>';
     }
-    cards.push(_buildOfficeHistoryCard(latest, year + '年 ' + qDef.label + '（期末実績）', { extra: monthBreakdown }));
+    // 見出しは実際に集計できた月を出す。qDef.label の「Q3（7月〜9月）」を併記すると
+    // 「Q3（7月〜9月）（7〜9月 累計）」と二重括弧になるので、qDef.key だけ使う
+    var qRange = _formatMonthRange(totals._months.map(function(ym) { return Number(ym.slice(5, 7)); }));
+    cards.push(_buildOfficeHistoryCard(totals, year + '年 ' + qDef.key + '（' + qRange + ' 累計）', { extra: monthBreakdown }));
   });
   if (!cards.length) {
     container.innerHTML = '<div class="hist-empty">' + year + '年' + (selectedQ !== 'all' ? ' ' + selectedQ : '') + 'のデータはありません</div>';
@@ -4209,10 +4538,10 @@ function _renderOfficeYearlyView(entries, container) {
     if (!years[y]) years[y] = [];
     years[y].push(e);
   });
+  // 年の実績＝各月の月末値の合計。最終行だけ取ると12月（進行中なら最新月）の数字しか出ない
   var list = Object.entries(years).sort(function(a, b) { return b[0].localeCompare(a[0]); }).map(function(kv) {
-    var latest = kv[1].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, kv[1][0]);
-    return { year: kv[0], entries: kv[1], latest: latest };
-  });
+    return { year: kv[0], entries: kv[1], totals: _sumOfficeByMonth(kv[1]) };
+  }).filter(function(y) { return y.totals; });
   if (!list.length) { container.innerHTML = '<div class="hist-empty">データがありません</div>'; return; }
   container.innerHTML = list.map(function(y) {
     var monthMap = _groupOfficeByMonth(y.entries).reverse();
@@ -4240,7 +4569,8 @@ function _renderOfficeYearlyView(entries, container) {
       monthBreakdown = '<details style="margin-top:8px"><summary style="font-size:11px;color:var(--text-muted);cursor:pointer">月別内訳を見る</summary>' +
         '<div style="padding:4px 0">' + rows + '</div></details>';
     }
-    return _buildOfficeHistoryCard(y.latest, y.year + '年（年末実績）', { extra: monthBreakdown });
+    var yRange = _formatMonthRange(y.totals._months.map(function(ym) { return Number(ym.slice(5, 7)); }));
+    return _buildOfficeHistoryCard(y.totals, y.year + '年（' + yRange + ' 累計）', { extra: monthBreakdown });
   }).join('');
 }
 
@@ -4289,21 +4619,11 @@ function _getOfficePrevPeriodInfo(view) {
   const rows = allData;
   const cp = comparePeriod;
 
-  function sumRows(list) {
-    if (!list.length) return null;
-    const s = { inspectionPlan:0, inspectionActual:0, salesPlan:0, salesActual:0,
-                salesAcase:0, renewalNextPlanTop:0, renewalNextActualTop:0,
-                newMaintPlan:0, newMaintActual:0,
-                renewalThisPlan:0, renewalThisActual:0,
-                renewalNext2Plan:0, renewalNext2Actual:0 };
-    list.forEach(function(r) {
-      Object.keys(s).forEach(function(k) { s[k] += (Number(r[k]) || 0); });
-    });
-    s.salesForecast = _officeSalesForecast(s);
-    return s;
-  }
-
+  // 期間の値は「各月の最終行を合計」で出す（_sumOfficeByMonth）。
+  // 日次行をそのまま足していたのが、期間比較が壊れていた原因。
   let currLabel, prevLabel, currRows, prevRows;
+  let curr = null, prev = null, basisNote = '';
+  let monthSum   = false;   // 月次/四半期/年次は「各月の月末値の合計」で出し、月数もそろえる
 
   if (view === 'daily') {
     var currDate = officeHistState.date || getTodayJST();
@@ -4311,8 +4631,12 @@ function _getOfficePrevPeriodInfo(view) {
     var cmpDate = cp.date || ddd.toISOString().slice(0, 10);
     currLabel = formatDate(currDate);
     prevLabel = formatDate(cmpDate);
-    currRows  = rows.filter(function(r) { return String(r.date) === currDate; });
-    prevRows  = rows.filter(function(r) { return String(r.date) === cmpDate; });
+    // 日次はその日の累計をそのまま見る。同じ日に複数行あっても最後の1行だけ使う
+    curr = _officeDayLatest(rows, currDate);
+    prev = _officeDayLatest(rows, cmpDate);
+    if (curr) curr = Object.assign({}, curr, { salesForecast: _officeSalesForecast(curr) });
+    if (prev) prev = Object.assign({}, prev, { salesForecast: _officeSalesForecast(prev) });
+    basisNote = '月初からの累計で比較';
   } else if (view === 'weekly') {
     var currYM = yearMonth;
     var currWI = officeHistState.weekIndex || 1;
@@ -4321,23 +4645,19 @@ function _getOfficePrevPeriodInfo(view) {
       return new Date(Date.UTC(pts[0], pts[1] - 2, 1)).toISOString().slice(0, 7);
     })();
     var cmpWI = cp.weekIndex || 1;
-    function _filterOfficeWeek(ym, wi) {
-      return rows.filter(function(r) {
-        var d = String(r.date);
-        if (!d.startsWith(ym)) return false;
-        return Math.ceil(Number(d.slice(8, 10)) / 7) === wi;
-      });
-    }
     currLabel = formatYearMonth(currYM) + ' 第' + currWI + '週';
     prevLabel = formatYearMonth(cmpYM) + ' 第' + cmpWI + '週';
-    currRows  = _filterOfficeWeek(currYM, currWI);
-    prevRows  = _filterOfficeWeek(cmpYM, cmpWI);
+    // 週はその週に積み上がった分（週末の累計 − 週初直前の累計）
+    curr = _officeWeekDelta(rows, currYM, currWI);
+    prev = _officeWeekDelta(rows, cmpYM, cmpWI);
+    basisNote = '各週の増分で比較（週末の累計 − 週初直前の累計）。計画は月間計画÷3';
   } else if (view === 'monthly') {
     const cmpYear = cp.year || year - 1;
     currLabel = year + '年';
     prevLabel = cmpYear + '年';
     currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
     prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(cmpYear)); });
+    monthSum = true;
   } else if (view === 'quarterly') {
     const qMap = { Q1:[1,2,3], Q2:[4,5,6], Q3:[7,8,9], Q4:[10,11,12], all:null };
     const qOrder = ['Q1','Q2','Q3','Q4'];
@@ -4363,20 +4683,37 @@ function _getOfficePrevPeriodInfo(view) {
     }
     currRows = filterQ(year,    quarter);
     prevRows = filterQ(cmpYear, cmpQ);
+    monthSum = true;
   } else if (view === 'yearly') {
     const cmpYear = cp.year || year - 1;
     currLabel = year + '年';
     prevLabel = cmpYear + '年';
     currRows  = rows.filter(function(r) { return String(r.date).startsWith(String(year)); });
     prevRows  = rows.filter(function(r) { return String(r.date).startsWith(String(cmpYear)); });
+    monthSum = true;
   } else {
     return null;
   }
 
-  const curr = sumRows(currRows);
-  const prev = sumRows(prevRows);
+  if (monthSum) {
+    // 当期が1〜9月・比較期が1〜12月 のように月数が違うと、月数の差が増減率に化ける。
+    // 共通する月番号だけ残してから合計する
+    var al = _alignOfficeMonths(currRows, prevRows);
+    curr = _sumOfficeByMonth(al.curr);
+    prev = _sumOfficeByMonth(al.prev);
+    basisNote = '各月の月末値を合計' +
+      (al.months.length ? '（' + _formatMonthRange(al.months) + 'に揃えて集計）' : '');
+  }
+
   if (!curr && !prev) return null;
-  return { currentLabel: currLabel, prevLabel: prevLabel, curr: curr || {}, prev: prev || {} };
+  // 片方だけデータが無いと全項目が 0 で並び、「実績ゼロ」と読めてしまう。
+  // 週次はデータの入っていない週を選べるので実際に起きる
+  if (!curr) basisNote += '（当期にデータがありません）';
+  if (!prev) basisNote += '（比較期にデータがありません）';
+  return {
+    currentLabel: currLabel, prevLabel: prevLabel,
+    curr: curr || {}, prev: prev || {}, basisNote: basisNote,
+  };
 }
 
 const OFFICE_CMP_METRICS = [
@@ -4400,30 +4737,36 @@ function _buildOfficeComparisonCard(info) {
     const c = Number(info.curr[m.key] || 0);
     const p = Number(info.prev[m.key] || 0);
     const diff = c - p;
-    const pct  = p !== 0 ? ((diff / Math.abs(p)) * 100).toFixed(1) + '%' : '—';
+    const hasPct = p !== 0;
+    const pct  = hasPct ? (diff > 0 ? '+' : '') + ((diff / Math.abs(p)) * 100).toFixed(1) + '%' : '—';
     const cls  = diff > 0 ? 'cmp-pos' : diff < 0 ? 'cmp-neg' : '';
     const sign = diff > 0 ? '+' : '';
     const fmt  = m.unit === '万円'
       ? function(v) { return (v / 10000).toFixed(1) + '万'; }
       : function(v) { return v + m.unit; };
+    // 比較期のセルにも cmp-val を付ける。付けないと右寄せ・等幅・13px が効かず、
+    // 当期の値の真横に小さくグレーで出てどちらの列か分からなくなる
     return `<tr>
       <td class="cmp-label">${m.label}</td>
       <td class="cmp-val">${fmt(c)}</td>
-      <td class="cmp-base">${fmt(p)}</td>
+      <td class="cmp-val cmp-base">${fmt(p)}</td>
       <td class="cmp-val ${cls}">${sign}${fmt(diff)}</td>
-      <td class="cmp-val ${cls}">${sign}${pct}</td>
+      <td class="cmp-val ${cls}">${pct}</td>
     </tr>`;
   }).join('');
+  const note = info.basisNote
+    ? `<div class="cmp-basis-note">集計方法：${info.basisNote}</div>` : '';
   return `<div class="cmp-card">
     <div class="cmp-header">期間比較</div>
     <div class="cmp-legends">
       <span class="cmp-legend-curr">■ ${info.currentLabel}（当期）</span>
       <span class="cmp-legend-base">■ ${info.prevLabel}（比較）</span>
     </div>
+    ${note}
     <div class="cmp-table-wrap">
       <table class="cmp-table">
         <thead><tr>
-          <th>指標</th><th>当期</th><th>比較期</th><th>差分</th><th>増減率</th>
+          <th>指標</th><th>${info.currentLabel}</th><th class="cmp-base">${info.prevLabel}</th><th>差分</th><th>増減率</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -4578,7 +4921,9 @@ function _buildOfficePrintHtml(opts) {
     '.cmp-table td{padding:6px;border-top:1px solid #eee;vertical-align:middle}' +
     '.cmp-label{font-size:12px;color:#333}' +
     '.cmp-val{font-size:12px;text-align:right;color:#111}' +
-    '.cmp-base{color:#666;text-align:right}' +
+    '.cmp-base{color:#555;text-align:right}' +
+    '.cmp-table th.cmp-base,.cmp-table td.cmp-base{background-color:#f2f2f2}' +
+    '.cmp-basis-note{font-size:11px;color:#666;margin:6px 0 2px}' +
     '.cmp-pos{color:#167a16;font-weight:700;text-align:right}' +
     '.cmp-neg{color:#c00;font-weight:700;text-align:right}' +
     '.cmp-chart-wrap{margin-top:8px;text-align:center}' +
@@ -4751,8 +5096,10 @@ function _buildOfficeReportText(rows, view) {
     qDefs.forEach(function(qDef) {
       const qEntries = quarters[qDef.key];
       if (!qEntries.length) return;
-      var latest = qEntries.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, qEntries[0]);
-      lines.push('◆' + year + '年 ' + qDef.label + '\n' + entry2lines(latest));
+      // 四半期・年次は各月の月末値の合計。最終行だけだと最後の月の数字になる
+      var totals = _sumOfficeByMonth(qEntries);
+      if (!totals) return;
+      lines.push('◆' + year + '年 ' + qDef.label + '\n' + entry2lines(totals));
     });
     if (!lines.length) return '【営業所四半期報告】' + year + '年\n報告日: ' + today + '\nデータがありません';
     return '【営業所四半期報告】' + year + '年\n報告日: ' + today + '\n\n' + lines.join('\n\n');
@@ -4764,9 +5111,11 @@ function _buildOfficeReportText(rows, view) {
   if (!list.length) return '【営業所年次報告】\n報告日: ' + today + '\nデータがありません';
   return '【営業所年次報告】\n報告日: ' + today + '\n\n' +
     list.map(function(kv) {
-      var latest = kv[1].reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, kv[1][0]);
-      return '◆' + kv[0] + '年\n' + entry2lines(latest);
-    }).join('\n\n');
+      var totals = _sumOfficeByMonth(kv[1]);
+      if (!totals) return '';
+      var range = _formatMonthRange(totals._months.map(function(ym) { return Number(ym.slice(5, 7)); }));
+      return '◆' + kv[0] + '年（' + range + ' 累計）\n' + entry2lines(totals);
+    }).filter(Boolean).join('\n\n');
 }
 
 function _calcOfficeKpiRate(entry, kpiDef) {
@@ -5509,6 +5858,7 @@ function _applyUiSettingsToState() {
   var rs = _uiSettings.reportSettings || {};
   if (rs.personal) Object.assign(reportSettings, rs.personal);
   if (rs.office)   Object.assign(officeReportSettings, rs.office);
+  if (rs.officeDash) Object.assign(officeDashReportSettings, rs.officeDash);
 }
 
 /** 起動時: キャッシュを同期的に適用する（描画前に呼ぶ） */
@@ -5561,6 +5911,7 @@ function _onUiSettingsLoaded() {
   if (typeof _buildOfficeReportSettingsPanel === 'function') _buildOfficeReportSettingsPanel();
   if (typeof buildProgressSettingsPanel === 'function') buildProgressSettingsPanel();
   if (typeof buildOfficeProgressSettingsPanel === 'function') buildOfficeProgressSettingsPanel();
+  if (typeof _buildOfficeDashReportSettingsPanel === 'function') _buildOfficeDashReportSettingsPanel();
   // 進捗タブがすでに描かれていれば作り直す（データの再取得はしない）
   var dash = document.getElementById('tab-dashboard');
   if (dash && dash.classList.contains('active') && typeof refreshDashboard === 'function') refreshDashboard();

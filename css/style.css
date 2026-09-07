@@ -1067,7 +1067,8 @@ input.kgi-field-input {
    印刷用スタイル
    ------------------------------------------------------------ */
 @media print {
-  #app-header, #bottom-nav, .hist-controls, .report-controls, #report-settings, #office-report-settings { display: none !important; }
+  #app-header, #bottom-nav, .hist-controls, .report-controls,
+  #report-settings, #office-report-settings, #office-dash-report-settings { display: none !important; }
   body { background: #fff !important; color: #000 !important; }
   #content { overflow: visible !important; height: auto !important; }
   #app { max-width: 100% !important; height: auto !important; }
@@ -1099,7 +1100,9 @@ input.kgi-field-input {
   .cmp-table td { border-top: 1px solid #eee !important; }
   .cmp-label { color: #333 !important; }
   .cmp-val { color: #111 !important; }
-  .cmp-base { color: #666 !important; }
+  .cmp-base { color: #555 !important; text-align: right !important; }
+  .cmp-table th.cmp-base, .cmp-table td.cmp-base { background-color: #f2f2f2 !important; }
+  .cmp-basis-note { color: #666 !important; }
   .cmp-pos { color: #167a16 !important; }
   .cmp-neg { color: #c00 !important; }
   .cmp-legend-curr { color: #0088aa !important; }
@@ -1830,8 +1833,22 @@ input.kgi-field-input {
   color: var(--text-primary);
 }
 
+/* 比較期の列。--text-muted (#475569) は暗すぎて読めないので --text-secondary にする。
+   薄い背景で列を区切らないと、当期の値の真横に並んでどちらの列か分からなくなる */
 .cmp-base {
-  color: var(--text-muted);
+  color: var(--text-secondary);
+}
+
+.cmp-table th.cmp-base,
+.cmp-table td.cmp-base {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.cmp-basis-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 6px 0 2px;
+  line-height: 1.5;
 }
 
 .cmp-pos {

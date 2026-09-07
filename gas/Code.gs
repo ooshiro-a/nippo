@@ -953,11 +953,49 @@ function generateOfficeReportImpl(data) {
 
   function getLatest(rows) {
     if (!rows.length) return {};
-    return rows.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, rows[0]);
+    var e = rows.reduce(function(max, r) { return String(r.date) > String(max.date) ? r : max; }, rows[0]);
+    // 末見通しは実績＋A案件で出し直す。保存値をそのまま読むと、複数月合計側の
+    // 計算とズレたときに気づけない（CLAUDE.md「個人 進捗タブの末見額2行」）
+    var o = {};
+    for (var k in e) o[k] = e[k];
+    o.salesForecast = (Number(e.salesActual) || 0) + (Number(e.salesAcase) || 0);
+    return o;
   }
 
-  var curEntry  = getLatest(curRows);
-  var prevEntry = getLatest(prevRows);
+  /**
+   * 営業所の数値は月内累計で月初にリセットされる。
+   * 期間が複数月にまたがる（yearly / quarterly）ときは
+   * 「各月の最終行だけ取って月をまたいで足す」のが正しい。
+   * getLatest のままだと期間の最後の月の数字しか出ない。
+   * daily / weekly / monthly は単月内なので getLatest で正しい。
+   */
+  var OFFICE_SUM_KEYS = [
+    'inspectionPlan', 'inspectionActual',
+    'salesPlan', 'salesActual', 'salesAcase',
+    'newMaintPlan', 'newMaintActual',
+    'renewalThisPlan', 'renewalThisActual',
+    'renewalNextPlanTop', 'renewalNextActualTop',
+    'renewalNext2Plan', 'renewalNext2Actual'
+  ];
+  function sumByMonth(rows) {
+    if (!rows.length) return {};
+    var map = {};
+    rows.forEach(function(r) {
+      var ym = String(r.date).slice(0, 7);
+      if (!map[ym] || String(r.date) >= String(map[ym].date)) map[ym] = r;
+    });
+    var s = {};
+    OFFICE_SUM_KEYS.forEach(function(k) { s[k] = 0; });
+    Object.keys(map).forEach(function(ym) {
+      OFFICE_SUM_KEYS.forEach(function(k) { s[k] += Number(map[ym][k]) || 0; });
+    });
+    s.salesForecast = (s.salesActual || 0) + (s.salesAcase || 0);
+    return s;
+  }
+
+  var multiMonth = (type === 'yearly' || type === 'quarterly');
+  var curEntry  = multiMonth ? sumByMonth(curRows)  : getLatest(curRows);
+  var prevEntry = multiMonth ? sumByMonth(prevRows) : getLatest(prevRows);
 
   var n = function(e, key) { return Number(e[key]) || 0; };
   // 単位はキーの決め打ち分岐ではなくこの表を見る。
